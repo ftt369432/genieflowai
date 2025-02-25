@@ -1,0 +1,166 @@
+@import 'react-grid-layout/css/styles.css';
+@import 'react-resizable/css/styles.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .grid-layout {
+    @apply grid gap-6 p-6 bg-background;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+
+  .grid-layout.compact {
+    @apply gap-4 p-4;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  }
+
+  .grid-layout.dense {
+    @apply gap-3 p-3;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  .grid-layout.wide {
+    @apply gap-8 p-8;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  }
+
+  /* Fixed column variants */
+  .grid-layout.cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .grid-layout.cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .grid-layout.cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Responsive variants */
+  @media (max-width: 768px) {
+    .grid-layout {
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .grid-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Theme variants */
+  .grid-layout {
+    position: relative;
+    background-color: var(--color-background);
+  }
+
+  .grid-layout::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(
+      to right,
+      var(--color-border) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      var(--color-border) 1px,
+      transparent 1px
+    );
+    background-size: 20px 20px;
+    opacity: 0.1;
+    pointer-events: none;
+  }
+
+  .grid-layout.with-scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent 50%,
+      rgba(var(--color-primary), 0.05) 50%
+    );
+    background-size: 100% 4px;
+    pointer-events: none;
+  }
+
+  /* Grid item styles */
+  .grid-item {
+    @apply rounded-lg border p-4 transition-all duration-200;
+    background-color: var(--color-paper);
+    border-color: var(--color-border);
+  }
+
+  .grid-item.interactive {
+    @apply cursor-pointer;
+    &:hover {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 15px var(--color-primary);
+    }
+  }
+
+  .grid-item.glowing {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 20px var(--color-primary);
+  }
+
+  /* Theme-specific overrides */
+  [data-theme='cyberpunk'] .grid-layout::before {
+    opacity: 0.2;
+    background-size: 30px 30px;
+  }
+
+  [data-theme='dark'] .grid-layout::before {
+    opacity: 0.05;
+  }
+
+  [data-theme='tokyo-night'] .grid-layout::before {
+    opacity: 0.15;
+    background-size: 25px 25px;
+  }
+
+  [data-theme='cyborg'] .grid-layout::before {
+    opacity: 0.1;
+    background-size: 40px 40px;
+  }
+}
+
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top;
+}
+
+.react-grid-item.cssTransforms {
+  transition-property: transform;
+}
+
+.react-grid-item.resizing {
+  z-index: 1;
+  will-change: width, height;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 3;
+  will-change: transform;
+}
+
+.react-grid-item.react-grid-placeholder {
+  background-color: var(--color-primary);
+  opacity: 0.1;
+  border: 2px dashed var(--color-primary);
+  transition-duration: 100ms;
+  z-index: 2;
+  border-radius: 0.5rem;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -o-user-select: none;
+  user-select: none;
+} 
