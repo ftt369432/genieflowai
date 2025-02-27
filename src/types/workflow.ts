@@ -21,17 +21,21 @@ export interface WorkflowAction {
   duration: number;
 }
 
+export interface UserAction {
+  type: string;
+  payload: any;
+  timestamp: Date;
+  userId: string;
+}
+
 export interface WorkflowPattern {
   id: string;
   name: string;
-  type: WorkflowPatternType;
   description: string;
+  type: 'learning' | 'fixed';
+  actions: UserAction[];
   frequency: number;
   confidence: number;
-  complexity: number;
-  capabilities: string[];
-  triggers: string[];
-  actions: WorkflowAction[];
 }
 
 export interface WorkflowMetrics {
@@ -55,13 +59,45 @@ export interface WorkflowSuggestion {
 }
 
 export interface AgentSuggestion {
-  type: 'automation';
+  id: string;
+  patternId: string;
   description: string;
   confidence: number;
-  suggestedAgent: {
-    name: string;
-    capabilities: string[];
-    autonomyLevel: AutonomyLevel;
-    triggers: string[];
+  potentialBenefits: string[];
+  estimatedTimesSaved: number;
+}
+
+export interface AgentExecutionResult {
+  action: string;
+  result: any;
+  timestamp: Date;
+  error: string | null;
+}
+
+export interface ActionMetrics {
+  action: string;
+  success: boolean;
+  duration?: number;
+  error?: string;
+  output?: any;
+}
+
+export interface AgentMetrics {
+  totalExecutions: number;
+  successRate: number;
+  averageExecutionTime: number;
+  lastExecution: Date | null;
+}
+
+export interface AgentConfig {
+  id: string;
+  name: string;
+  type: 'email' | 'calendar' | 'document' | 'task';
+  capabilities: string[];
+  pattern?: WorkflowPattern;
+  metadata?: {
+    created: Date;
+    lastModified: Date;
+    version: string;
   };
 } 

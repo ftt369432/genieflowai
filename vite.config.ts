@@ -9,14 +9,18 @@ export default defineConfig(({ mode }) => {
   
   return {
     plugins: [react()],
+    define: {
+      // Add global variables
+      global: 'globalThis'
+    },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        '@': path.resolve(__dirname, './src')
       },
       extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json']
     },
     optimizeDeps: {
-      include: ['lucide-react', 'zustand'],
+      include: ['lucide-react', 'zustand']
     },
     build: {
       sourcemap: true,
@@ -30,10 +34,8 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    // Don't expose environment variables through process.env
-    // They will be available through import.meta.env directly
     server: {
-      port: 3000,
+      port: 5173,
       host: true,
       proxy: {
         '/api': {

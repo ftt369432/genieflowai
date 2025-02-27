@@ -6,9 +6,10 @@ import { AgentCreationService } from '../AgentCreationService';
 import { VoiceControl } from '../VoiceControl';
 import { AIAssistantService } from '../AIAssistantService';
 import { OpenAIService } from '../ai/openai';
-import { mockOpenAIService } from '../ai/mockOpenAI';
+import { mockAIService } from '../ai/mockOpenAI';
 import { GeminiService } from '../ai/gemini';
 import { ClaudeService } from '../ai/claude';
+import { geminiService } from '../gemini';
 
 class ServiceContainer {
   private static instance: ServiceContainer;
@@ -24,10 +25,10 @@ class ServiceContainer {
 
   private constructor() {
     // Initialize AI providers based on environment configuration
-    const aiProvider = this.initializeAIProvider();
+    const aiProvider = this.initializeAIService();
     
     // Initialize core services
-    this.aiService = new AIService();
+    this.aiService = aiProvider;
     this.taskService = new TaskService(this.aiService);
     this.calendarService = new CalendarService(this.taskService, this.aiService);
     this.workflowOrchestrator = new WorkflowOrchestrator();
@@ -89,23 +90,21 @@ class ServiceContainer {
     this.aiAssistant = new AIAssistantService(defaultPersonality, defaultPreferences);
   }
 
-  private initializeAIProvider() {
-    const provider = import.meta.env.VITE_AI_PROVIDER || 'openai';
-    const useMock = import.meta.env.VITE_USE_MOCK === 'true';
-
-    if (useMock) {
-      return mockOpenAIService;
+  private initializeAIService(): AIService {
+    const provider = import.meta.env.VITE_AI_PROVIDER || 'google';
+    
+    if (process.env.NODE_ENV === 'test' || import.meta.env.VITE_USE_MOCK === 'true') {
+      return mockAIService;
     }
 
-    switch (provider.toLowerCase()) {
+    switch (provider) {
+      case 'google':
+        return geminiService;
       case 'openai':
         return new OpenAIService();
-      case 'gemini':
-        return new GeminiService();
-      case 'claude':
-        return new ClaudeService();
       default:
-        return new OpenAIService();
+        console.warn(`Unknown AI provider ${provider}, falling back to Google AI`);
+        return geminiService;
     }
   }
 

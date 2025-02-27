@@ -1,10 +1,18 @@
+import type { WorkflowPattern } from './workflow';
+
 // Consolidate agent-related types from multiple files into one
 export interface AgentConfig {
-  id: string;  // Add this
-  type: string;
+  id: string;
   name: string;
+  type: 'email' | 'calendar' | 'document' | 'task';
   capabilities: string[];
-  config: {
+  pattern?: WorkflowPattern;
+  metadata?: {
+    created: Date;
+    lastModified: Date;
+    version: string;
+  };
+  config?: {
     modelName: string;
     maxTokens: number;
     temperature: number;

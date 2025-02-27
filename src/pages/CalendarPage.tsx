@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, MoreVertical } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { useTheme } from '../contexts/ThemeContext';
+import { cn } from '../utils/cn';
 
 interface CalendarEvent {
   id: string;
@@ -53,6 +55,7 @@ export function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>(SAMPLE_EVENTS);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const { colors } = useTheme();
 
   const getDaysInMonth = (date: Date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -100,16 +103,19 @@ export function CalendarPage() {
       days.push(
         <div
           key={day}
-          className={`h-24 border border-border/50 p-1 cursor-pointer transition-colors
-            ${isToday ? 'bg-primary/5' : ''}
-            ${isSelected ? 'border-primary' : ''}
-            hover:border-primary/50`}
+          className={cn(
+            "h-24 border border-border/50 p-1 cursor-pointer transition-colors",
+            isToday && "bg-primary/5",
+            isSelected && "border-primary",
+            "hover:border-primary/50"
+          )}
           onClick={() => setSelectedDate(date)}
         >
           <div className="flex justify-between items-start">
-            <span className={`text-sm font-medium ${
-              isToday ? 'text-primary' : 'text-text-primary'
-            }`}>
+            <span className={cn(
+              "text-sm font-medium",
+              isToday ? "text-primary" : "text-text-primary"
+            )}>
               {day}
             </span>
             {dayEvents.length > 0 && (
@@ -118,25 +124,25 @@ export function CalendarPage() {
               </span>
             )}
           </div>
-          <div className="mt-1 space-y-1">
-            {dayEvents.slice(0, 2).map(event => (
-              <div
-                key={event.id}
-                className={`text-xs p-1 rounded truncate ${
-                  event.type === 'meeting' ? 'bg-primary/10 text-primary' :
-                  event.type === 'task' ? 'bg-warning/10 text-warning' :
-                  'bg-info/10 text-info'
-                }`}
-              >
-                {event.title}
-              </div>
-            ))}
-            {dayEvents.length > 2 && (
-              <div className="text-xs text-text-secondary">
-                +{dayEvents.length - 2} more
-              </div>
-            )}
-          </div>
+          
+          {dayEvents.slice(0, 2).map(event => (
+            <div
+              key={event.id}
+              className={cn(
+                "text-xs p-1 rounded truncate",
+                event.type === 'meeting' && "bg-primary/10 text-primary",
+                event.type === 'task' && "bg-warning/10 text-warning",
+                event.type === 'reminder' && "bg-info/10 text-info"
+              )}
+            >
+              {event.title}
+            </div>
+          ))}
+          {dayEvents.length > 2 && (
+            <div className="text-xs text-text-secondary">
+              +{dayEvents.length - 2} more
+            </div>
+          )}
         </div>
       );
     }
@@ -221,17 +227,22 @@ export function CalendarPage() {
               {getDayEvents(selectedDate).map(event => (
                 <div
                   key={event.id}
-                  className="flex items-start gap-4 p-4 rounded-lg border border-border hover:border-primary/20"
+                  className={cn(
+                    "flex items-start gap-4 p-4 rounded-lg border border-border",
+                    "hover:border-primary/20"
+                  )}
                 >
-                  <div className={`p-2 rounded-lg ${
-                    event.type === 'meeting' ? 'bg-primary/10' :
-                    event.type === 'task' ? 'bg-warning/10' :
-                    'bg-info/10'
-                  }`}>
+                  <div className={cn(
+                    "p-2 rounded-lg",
+                    event.type === 'meeting' && "bg-primary/10",
+                    event.type === 'task' && "bg-warning/10",
+                    event.type === 'reminder' && "bg-info/10"
+                  )}>
                     {event.type === 'meeting' ? <Calendar className="w-5 h-5" /> :
                      event.type === 'task' ? <Clock className="w-5 h-5" /> :
                      <Calendar className="w-5 h-5" />}
                   </div>
+                  
                   <div className="flex-1">
                     <div className="flex items-start justify-between">
                       <div>
