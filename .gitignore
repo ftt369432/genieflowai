@@ -1,5 +1,5 @@
 # Dependencies
-node_modules
+/node_modules
 .pnp
 .pnp.js
 
@@ -8,8 +8,8 @@ coverage
 .nyc_output
 
 # Production
-build
-dist
+/dist
+/build
 out
 
 # Environment Variables
@@ -33,6 +33,11 @@ yarn-error.log*
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # Temporary files

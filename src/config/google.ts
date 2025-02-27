@@ -17,3 +17,15 @@ export const googleConfig: GoogleConfig = {
     'https://www.googleapis.com/auth/contacts.readonly'
   ]
 };
+
+export const mockGoogleConfig = {
+  clientId: 'mock-client-id',
+  clientSecret: 'mock-client-secret',
+  redirectUri: 'http://localhost:3000/auth/callback',
+  scopes: [
+    'profile',
+    'email',
+    'calendar.readonly',
+    'gmail.readonly'
+  ]
+};

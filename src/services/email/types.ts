@@ -1,3 +1,5 @@
+import { Address } from 'mailparser';
+
 export interface EmailCredentials {
   access_token: string;
 }
@@ -33,4 +35,44 @@ export interface GmailMessage {
     };
   };
   internalDate: string;
+}
+
+export interface EmailAddress {
+  name?: string;
+  address: string;
+}
+
+export interface ParsedEmailAddress {
+  value: EmailAddress[];
+  text: string;
+}
+
+export interface ImapBox {
+  messages: {
+    total: number;
+  };
+}
+
+export interface ImapMessageAttributes {
+  uid: number;
+  flags?: string[];
+}
+
+export interface ImapFetchOptions {
+  bodies: string | string[];
+  struct: boolean;
+}
+
+export interface ImapMailboxInfo {
+  delimiter?: string;
+  children?: { [key: string]: ImapMailboxInfo };
+  attribs: string[];
+}
+
+export interface EmailMessageMetadata {
+  id: string;
+  threadId: string;
+  labels: string[];
+  read: boolean;
+  starred: boolean;
 }

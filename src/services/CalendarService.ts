@@ -1,6 +1,6 @@
 import { Event, EventType } from '../types/calendar';
 import { TaskService } from './TaskService';
-import { AIService } from './AIService';
+import { AIService } from './ai/baseAIService';
 
 export class CalendarService {
   private events: Event[] = [];
@@ -25,12 +25,18 @@ export class CalendarService {
   async convertTaskToEvent(taskId: string): Promise<Event> {
     // Implementation for task conversion
     const task = await this.taskService.getTask(taskId);
+    const startTime = task.dueDate || new Date(); // Default to now if no due date
+    const now = new Date();
+    
     return this.createEvent({
       title: task.title,
-      startTime: task.dueDate,
-      endTime: new Date(task.dueDate.getTime() + task.estimatedDuration),
+      description: task.description,
+      startTime,
+      endTime: new Date(startTime.getTime() + (task.estimatedDuration * 60 * 1000)), // Convert minutes to milliseconds
       type: EventType.TASK,
-      metadata: { taskId }
+      metadata: { taskId },
+      created: now,
+      lastModified: now
     });
   }
 

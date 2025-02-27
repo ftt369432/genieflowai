@@ -1,5 +1,5 @@
 import { Task, TaskPriority } from '../types/task';
-import { AIService } from './AIService';
+import { AIService } from './ai/baseAIService';
 
 export class TaskService {
   private tasks: Task[] = [];

@@ -1,5 +1,5 @@
 import { EmailResponse } from './types';
-import { getAccessToken } from '../auth/googleAuth';
+import { mockAuthService } from '../auth/googleAuth';
 
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
@@ -7,20 +7,14 @@ export async function fetchWithAuth<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<EmailResponse<T>> {
-  const accessToken = getAccessToken();
-  if (!accessToken) {
-    return {
-      data: {} as T,
-      error: { message: 'No access token available' }
-    };
-  }
-
+  const token = mockAuthService.getAccessToken();
+  
   try {
     const response = await fetch(`${GMAIL_API_BASE}${endpoint}`, {
       ...options,
       headers: {
         ...options.headers,
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -44,4 +38,23 @@ export async function fetchWithAuth<T>(
       error: { message: error instanceof Error ? error.message : 'Unknown error occurred' }
     };
   }
+}
+
+export async function makeGmailApiCall(endpoint: string, options: RequestInit = {}) {
+  const token = mockAuthService.getAccessToken();
+  
+  const response = await fetch(`${GMAIL_API_BASE}${endpoint}`, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gmail API call failed: ${response.statusText}`);
+  }
+
+  return response.json();
 }

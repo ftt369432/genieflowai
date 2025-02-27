@@ -1,4 +1,6 @@
 export type ThemeType = 'light' | 'dark' | 'tokyo-night' | 'cyberpunk' | 'cyborg';
+export type ThemeMode = 'light' | 'dark' | 'system';
+export type ThemeStyle = 'default' | 'cyberpunk' | 'modern' | 'minimal';
 
 export interface ThemeColors {
   primary: string;

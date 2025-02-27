@@ -1,13 +1,8 @@
 // Add debug logging
 console.log('Environment variables:', {
-  OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY,
-  OPENAI_ORG_ID: import.meta.env.VITE_OPENAI_ORG_ID,
-  OPENAI_PROJECT_ID: import.meta.env.VITE_OPENAI_PROJECT_ID,
-  OPENAI_PROJECT_NAME: import.meta.env.VITE_OPENAI_PROJECT_NAME,
-  OPENAI_API_VERSION: import.meta.env.VITE_OPENAI_API_VERSION,
-  OPENAI_MODEL_NAME: import.meta.env.VITE_OPENAI_MODEL_NAME,
-  OPENAI_MAX_TOKENS: parseInt(import.meta.env.VITE_OPENAI_MAX_TOKENS || '2000'),
-  AI_MODEL: import.meta.env.VITE_AI_MODEL,
+  GOOGLE_API_KEY: import.meta.env.VITE_GOOGLE_API_KEY,
+  GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+  GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY,
   AI_PROVIDER: import.meta.env.VITE_AI_PROVIDER,
   USE_MOCK: import.meta.env.VITE_USE_MOCK === 'true',
   API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
@@ -15,22 +10,15 @@ console.log('Environment variables:', {
   ENABLE_XAI: import.meta.env.VITE_ENABLE_XAI === 'true',
   ENABLE_DEEPSEEK: import.meta.env.VITE_ENABLE_DEEPSEEK === 'true',
   AI_ASSISTANT_PROVIDER: import.meta.env.VITE_AI_ASSISTANT_PROVIDER,
-  AI_AGENT_PROVIDER: import.meta.env.VITE_AI_AGENT_PROVIDER,
-  keyStart: import.meta.env.VITE_OPENAI_API_KEY?.substring(0, 8),
-  keyLength: import.meta.env.VITE_OPENAI_API_KEY?.length,
-  useMock: !import.meta.env.VITE_OPENAI_API_KEY
+  AI_AGENT_PROVIDER: import.meta.env.VITE_AI_AGENT_PROVIDER
 });
 
 export interface EnvConfig {
-  OPENAI_API_KEY: string;
-  OPENAI_ORG_ID: string;
-  OPENAI_PROJECT_ID: string;
-  OPENAI_PROJECT_NAME: string;
-  OPENAI_API_VERSION: string;
-  OPENAI_MODEL_NAME: string;
-  OPENAI_MAX_TOKENS: number;
+  GOOGLE_API_KEY: string;
+  GOOGLE_CLIENT_ID: string;
+  GEMINI_API_KEY: string;
   AI_MODEL: string;
-  AI_PROVIDER: 'openai' | 'gemini' | 'claude';
+  AI_PROVIDER: 'google' | 'openai' | 'claude';
   USE_MOCK: boolean;
   API_BASE_URL: string;
   ENABLE_CLAUDE: boolean;
@@ -41,41 +29,36 @@ export interface EnvConfig {
 }
 
 export const ENV: EnvConfig = {
-  OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY || '',
-  OPENAI_ORG_ID: import.meta.env.VITE_OPENAI_ORG_ID || '',
-  OPENAI_PROJECT_ID: import.meta.env.VITE_OPENAI_PROJECT_ID || '',
-  OPENAI_PROJECT_NAME: import.meta.env.VITE_OPENAI_PROJECT_NAME || 'GenieFlow',
-  OPENAI_API_VERSION: import.meta.env.VITE_OPENAI_API_VERSION || '2024-02',
-  OPENAI_MODEL_NAME: import.meta.env.VITE_OPENAI_MODEL_NAME || 'gpt-4',
-  OPENAI_MAX_TOKENS: parseInt(import.meta.env.VITE_OPENAI_MAX_TOKENS || '2000'),
-  AI_MODEL: import.meta.env.VITE_AI_MODEL || 'gpt-4-turbo-preview',
-  AI_PROVIDER: (import.meta.env.VITE_AI_PROVIDER || 'openai') as 'openai' | 'gemini' | 'claude',
+  GOOGLE_API_KEY: import.meta.env.VITE_GOOGLE_API_KEY || '',
+  GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+  GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY || '',
+  AI_MODEL: import.meta.env.VITE_AI_MODEL || 'gemini-pro',
+  AI_PROVIDER: (import.meta.env.VITE_AI_PROVIDER || 'google') as 'google' | 'openai' | 'claude',
   USE_MOCK: import.meta.env.VITE_USE_MOCK === 'true',
   API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
   ENABLE_CLAUDE: import.meta.env.VITE_ENABLE_CLAUDE === 'true',
   ENABLE_XAI: import.meta.env.VITE_ENABLE_XAI === 'true',
   ENABLE_DEEPSEEK: import.meta.env.VITE_ENABLE_DEEPSEEK === 'true',
-  AI_ASSISTANT_PROVIDER: import.meta.env.VITE_AI_ASSISTANT_PROVIDER || 'openai',
-  AI_AGENT_PROVIDER: import.meta.env.VITE_AI_AGENT_PROVIDER || 'openai',
+  AI_ASSISTANT_PROVIDER: import.meta.env.VITE_AI_ASSISTANT_PROVIDER || 'google',
+  AI_AGENT_PROVIDER: import.meta.env.VITE_AI_AGENT_PROVIDER || 'google',
 };
 
 // Add debug logging in development
 if (import.meta.env.DEV) {
   console.log('Environment loaded:', {
-    hasApiKey: !!ENV.OPENAI_API_KEY,
-    apiKeyLength: ENV.OPENAI_API_KEY?.length,
-    hasOrgId: !!ENV.OPENAI_ORG_ID,
-    model: ENV.AI_MODEL,
+    hasGoogleApiKey: !!ENV.GOOGLE_API_KEY,
+    hasGoogleClientId: !!ENV.GOOGLE_CLIENT_ID,
+    hasGeminiApiKey: !!ENV.GEMINI_API_KEY,
+    aiProvider: ENV.AI_PROVIDER,
     useMock: ENV.USE_MOCK
   });
 }
 
-// Remove the API key validation
-if (ENV.OPENAI_API_KEY) {
-  const isProjectKey = ENV.OPENAI_API_KEY.startsWith('sk-proj-');
-  const isStandardKey = ENV.OPENAI_API_KEY.startsWith('sk-');
-
-  if (!isProjectKey && !isStandardKey) {
-    console.warn('Invalid API key format. Using mock data instead.');
-  }
+// Validate Google API keys
+if (!ENV.GOOGLE_API_KEY || !ENV.GOOGLE_CLIENT_ID || !ENV.GEMINI_API_KEY) {
+  console.warn('Missing required Google API configuration. Some features may not work properly.');
+  ENV.USE_MOCK = true;
+} else if (!ENV.GOOGLE_API_KEY.startsWith('AIza')) {
+  console.warn('Invalid Google API key format. Key should start with "AIza".');
+  ENV.USE_MOCK = true;
 } 

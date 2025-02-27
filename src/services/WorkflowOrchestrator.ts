@@ -1,7 +1,7 @@
 import { WorkflowLearner } from './WorkflowLearner';
 import { VoiceControl } from './VoiceControl';
 import { AgentCreationService } from './AgentCreationService';
-import type { UserAction, WorkflowPattern, AgentConfig, AgentSuggestion } from '../types/workflow';
+import type { UserAction, WorkflowPattern, AgentConfig, AgentSuggestion, AgentExecutionResult } from '../types/workflow';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { EmailAgent, CalendarAgent, DocumentAgent, TaskAgent } from './agents';
 
@@ -17,7 +17,7 @@ export class WorkflowOrchestrator {
   private patterns$ = new BehaviorSubject<WorkflowPattern[]>([]);
   private activeAgents$ = new BehaviorSubject<AgentConfig[]>([]);
   private agentExecutions$ = new BehaviorSubject<Record<string, boolean>>({});
-  private agentResults$ = new BehaviorSubject<Record<string, any[]>>({});
+  private agentResults$ = new BehaviorSubject<Record<string, AgentExecutionResult[]>>({});
   public suggestions$ = new BehaviorSubject<AgentSuggestion[]>([]);
 
   constructor() {
@@ -47,7 +47,7 @@ export class WorkflowOrchestrator {
     this.suggestions$.next(suggestions);
   }
 
-  private setupVoiceCommands() {
+  private setupVoiceCommands(): void {
     this.voiceControl.registerCommand('analyze workflow', () => {
       this.analyzeWorkflow();
     });
@@ -66,17 +66,16 @@ export class WorkflowOrchestrator {
         this.voiceControl.speak('No workflow patterns detected yet');
       } else {
         this.voiceControl.speak(`Found ${patterns.length} workflow patterns`);
-        // Trigger pattern visualization
       }
     });
   }
 
-  public recordAction(action: UserAction) {
+  public recordAction(action: UserAction): void {
     this.workflowLearner.recordAction(action);
     this.updatePatterns();
   }
 
-  private updatePatterns() {
+  private updatePatterns(): void {
     const suggestions = this.workflowLearner.suggestAutomation();
     if (suggestions.length > 0) {
       this.voiceControl.speak(`Found ${suggestions.length} new automation opportunities`);
@@ -84,17 +83,23 @@ export class WorkflowOrchestrator {
     this.patterns$.next(this.workflowLearner.getPatterns());
   }
 
-  private async createAgentFromPattern(pattern: WorkflowPattern) {
+  public async createAgentFromPattern(pattern: WorkflowPattern): Promise<AgentConfig | null> {
     try {
-      const agentConfig = this.agentCreationService.createAgentFromPattern(pattern);
+      const agent = this.agentCreationService.createAgentFromPattern(pattern);
       const currentAgents = this.activeAgents$.value;
-      this.activeAgents$.next([...currentAgents, agentConfig]);
-      
-      this.voiceControl.speak(`Created new agent: ${agentConfig.name}`);
-      return agentConfig;
+      this.activeAgents$.next([...currentAgents, agent]);
+
+      this.voiceControl.speak(`Created new ${agent.name}. Would you like me to explain its capabilities?`);
+
+      // Start training if needed
+      if (pattern.type === 'learning') {
+        await this.trainAgent(agent.id, pattern.actions);
+      }
+
+      return agent;
     } catch (error) {
       console.error('Failed to create agent:', error);
-      this.voiceControl.speak('Sorry, I encountered an error creating the agent');
+      this.voiceControl.speak('Sorry, I encountered an error while creating the agent');
       return null;
     }
   }
@@ -107,22 +112,25 @@ export class WorkflowOrchestrator {
     return this.activeAgents$.asObservable();
   }
 
-  public startVoiceControl() {
+  public startVoiceControl(): void {
     this.voiceControl.startListening();
   }
 
-  public stopVoiceControl() {
+  public stopVoiceControl(): void {
     this.voiceControl.stopListening();
   }
 
-  private analyzeWorkflow() {
+  private analyzeWorkflow(): void {
     this.voiceControl.speak('Analyzing your workflow patterns');
-    // Trigger comprehensive workflow analysis
     this.workflowLearner.analyzePatterns();
     this.updatePatterns();
   }
 
-  public async executeAgentAction(agentId: string, action: string, params: any = {}) {
+  public async executeAgentAction(
+    agentId: string,
+    action: string,
+    params: any = {}
+  ): Promise<any> {
     try {
       this.agentExecutions$.next({
         ...this.agentExecutions$.value,
@@ -132,23 +140,39 @@ export class WorkflowOrchestrator {
       const agent = this.activeAgents$.value.find(a => a.id === agentId);
       if (!agent) throw new Error('Agent not found');
 
-      // Execute action based on agent type and capabilities
       const result = await this.executeAction(agent, action, params);
       
       // Store result
       const currentResults = this.agentResults$.value[agentId] || [];
       this.agentResults$.next({
         ...this.agentResults$.value,
-        [agentId]: [...currentResults, { action, result, timestamp: new Date() }]
+        [agentId]: [...currentResults, { 
+          action, 
+          result, 
+          timestamp: new Date(),
+          error: null 
+        }]
       });
 
-      // Provide voice feedback
       this.voiceControl.speak(`${agent.name} completed ${action}`);
-
       return result;
+
     } catch (error) {
       console.error(`Agent execution error:`, error);
       this.voiceControl.speak(`Error executing ${action}`);
+
+      // Store error result
+      const currentResults = this.agentResults$.value[agentId] || [];
+      this.agentResults$.next({
+        ...this.agentResults$.value,
+        [agentId]: [...currentResults, { 
+          action, 
+          result: null, 
+          timestamp: new Date(),
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }]
+      });
+
       throw error;
     } finally {
       this.agentExecutions$.next({
@@ -158,156 +182,83 @@ export class WorkflowOrchestrator {
     }
   }
 
-  private async executeAction(agent: AgentConfig, action: string, params: any) {
-    switch (action) {
-      case 'analyze-email':
-        return this.executeEmailAnalysis(agent, params);
-      case 'schedule-meeting':
-        return this.scheduleMeeting(agent, params);
-      case 'process-document':
-        return this.processDocument(agent, params);
-      case 'create-task':
-        return this.createTask(agent, params);
+  private async executeAction(agent: AgentConfig, action: string, params: any): Promise<any> {
+    switch (agent.type) {
+      case 'email':
+        return this.emailAgent.executeAction(action, params);
+      case 'calendar':
+        return this.calendarAgent.executeAction(action, params);
+      case 'document':
+        return this.documentAgent.executeAction(action, params);
+      case 'task':
+        return this.taskAgent.executeAction(action, params);
       default:
-        throw new Error(`Unknown action: ${action}`);
+        throw new Error(`Unknown agent type: ${agent.type}`);
     }
   }
 
-  public getAgentMetrics(agentId: string) {
+  public getAgentMetrics(agentId: string): {
+    totalExecutions: number;
+    successRate: number;
+    averageExecutionTime: number;
+    lastExecution: Date | null;
+  } {
     const results = this.agentResults$.value[agentId] || [];
     return {
       totalExecutions: results.length,
-      successRate: results.filter(r => !r.error).length / results.length,
+      successRate: results.filter(r => !r.error).length / (results.length || 1),
       averageExecutionTime: this.calculateAverageExecutionTime(results),
-      lastExecution: results[results.length - 1]?.timestamp
+      lastExecution: results[results.length - 1]?.timestamp || null
     };
   }
 
-  private calculateAverageExecutionTime(results: any[]) {
+  private calculateAverageExecutionTime(results: AgentExecutionResult[]): number {
     if (results.length < 2) return 0;
     const times = results.map(r => r.timestamp.getTime());
     const intervals = times.slice(1).map((time, i) => time - times[i]);
     return intervals.reduce((a, b) => a + b, 0) / intervals.length;
   }
 
-  public trainAgent(agentId: string, trainingData: any[]) {
+  public async trainAgent(agentId: string, trainingData: any[]): Promise<void> {
     const agent = this.activeAgents$.value.find(a => a.id === agentId);
     if (!agent) throw new Error('Agent not found');
 
     this.voiceControl.speak(`Starting training for ${agent.name}`);
     
-    // Implement training logic here
-    // This could involve fine-tuning the model or updating the agent's configuration
+    try {
+      switch (agent.type) {
+        case 'email':
+          await this.emailAgent.train(trainingData);
+          break;
+        case 'calendar':
+          await this.calendarAgent.train(trainingData);
+          break;
+        case 'document':
+          await this.documentAgent.train(trainingData);
+          break;
+        case 'task':
+          await this.taskAgent.train(trainingData);
+          break;
+        default:
+          throw new Error(`Cannot train agent of unknown type: ${agent.type}`);
+      }
+      
+      this.voiceControl.speak(`Training completed for ${agent.name}`);
+    } catch (error) {
+      console.error(`Training error for agent ${agentId}:`, error);
+      this.voiceControl.speak(`Error during training for ${agent.name}`);
+      throw error;
+    }
   }
 
   public async observeUserActions(action: UserAction): Promise<void> {
-    // Record and analyze user actions
     this.workflowLearner.analyzeActions([action]);
-
-    // Check for new automation opportunities
     const suggestions = this.workflowLearner.suggestAutomations();
+    
     if (suggestions.length > this.suggestions$.value.length) {
       this.voiceControl.speak(`Found ${suggestions.length} new automation opportunities`);
     }
-    this.suggestions$.next(suggestions);
-  }
-
-  public async createAgentFromPattern(pattern: WorkflowPattern): Promise<void> {
-    try {
-      const agent = this.agentCreationService.createAgentFromPattern(pattern);
-      
-      // Add to active agents
-      const currentAgents = this.activeAgents$.value;
-      this.activeAgents$.next([...currentAgents, agent]);
-
-      // Announce creation
-      this.voiceControl.speak(
-        `Created new ${agent.name}. Would you like me to explain its capabilities?`
-      );
-
-      // Start training if needed
-      if (pattern.type === 'learning') {
-        await this.trainAgent(agent, pattern.actions);
-      }
-    } catch (error) {
-      console.error('Failed to create agent:', error);
-      this.voiceControl.speak('Sorry, I encountered an error while creating the agent');
-    }
-  }
-
-  public async executeAgentAction(
-    agentId: string,
-    action: string,
-    params: any
-  ): Promise<void> {
-    try {
-      // Log action start
-      console.log(`Executing ${action} with agent ${agentId}`);
-
-      // Find agent
-      const agent = this.activeAgents$.value.find(a => a.id === agentId);
-      if (!agent) throw new Error('Agent not found');
-
-      // Execute action based on agent type and capabilities
-      const result = await this.executeAction(agent, action, params);
-
-      // Update agent metrics
-      this.updateAgentMetrics(agentId, {
-        action,
-        success: true,
-        duration: result.duration,
-        output: result.output
-      });
-
-    } catch (error) {
-      console.error(`Agent action failed:`, error);
-      this.updateAgentMetrics(agentId, {
-        action,
-        success: false,
-        error: error.message
-      });
-    }
-  }
-
-  private async executeAction(
-    agent: AgentConfig,
-    action: string,
-    params: any
-  ): Promise<ActionResult> {
-    const startTime = Date.now();
-
-    switch (action) {
-      case 'analyze-email':
-        return await this.emailAgent.analyzeEmail(params.email);
-      case 'schedule-meeting':
-        return await this.calendarAgent.scheduleMeeting(params.participants, params.duration);
-      case 'process-document':
-        return await this.documentAgent.processDocument(params.document);
-      case 'create-task':
-        return await this.taskAgent.createTask(params.task);
-      default:
-        throw new Error(`Unknown action: ${action}`);
-    }
-  }
-
-  private updateAgentMetrics(agentId: string, metrics: ActionMetrics): void {
-    const agents = this.activeAgents$.value;
-    const agentIndex = agents.findIndex(a => a.id === agentId);
     
-    if (agentIndex >= 0) {
-      const updatedAgent = {
-        ...agents[agentIndex],
-        metrics: {
-          ...agents[agentIndex].metrics,
-          actionsCompleted: agents[agentIndex].metrics.actionsCompleted + 1,
-          successRate: metrics.success 
-            ? (agents[agentIndex].metrics.successRate * agents[agentIndex].metrics.actionsCompleted + 1) / (agents[agentIndex].metrics.actionsCompleted + 1)
-            : (agents[agentIndex].metrics.successRate * agents[agentIndex].metrics.actionsCompleted) / (agents[agentIndex].metrics.actionsCompleted + 1)
-        }
-      };
-
-      agents[agentIndex] = updatedAgent;
-      this.activeAgents$.next([...agents]);
-    }
+    this.suggestions$.next(suggestions);
   }
 } 
