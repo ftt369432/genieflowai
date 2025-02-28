@@ -1,69 +1,67 @@
 import React, { useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { Paperclip, File, X } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { Button } from '../ui/Button';
+import type { Document } from '../../types/documents';
 
-interface FileUploadProps {
-  files: File[];
-  onFilesChange: (files: File[]) => void;
+export interface FileUploadProps {
+  onUpload: (document: Document) => Promise<boolean>;
+  accept?: string;
+  maxSize?: number;
 }
 
-export function FileUpload({ files, onFilesChange }: FileUploadProps) {
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    onFilesChange([...files, ...acceptedFiles]);
-  }, [files, onFilesChange]);
+export function FileUpload({ onUpload, accept = '.pdf,.doc,.txt,.md', maxSize = 10 * 1024 * 1024 }: FileUploadProps) {
+  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'text/*': ['.txt', '.md'],
-      'application/pdf': ['.pdf'],
-      'application/json': ['.json'],
-    },
-    maxSize: 5242880, // 5MB
-  });
+    // Check file size
+    if (file.size > maxSize) {
+      alert(`File size must be less than ${maxSize / 1024 / 1024}MB`);
+      return;
+    }
 
-  const removeFile = (index: number) => {
-    onFilesChange(files.filter((_, i) => i !== index));
-  };
+    try {
+      // Read file content
+      const content = await file.text();
+      
+      // Create document object
+      const document: Document = {
+        id: crypto.randomUUID(),
+        name: file.name,
+        type: file.name.split('.').pop() as 'pdf' | 'doc' | 'txt' | 'md',
+        content,
+        size: file.size,
+        tags: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: {
+          lastModified: new Date(file.lastModified)
+        }
+      };
+
+      // Upload document
+      const success = await onUpload(document);
+      if (success) {
+        event.target.value = ''; // Reset input
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Failed to upload file');
+    }
+  }, [maxSize, onUpload]);
 
   return (
-    <div className="space-y-2">
-      <div
-        {...getRootProps()}
-        className={`border-2 border-dashed rounded-lg p-4 cursor-pointer hover:border-blue-500 transition-colors ${
-          isDragActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''
-        }`}
-      >
-        <input {...getInputProps()} />
-        <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-          <Paperclip className="w-4 h-4" />
-          <span>Drop files here or click to upload</span>
-        </div>
-      </div>
-
-      {files.length > 0 && (
-        <div className="space-y-2">
-          {files.map((file, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded"
-            >
-              <div className="flex items-center gap-2">
-                <File className="w-4 h-4" />
-                <span className="text-sm">{file.name}</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => removeFile(index)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="relative">
+      <input
+        type="file"
+        accept={accept}
+        onChange={handleFileChange}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+      />
+      <Button variant="outline" className="pointer-events-none">
+        <Upload className="w-4 h-4 mr-2" />
+        Upload
+      </Button>
     </div>
   );
 } 

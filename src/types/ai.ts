@@ -4,12 +4,33 @@ export interface AIModel {
   provider: 'openai' | 'google' | 'anthropic';
 }
 
+export interface AIConfig {
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+  systemPrompt?: string;
+  context?: DocumentReference[];
+}
+
+export interface MessageMetadata {
+  mode?: 'flash' | 'flash-lite' | 'pro';
+  model?: 'gemini-2.0-flash' | 'gemini-2.0-flash-lite' | 'gemini-2.0-pro' | 'gemini-pro';
+  processingTime?: number;
+  error?: boolean;
+  tokens?: {
+    prompt: number;
+    completion: number;
+    total: number;
+  };
+}
+
 export interface Message {
   id: string;
   content: string;
   role: 'user' | 'assistant' | 'error';
   timestamp: Date;
   documents?: DocumentReference[];
+  metadata?: MessageMetadata;
 }
 
 export interface DocumentReference {
@@ -32,13 +53,30 @@ export interface AIDocument {
   id: string;
   title: string;
   content: string;
-  type: 'pdf' | 'doc' | 'docx' | 'txt' | 'md' | 'xlsx' | 'pptx' | 'drive' | 'image';
-  folderId: string | null; // Reference to parent folder
-  summary?: string;
+  type: 'pdf' | 'doc' | 'docx' | 'txt' | 'md' | 'drive' | 'image';
   tags: string[];
-  embedding?: number[]; // Vector embedding for semantic search
-  createdAt: Date;
-  updatedAt: Date;
+  category?: string;
+  clientId?: string;
+  caseType?: string;
+  caseStatus?: 'active' | 'pending' | 'closed';
+  metadata?: {
+    author?: string;
+    court?: string;
+    caseNumber?: string;
+    filingDate?: string;
+    jurisdiction?: string;
+    docType?: 'pleading' | 'motion' | 'order' | 'evidence' | 'correspondence';
+  };
+  insights?: {
+    topics: string[];
+    relevance: number;
+    summary?: string;
+    citations?: string[];
+    keyPoints?: string[];
+  };
+  createdAt: string;
+  updatedAt: string;
+  folderId: string | null;
   // Drive-specific fields
   size?: number;
   url?: string;
@@ -47,6 +85,11 @@ export interface AIDocument {
   shared?: boolean;
   ownerId?: string;
   lastModifiedBy?: string;
+  references?: {
+    documentId: string;
+    title: string;
+    relevance: number;
+  }[];
 }
 
 export interface SearchResult {

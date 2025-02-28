@@ -1,103 +1,156 @@
-import { useState, useCallback } from 'react';
-import type { Document } from '../types/documents';
+import { useState, useCallback, useEffect } from 'react';
+import type { AIDocument, SearchResult } from '../types/ai';
 
-interface SearchOptions {
-  limit?: number;
-  threshold?: number;
-  filters?: Record<string, any>;
+interface UseKnowledgeBaseOptions {
+  enableDriveSync?: boolean;
+  autoIndex?: boolean;
+  maxResults?: number;
 }
 
-export function useKnowledgeBase() {
-  const [documents, setDocuments] = useState<Document[]>([]);
+export function useKnowledgeBase(options: UseKnowledgeBaseOptions = {}) {
+  const [documents, setDocuments] = useState<AIDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isIndexing, setIsIndexing] = useState(false);
+  const [driveDocuments, setDriveDocuments] = useState<AIDocument[]>([]);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
 
-  const addDocument = useCallback(async (document: Document) => {
+  // Initialize drive sync
+  useEffect(() => {
+    if (options.enableDriveSync) {
+      syncDriveDocuments();
+    }
+  }, [options.enableDriveSync]);
+
+  const syncDriveDocuments = async () => {
+    try {
+      setSyncStatus('syncing');
+      // TODO: Implement Google Drive API integration
+      // const driveFiles = await fetchDriveFiles();
+      // const processedDocs = await processDriveFiles(driveFiles);
+      // setDriveDocuments(processedDocs);
+      setSyncStatus('idle');
+    } catch (err) {
+      setSyncStatus('error');
+      setError('Failed to sync drive documents');
+    }
+  };
+
+  const addDocument = useCallback(async (doc: AIDocument) => {
     setIsLoading(true);
     try {
-      // Here you would typically process the document, extract text, 
-      // generate embeddings, etc.
-      setDocuments(prev => [...prev, {
-        ...document,
-        id: crypto.randomUUID(),
-        uploadDate: new Date(),
-        lastModified: new Date()
-      }]);
-      return true;
+      // Generate embedding for the document
+      if (options.autoIndex) {
+        setIsIndexing(true);
+        // TODO: Implement embedding generation
+        // const embedding = await generateEmbedding(doc.content);
+        // doc.embedding = embedding;
+      }
+      setDocuments(prev => [...prev, doc]);
+      setIsIndexing(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add document');
-      return false;
+      setError('Failed to add document');
     } finally {
       setIsLoading(false);
     }
+  }, [options.autoIndex]);
+
+  const removeDocument = useCallback((docId: string) => {
+    setDocuments(prev => prev.filter(d => d.id !== docId));
+    setDriveDocuments(prev => prev.filter(d => d.id !== docId));
   }, []);
 
-  const removeDocument = useCallback(async (documentId: string) => {
-    setDocuments(prev => prev.filter(doc => doc.id !== documentId));
-  }, []);
-
-  const searchKnowledge = useCallback(async (
-    query: string,
-    options: SearchOptions = {}
-  ) => {
+  const updateDocument = useCallback(async (documentId: string, updates: Partial<AIDocument>) => {
     setIsLoading(true);
     try {
-      const {
-        limit = 5,
-        threshold = 0.7,
-        filters = {}
-      } = options;
+      if (updates.content && options.autoIndex) {
+        setIsIndexing(true);
+        // TODO: Implement embedding update
+        // const embedding = await generateEmbedding(updates.content);
+        // updates.embedding = embedding;
+      }
+      setDocuments(prev => prev.map(doc => 
+        doc.id === documentId ? { ...doc, ...updates } : doc
+      ));
+      setIsIndexing(false);
+    } catch (err) {
+      setError('Failed to update document');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [options.autoIndex]);
 
-      // Here you would typically:
-      // 1. Convert query to embedding
-      // 2. Perform semantic search
-      // 3. Filter and rank results
-      
-      const results = documents
-        .filter(doc => {
-          // Apply filters
-          return Object.entries(filters).every(([key, value]) => 
-            doc[key as keyof Document] === value
-          );
-        })
+  const searchDocuments = useCallback(async (query: string): Promise<SearchResult[]> => {
+    setIsLoading(true);
+    try {
+      // TODO: Implement semantic search with embeddings
+      const results = documents.concat(driveDocuments)
         .filter(doc => 
-          // Simple text search for now
+          doc.title.toLowerCase().includes(query.toLowerCase()) ||
           doc.content.toLowerCase().includes(query.toLowerCase())
         )
-        .slice(0, limit);
-
+        .map(doc => ({
+          document: doc,
+          similarity: 1 // Placeholder for actual similarity score
+        }))
+        .slice(0, options.maxResults || 5);
+      
       return results;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to search knowledge base');
+      setError('Failed to search documents');
       return [];
     } finally {
       setIsLoading(false);
     }
-  }, [documents]);
+  }, [documents, driveDocuments, options.maxResults]);
 
-  const updateDocument = useCallback(async (
-    documentId: string,
-    updates: Partial<Document>
-  ) => {
-    setDocuments(prev => prev.map(doc => 
-      doc.id === documentId
-        ? { ...doc, ...updates, lastModified: new Date() }
-        : doc
-    ));
-  }, []);
+  const getDocumentById = useCallback((id: string) => {
+    return documents.find(doc => doc.id === id) || driveDocuments.find(doc => doc.id === id);
+  }, [documents, driveDocuments]);
 
-  const getDocument = useCallback((documentId: string) => {
-    return documents.find(doc => doc.id === documentId);
-  }, [documents]);
+  const getDocumentsByFolder = useCallback((folderId: string | null) => {
+    return documents.concat(driveDocuments).filter(doc => doc.folderId === folderId);
+  }, [documents, driveDocuments]);
+
+  const analyzeDocument = useCallback(async (documentId: string) => {
+    const document = getDocumentById(documentId);
+    if (!document) return null;
+
+    try {
+      setIsLoading(true);
+      // TODO: Implement AI analysis
+      const insights = {
+        keyPoints: [],
+        topics: [],
+        sentiment: 'neutral' as const,
+        entities: [],
+        readingTime: Math.ceil(document.content.split(' ').length / 200),
+        relevance: 1
+      };
+
+      await updateDocument(documentId, { insights });
+      return insights;
+    } catch (err) {
+      setError('Failed to analyze document');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getDocumentById, updateDocument]);
 
   return {
-    documents,
+    documents: documents.concat(driveDocuments),
     isLoading,
+    isIndexing,
     error,
+    syncStatus,
     addDocument,
     removeDocument,
-    searchKnowledge,
     updateDocument,
-    getDocument
+    searchDocuments,
+    getDocumentById,
+    getDocumentsByFolder,
+    analyzeDocument,
+    syncDriveDocuments
   };
 } 

@@ -29,7 +29,7 @@ export const buttonVariants = {
   }
 };
 
-export function Button({
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
   className,
   variant = 'default',
   size = 'default',
@@ -37,9 +37,10 @@ export function Button({
   children,
   disabled,
   ...props
-}: ButtonProps) {
+}, ref) => {
   return (
     <button
+      ref={ref}
       className={cn(
         buttonVariants.base,
         buttonVariants.variants[variant],
@@ -79,4 +80,4 @@ export function Button({
       )}
     </button>
   );
-} 
+}); 

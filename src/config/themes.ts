@@ -1,109 +1,173 @@
-export type ThemeType = 'light' | 'dark' | 'tokyo-night' | 'cyberpunk' | 'cyborg';
-export type ThemeMode = 'light' | 'dark' | 'system';
-export type ThemeStyle = 'default' | 'cyberpunk' | 'modern' | 'minimal';
+export type ThemeId = 'light' | 'dark' | 'cyberpunk' | 'tokyo-night' | 'synthwave' | 'matrix' | 'minimal';
 
-export interface ThemeColors {
-  primary: string;
-  secondary: string;
-  background: string;
-  paper: string;
-  text: {
+export interface Theme {
+  id: ThemeId;
+  name: string;
+  description: string;
+  colors: {
+    background: string;
+    paper: string;
     primary: string;
     secondary: string;
-    muted: string;
+    accent: string;
+    border: string;
+    text: {
+      primary: string;
+      secondary: string;
+      muted: string;
+    };
   };
-  border: string;
-  accent: string;
-  success: string;
-  warning: string;
-  error: string;
-  info: string;
+  effects?: {
+    enableGlow?: boolean;
+    enableScanlines?: boolean;
+    enableGrid?: boolean;
+    enableGlitch?: boolean;
+  };
 }
 
-export const themes: Record<ThemeType, ThemeColors> = {
-  light: {
-    primary: '#0284c7',
-    secondary: '#475569',
-    background: '#ffffff',
-    paper: '#f8fafc',
-    text: {
+export const themes: Theme[] = [
+  {
+    id: 'light',
+    name: 'Light',
+    description: 'Clean and minimal light theme',
+    colors: {
+      background: '#ffffff',
+      paper: '#f8fafc',
       primary: '#1e293b',
-      secondary: '#475569',
-      muted: '#64748b',
+      secondary: '#64748b',
+      accent: '#94a3b8',
+      border: '#e2e8f0',
+      text: {
+        primary: '#1e293b',
+        secondary: '#64748b',
+        muted: '#94a3b8',
+      },
     },
-    border: '#cbd5e1',
-    accent: '#0ea5e9',
-    success: '#16a34a',
-    warning: '#d97706',
-    error: '#dc2626',
-    info: '#2563eb',
   },
-  dark: {
-    primary: '#38bdf8',
-    secondary: '#94a3b8',
-    background: '#0f172a',
-    paper: '#1e293b',
-    text: {
-      primary: '#f1f5f9',
-      secondary: '#cbd5e1',
-      muted: '#94a3b8',
+  {
+    id: 'dark',
+    name: 'Dark',
+    description: 'Modern dark theme',
+    colors: {
+      background: '#0f172a',
+      paper: '#1e293b',
+      primary: '#f8fafc',
+      secondary: '#94a3b8',
+      accent: '#64748b',
+      border: '#334155',
+      text: {
+        primary: '#f8fafc',
+        secondary: '#94a3b8',
+        muted: '#64748b',
+      },
     },
-    border: '#334155',
-    accent: '#0ea5e9',
-    success: '#22c55e',
-    warning: '#f59e0b',
-    error: '#ef4444',
-    info: '#3b82f6',
   },
-  'tokyo-night': {
-    primary: '#7aa2f7',
-    secondary: '#bb9af7',
-    background: '#1a1b26',
-    paper: '#24283b',
-    text: {
-      primary: '#c0caf5',
-      secondary: '#a9b1d6',
-      muted: '#565f89',
+  {
+    id: 'cyberpunk',
+    name: 'Cyberpunk',
+    description: 'High-tech, neon-infused cyberpunk aesthetic',
+    colors: {
+      background: '#000033',
+      paper: '#000044',
+      primary: '#00ffff',
+      secondary: '#ff00ff',
+      accent: '#ffff00',
+      border: '#00ffff20',
+      text: {
+        primary: '#ffffff',
+        secondary: '#00ffff',
+        muted: '#00ffff80',
+      },
     },
-    border: '#414868',
-    accent: '#ff9e64',
-    success: '#9ece6a',
-    warning: '#e0af68',
-    error: '#f7768e',
-    info: '#2ac3de',
-  },
-  cyberpunk: {
-    primary: '#00fff9',
-    secondary: '#ff00ff',
-    background: '#0c0c2c',
-    paper: '#161640',
-    text: {
-      primary: '#ffffff',
-      secondary: '#00fff9',
-      muted: 'rgba(0, 255, 249, 0.7)',
+    effects: {
+      enableGlow: true,
+      enableScanlines: true,
+      enableGrid: true,
+      enableGlitch: true,
     },
-    border: 'rgba(0, 255, 249, 0.3)',
-    accent: '#ff00ff',
-    success: '#00ff00',
-    warning: '#ffff00',
-    error: '#ff0000',
-    info: '#0099ff',
   },
-  cyborg: {
-    primary: '#ff4d4d',
-    secondary: '#cccccc',
-    background: '#121212',
-    paper: '#1e1e1e',
-    text: {
-      primary: '#ffffff',
-      secondary: '#cccccc',
-      muted: '#999999',
+  {
+    id: 'tokyo-night',
+    name: 'Tokyo Night',
+    description: 'Inspired by Tokyo\'s neon-lit nightscape',
+    colors: {
+      background: '#1a1b26',
+      paper: '#24283b',
+      primary: '#7aa2f7',
+      secondary: '#bb9af7',
+      accent: '#f7768e',
+      border: '#414868',
+      text: {
+        primary: '#c0caf5',
+        secondary: '#7aa2f7',
+        muted: '#565f89',
+      },
     },
-    border: '#333333',
-    accent: '#ff4d4d',
-    success: '#00cc66',
-    warning: '#ffcc00',
-    error: '#ff3333',
-    info: '#3399ff',
+    effects: {
+      enableGlow: true,
+      enableGrid: true,
+    },
   },
-}; 
+  {
+    id: 'synthwave',
+    name: 'Synthwave',
+    description: '80s retro synthwave aesthetic',
+    colors: {
+      background: '#2b213a',
+      paper: '#241b2f',
+      primary: '#ff7edb',
+      secondary: '#799bff',
+      accent: '#f97e72',
+      border: '#ff7edb20',
+      text: {
+        primary: '#ffffff',
+        secondary: '#ff7edb',
+        muted: '#ff7edb80',
+      },
+    },
+    effects: {
+      enableGlow: true,
+      enableGrid: true,
+    },
+  },
+  {
+    id: 'matrix',
+    name: 'Matrix',
+    description: 'Digital rain matrix style',
+    colors: {
+      background: '#000000',
+      paper: '#0a0a0a',
+      primary: '#00ff00',
+      secondary: '#00cc00',
+      accent: '#008800',
+      border: '#00ff0020',
+      text: {
+        primary: '#00ff00',
+        secondary: '#00cc00',
+        muted: '#00880080',
+      },
+    },
+    effects: {
+      enableScanlines: true,
+      enableGlitch: true,
+    },
+  },
+  {
+    id: 'minimal',
+    name: 'Minimal',
+    description: 'Clean, distraction-free interface',
+    colors: {
+      background: '#fafafa',
+      paper: '#ffffff',
+      primary: '#171717',
+      secondary: '#525252',
+      accent: '#737373',
+      border: '#e5e5e5',
+      text: {
+        primary: '#171717',
+        secondary: '#525252',
+        muted: '#737373',
+      },
+    },
+  },
+]; 

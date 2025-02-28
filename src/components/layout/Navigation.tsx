@@ -9,7 +9,10 @@ import {
   MessageSquare,
   Bot,
   Library,
+  Settings,
+  Brain,
 } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -24,23 +27,40 @@ const navigation = [
 
 export function Navigation() {
   return (
-    <nav className="space-y-1">
-      {navigation.map((item) => (
-        <NavLink
-          key={item.name}
-          to={item.href}
-          className={({ isActive }) =>
-            `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              isActive
-                ? 'bg-gray-100 text-gray-900'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`
-          }
-        >
-          <item.icon className="h-5 w-5 mr-3" />
-          {item.name}
-        </NavLink>
-      ))}
+    <nav className="flex items-center space-x-4">
+      <NavLink
+        to="/ai-assistant"
+        className={({ isActive }) => cn(
+          'flex items-center px-4 py-2 rounded-lg transition-colors',
+          'hover:bg-accent hover:text-accent-foreground',
+          isActive && 'bg-primary text-primary-foreground'
+        )}
+      >
+        <MessageSquare className="w-5 h-5 mr-2" />
+        Assistant
+      </NavLink>
+      <NavLink
+        to="/agents"
+        className={({ isActive }) => cn(
+          'flex items-center px-4 py-2 rounded-lg transition-colors',
+          'hover:bg-accent hover:text-accent-foreground',
+          isActive && 'bg-primary text-primary-foreground'
+        )}
+      >
+        <Brain className="w-5 h-5 mr-2" />
+        Agents
+      </NavLink>
+      <NavLink
+        to="/settings"
+        className={({ isActive }) => cn(
+          'flex items-center px-4 py-2 rounded-lg transition-colors',
+          'hover:bg-accent hover:text-accent-foreground',
+          isActive && 'bg-primary text-primary-foreground'
+        )}
+      >
+        <Settings className="w-5 h-5 mr-2" />
+        Settings
+      </NavLink>
     </nav>
   );
 } 

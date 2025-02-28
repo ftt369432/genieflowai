@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useKnowledgeBase } from '../hooks/useKnowledgeBase';
 import { KnowledgeBasePanel } from '../components/ai/KnowledgeBasePanel';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { FileUpload } from '../components/ai/FileUpload';
+import { AIInsights } from '../components/drive/AIInsights';
+import { cn } from '../lib/utils';
 import { 
   FileText, 
   Search, 
@@ -14,130 +16,190 @@ import {
   Star,
   Clock,
   Tag,
-  Filter
+  Filter,
+  Brain,
+  MessageSquare,
+  TrendingUp
 } from 'lucide-react';
-import type { Document } from '../types/documents';
+import type { Document, DocumentWithAnalytics, SearchOptions } from '../types/documents';
 
 export function AIDrivePage() {
-  const { documents, addDocument } = useKnowledgeBase();
+  const { documents, addDocument, analyzeDocument, searchDocuments } = useKnowledgeBase();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedDocument, setSelectedDocument] = useState<DocumentWithAnalytics | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [filteredDocuments, setFilteredDocuments] = useState<Document[]>(documents);
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
-    // Implement search logic
+    if (!query.trim()) {
+      setFilteredDocuments(documents);
+      return;
+    }
+
+    const options: SearchOptions = {
+      filters: {
+        tags: selectedTags,
+      },
+      sort: {
+        field: 'updatedAt',
+        order: 'desc'
+      }
+    };
+
+    const results = await searchDocuments(query, options);
+    setFilteredDocuments(results);
   };
 
-  const filteredDocuments = documents.filter(doc => 
-    doc.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-    (selectedTags.length === 0 || doc.tags.some(tag => selectedTags.includes(tag)))
-  );
+  const handleDocumentSelect = async (doc: Document) => {
+    setIsAnalyzing(true);
+    try {
+      const analysis = await analyzeDocument(doc.id);
+      setSelectedDocument({
+        ...doc,
+        insights: analysis.insights,
+        references: analysis.references
+      });
+    } catch (error) {
+      console.error('Error analyzing document:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!searchQuery) {
+      const filtered = documents.filter(doc => 
+        selectedTags.length === 0 || doc.tags.some(tag => selectedTags.includes(tag))
+      );
+      setFilteredDocuments(filtered);
+    }
+  }, [documents, selectedTags, searchQuery]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-cyberpunk-dark to-cyberpunk-darker p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <FileText className="h-8 w-8 text-cyberpunk-neon animate-glow" />
-            <h1 className="text-3xl font-bold text-white">
-              AI Drive
-              <span className="ml-2 text-cyberpunk-neon">v2.0</span>
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <Button variant="outline" className="gap-2">
-              <Upload className="h-4 w-4" />
-              Upload
-            </Button>
-            <div className="flex border border-cyberpunk-neon/30 rounded-lg overflow-hidden">
-              <Button
-                variant={view === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setView('grid')}
-              >
-                <Grid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={view === 'list' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setView('list')}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-
+    <div className="flex h-full">
+      {/* Main Content */}
+      <div className="flex-1 p-6 space-y-6">
         {/* Search and Filters */}
-        <div className="flex gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              className="pl-10"
+              type="text"
               placeholder="Search documents..."
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10"
             />
           </div>
-          <Button variant="outline" className="gap-2">
-            <Filter className="h-4 w-4" />
-            Filters
+          <Button variant="outline" onClick={() => setView(view === 'grid' ? 'list' : 'grid')}>
+            {view === 'grid' ? <List className="w-4 h-4" /> : <Grid className="w-4 h-4" />}
           </Button>
+          <FileUpload onUpload={addDocument} />
         </div>
 
-        {/* Main Content */}
-        <div className="grid grid-cols-12 gap-6">
-          {/* Document List */}
-          <div className="col-span-9">
-            {view === 'grid' ? (
-              <div className="grid grid-cols-3 gap-4">
-                {filteredDocuments.map(doc => (
-                  <DocumentCard key={doc.id} document={doc} />
-                ))}
+        {/* Document Grid/List */}
+        <div className={cn(
+          "grid gap-4",
+          view === 'grid' ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
+        )}>
+          {filteredDocuments.map((doc) => (
+            <Card
+              key={doc.id}
+              className={cn(
+                "cursor-pointer hover:border-primary transition-colors",
+                selectedDocument?.id === doc.id && "border-primary"
+              )}
+              onClick={() => handleDocumentSelect(doc)}
+            >
+              <div className="p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-8 h-8 text-primary" />
+                    <div>
+                      <h3 className="font-medium">{doc.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {doc.createdAt.toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  {doc.tags.length > 0 && (
+                    <div className="flex gap-1">
+                      {doc.tags.map(tag => (
+                        <span
+                          key={tag}
+                          className="px-2 py-1 text-xs rounded-full bg-primary/10 text-primary"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {filteredDocuments.map(doc => (
-                  <DocumentListItem key={doc.id} document={doc} />
-                ))}
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Document Analysis Sidebar */}
+      {selectedDocument && (
+        <div className="w-96 border-l border-border bg-card/50 p-6 space-y-6 overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium">Document Analysis</h2>
+            {isAnalyzing && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Brain className="w-4 h-4 animate-pulse" />
+                Analyzing...
               </div>
             )}
           </div>
 
-          {/* Sidebar */}
-          <div className="col-span-3 space-y-6">
-            {/* Quick Access */}
-            <Card className="bg-cyberpunk-dark/50 border-cyberpunk-neon/30 p-4">
-              <h3 className="text-sm font-medium text-cyberpunk-neon mb-4">Quick Access</h3>
-              <div className="space-y-2">
-                <QuickAccessItem
-                  icon={<Star className="h-4 w-4" />}
-                  label="Favorites"
-                  count={5}
-                />
-                <QuickAccessItem
-                  icon={<Clock className="h-4 w-4" />}
-                  label="Recent"
-                  count={12}
-                />
-                <QuickAccessItem
-                  icon={<Tag className="h-4 w-4" />}
-                  label="Tags"
-                  count={8}
-                />
-              </div>
-            </Card>
+          <AIInsights document={selectedDocument} />
 
-            {/* Knowledge Base */}
-            <Card className="bg-cyberpunk-dark/50 border-cyberpunk-neon/30">
-              <KnowledgeBasePanel />
-            </Card>
+          <div className="space-y-4">
+            <h3 className="font-medium flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Related Documents
+            </h3>
+            <div className="space-y-2">
+              {selectedDocument.references.map(ref => (
+                <Card key={ref.documentId} className="p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">{ref.title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {Math.round(ref.relevance * 100)}% match
+                    </span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="font-medium flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Analytics
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <Card className="p-3">
+                <div className="text-sm text-muted-foreground">Reading Time</div>
+                <div className="text-lg font-medium">
+                  {selectedDocument.insights.readingTime} min
+                </div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-sm text-muted-foreground">Sentiment</div>
+                <div className="text-lg font-medium">
+                  {selectedDocument.insights.sentiment}
+                </div>
+              </Card>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

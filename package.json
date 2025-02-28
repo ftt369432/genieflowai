@@ -83,6 +83,7 @@
     "@types/prop-types": "^15.7.14",
     "@types/react": "^18.2.25",
     "@types/react-dom": "^18.2.10",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",

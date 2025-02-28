@@ -1,22 +1,53 @@
 import type { WorkflowPattern } from './workflow';
 
 // Consolidate agent-related types from multiple files into one
+export type AgentType = 'assistant' | 'research' | 'development' | 'analysis';
+
+export type AgentStatus = 'active' | 'idle' | 'error';
+
+export type AutonomyLevel = 'supervised' | 'semi-autonomous' | 'autonomous';
+
 export interface AgentConfig {
   id: string;
   name: string;
-  type: 'email' | 'calendar' | 'document' | 'task';
+  type: AgentType;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  systemPrompt: string;
   capabilities: string[];
-  pattern?: WorkflowPattern;
-  metadata?: {
-    created: Date;
-    lastModified: Date;
-    version: string;
+}
+
+export interface AgentMetrics {
+  performance: number;
+  tasks: {
+    completed: number;
+    total: number;
   };
-  config?: {
-    modelName: string;
-    maxTokens: number;
-    temperature: number;
-    basePrompt: string;
+  responseTime: number;
+  successRate: number;
+  lastUpdated: Date;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  type: AgentType;
+  description: string;
+  status: AgentStatus;
+  autonomyLevel: AutonomyLevel;
+  capabilities: string[];
+  config: AgentConfig;
+  metrics: AgentMetrics;
+  lastActive: Date;
+  performance: number;
+  tasks: {
+    completed: number;
+    total: number;
+  };
+  triggers?: {
+    events: string[];
+    schedule?: string;
   };
 }
 
@@ -30,19 +61,4 @@ export interface AgentSuggestion {
     autonomyLevel: "supervised" | "semi-autonomous" | "autonomous";
     triggers: string[];
   };
-}
-
-export interface Agent {
-  id: string;
-  name: string;
-  type: string;
-  capabilities: string[];
-  status: 'active' | 'inactive' | 'training';
-  metrics?: {
-    successRate: number;
-    responseTime: number;
-    accuracy: number;
-    uptime: number;
-  };
-  config: AgentConfig;
 } 
