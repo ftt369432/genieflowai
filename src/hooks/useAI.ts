@@ -1,32 +1,54 @@
 import { useState, useCallback } from 'react';
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { useAIStore } from '../store/aiStore';
 import { useNotifications } from './useNotifications';
-import type { AIModel, Message } from '../types/ai';
+import type { AIConfig, AIModel, Message, DocumentReference } from '../types/ai';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat';
 
 export type AIProvider = 'openai' | 'gemini' | 'anthropic';
 
-interface AIConfig {
+interface AIState extends AIConfig {
   provider: AIProvider;
-  model: string;
-  temperature?: number;
-  maxTokens?: number;
-  systemPrompt?: string;
 }
 
 export function useAI() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showError } = useNotifications();
-  const [config, setConfig] = useState<AIConfig>({
-    provider: 'openai',
-    model: 'gpt-4-turbo-preview'
+  const [config, setConfig] = useState<AIState>({
+    provider: 'gemini',
+    model: 'gemini-1.5-flash'
   });
 
   const openai = new OpenAI({
     apiKey: import.meta.env.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
   });
+
+  const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+
+  const formatContextForProvider = (
+    context: DocumentReference[] | undefined,
+    provider: AIProvider
+  ): string => {
+    if (!context || context.length === 0) return '';
+
+    const formattedContext = context
+      .map(doc => `${doc.title}:\n${doc.excerpt}`)
+      .join('\n\n');
+
+    switch (provider) {
+      case 'openai':
+        return `Context:\n${formattedContext}\n\nBased on the above context, `;
+      case 'gemini':
+        return `Here is some relevant context:\n${formattedContext}\n\nUsing this context, `;
+      case 'anthropic':
+        return `Given this context:\n${formattedContext}\n\nWith this information in mind, `;
+      default:
+        return `Context:\n${formattedContext}\n\n`;
+    }
+  };
 
   const sendMessage = useCallback(async (
     content: string,
@@ -37,11 +59,25 @@ export function useAI() {
 
     try {
       const mergedConfig = { ...config, ...options };
+      const contextPrefix = formatContextForProvider(mergedConfig.context, mergedConfig.provider);
+      const fullContent = contextPrefix + content;
 
       switch (mergedConfig.provider) {
         case 'openai':
+          const messages: ChatCompletionMessageParam[] = [];
+          if (mergedConfig.systemPrompt) {
+            messages.push({ 
+              role: 'system', 
+              content: mergedConfig.systemPrompt 
+            });
+          }
+          messages.push({ 
+            role: 'user', 
+            content: fullContent 
+          });
+
           const completion = await openai.chat.completions.create({
-            messages: [{ role: 'user', content }],
+            messages,
             model: mergedConfig.model,
             temperature: mergedConfig.temperature,
             max_tokens: mergedConfig.maxTokens,
@@ -49,8 +85,17 @@ export function useAI() {
           return completion.choices[0].message.content;
 
         case 'gemini':
-          // Implement Gemini API call
-          throw new Error('Gemini integration not implemented');
+          const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash",
+          });
+
+          const prompt = mergedConfig.systemPrompt 
+            ? `${mergedConfig.systemPrompt}\n\n${fullContent}`
+            : fullContent;
+
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          return response.text();
 
         case 'anthropic':
           // Implement Claude/Anthropic API call
@@ -67,9 +112,9 @@ export function useAI() {
     } finally {
       setIsLoading(false);
     }
-  }, [config, openai, showError]);
+  }, [config, openai, genAI, showError]);
 
-  const updateConfig = useCallback((newConfig: Partial<AIConfig>) => {
+  const updateConfig = useCallback((newConfig: Partial<AIState>) => {
     setConfig(current => ({ ...current, ...newConfig }));
   }, []);
 

@@ -1,115 +1,91 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { ThemeType, ThemeMode, ThemeStyle, ThemeColors, themes } from '../config/themes';
+import { Theme, ThemeId, themes } from '../config/themes';
 
 interface ThemeContextType {
-  theme: ThemeType;
-  mode: ThemeMode;
-  style: ThemeStyle;
-  colors: ThemeColors;
-  setTheme: (theme: ThemeType) => void;
-  setMode: (mode: ThemeMode) => void;
-  setStyle: (style: ThemeStyle) => void;
+  currentTheme: Theme;
+  setTheme: (themeId: ThemeId) => void;
+  themes: Theme[];
+  mode: 'light' | 'dark' | 'system';
+  setMode: (mode: 'light' | 'dark' | 'system') => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const THEME_STORAGE_KEY = 'app-theme-preference';
-const MODE_STORAGE_KEY = 'app-theme-mode';
-const STYLE_STORAGE_KEY = 'app-theme-style';
+const THEME_STORAGE_KEY = 'genieflow-theme';
+const MODE_STORAGE_KEY = 'genieflow-mode';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeType>(() => {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return (stored as ThemeType) || 'dark';
+  const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
+    const savedThemeId = localStorage.getItem(THEME_STORAGE_KEY);
+    return themes.find(theme => theme.id === savedThemeId) || themes[0];
   });
 
-  const [mode, setModeState] = useState<ThemeMode>(() => {
-    const stored = localStorage.getItem(MODE_STORAGE_KEY);
-    return (stored as ThemeMode) || 'system';
+  const [mode, setMode] = useState<'light' | 'dark' | 'system'>(() => {
+    return (localStorage.getItem(MODE_STORAGE_KEY) as 'light' | 'dark' | 'system') || 'system';
   });
 
-  const [style, setStyleState] = useState<ThemeStyle>(() => {
-    const stored = localStorage.getItem(STYLE_STORAGE_KEY);
-    return (stored as ThemeStyle) || 'default';
-  });
+  const setTheme = (themeId: ThemeId) => {
+    const newTheme = themes.find(theme => theme.id === themeId);
+    if (newTheme) {
+      setCurrentTheme(newTheme);
+      localStorage.setItem(THEME_STORAGE_KEY, themeId);
+    }
+  };
+
+  const handleModeChange = (newMode: 'light' | 'dark' | 'system') => {
+    setMode(newMode);
+    localStorage.setItem(MODE_STORAGE_KEY, newMode);
+  };
 
   useEffect(() => {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-    localStorage.setItem(MODE_STORAGE_KEY, mode);
-    localStorage.setItem(STYLE_STORAGE_KEY, style);
-    
-    // Apply theme colors to CSS variables
-    const root = document.documentElement;
-    const colors = themes[theme];
-    
-    // Set base colors
-    root.style.setProperty('--color-primary', colors.primary);
-    root.style.setProperty('--color-secondary', colors.secondary);
-    root.style.setProperty('--color-background', colors.background);
-    root.style.setProperty('--color-paper', colors.paper);
-    
-    // Set text colors
-    root.style.setProperty('--color-text-primary', colors.text.primary);
-    root.style.setProperty('--color-text-secondary', colors.text.secondary);
-    root.style.setProperty('--color-text-muted', colors.text.muted);
-    
-    // Set utility colors
-    root.style.setProperty('--color-border', colors.border);
-    root.style.setProperty('--color-accent', colors.accent);
-    root.style.setProperty('--color-success', colors.success);
-    root.style.setProperty('--color-warning', colors.warning);
-    root.style.setProperty('--color-error', colors.error);
-    root.style.setProperty('--color-info', colors.info);
-
     // Handle system theme preference
     if (mode === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const updateTheme = (e: MediaQueryListEvent | MediaQueryList) => {
-        setThemeState(e.matches ? 'dark' : 'light');
+        document.documentElement.classList.toggle('dark', e.matches);
       };
 
       updateTheme(mediaQuery);
       mediaQuery.addEventListener('change', updateTheme);
       return () => mediaQuery.removeEventListener('change', updateTheme);
+    } else {
+      document.documentElement.classList.toggle('dark', mode === 'dark');
     }
+  }, [mode]);
 
-    // Apply theme classes
-    document.documentElement.classList.remove('light', 'dark', 'tokyo-night', 'cyberpunk', 'cyborg');
-    document.documentElement.classList.add(theme);
+  useEffect(() => {
+    // Apply theme classes to root element
+    const root = document.documentElement;
     
-    // Apply style classes
-    document.documentElement.classList.remove('default', 'modern', 'minimal');
-    document.documentElement.classList.add(`theme-${style}`);
+    // Remove all existing theme classes
+    themes.forEach(theme => {
+      root.classList.remove(`theme-${theme.id}`);
+    });
     
-  }, [theme, mode, style]);
+    // Add current theme class
+    root.classList.add(`theme-${currentTheme.id}`);
 
-  const setTheme = (newTheme: ThemeType) => {
-    setThemeState(newTheme);
-  };
-
-  const setMode = (newMode: ThemeMode) => {
-    setModeState(newMode);
-  };
-
-  const setStyle = (newStyle: ThemeStyle) => {
-    setStyleState(newStyle);
-  };
+    // Apply theme colors as CSS variables
+    Object.entries(currentTheme.colors).forEach(([key, value]) => {
+      if (typeof value === 'object') {
+        Object.entries(value).forEach(([subKey, subValue]) => {
+          root.style.setProperty(`--color-${key}-${subKey}`, subValue);
+        });
+      } else {
+        root.style.setProperty(`--color-${key}`, value);
+      }
+    });
+  }, [currentTheme]);
 
   return (
-    <ThemeContext.Provider 
-      value={{ 
-        theme, 
-        mode, 
-        style, 
-        colors: themes[theme], 
-        setTheme, 
-        setMode, 
-        setStyle 
-      }}
-    >
-      <div className={`${theme} theme-${style} min-h-screen bg-background text-text-primary transition-colors duration-200`}>
-        {children}
-      </div>
+    <ThemeContext.Provider value={{ 
+      currentTheme, 
+      setTheme, 
+      themes,
+      mode,
+      setMode: handleModeChange
+    }}>
+      {children}
     </ThemeContext.Provider>
   );
 }

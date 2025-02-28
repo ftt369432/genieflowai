@@ -1,35 +1,23 @@
 import React from 'react';
-import { Settings } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { Textarea } from '../ui/Textarea';
+import { Label } from '../ui/Label';
 
-interface SystemPromptProps {
-  prompt: string;
-  onPromptChange: (prompt: string) => void;
-  isOpen: boolean;
-  onToggle: () => void;
+export interface SystemPromptProps {
+  value: string;
+  onChange: (value: string) => void;
 }
 
-export function SystemPrompt({ prompt, onPromptChange, isOpen, onToggle }: SystemPromptProps) {
+export function SystemPrompt({ value, onChange }: SystemPromptProps) {
   return (
-    <div>
-      <button 
-        onClick={onToggle}
-        className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
-      >
-        System Prompt
-      </button>
-      
-      {isOpen && (
-        <div className="absolute mt-2 p-4 bg-white border rounded-lg shadow-lg">
-          <textarea
-            value={prompt}
-            onChange={(e) => onPromptChange(e.target.value)}
-            placeholder="Enter system prompt..."
-            className="w-full p-2 border rounded-lg"
-            rows={4}
-          />
-        </div>
-      )}
+    <div className="space-y-2">
+      <Label htmlFor="system-prompt">System Prompt</Label>
+      <Textarea
+        id="system-prompt"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Enter a system prompt to guide the AI's behavior..."
+        className="min-h-[100px]"
+      />
     </div>
   );
 } 
