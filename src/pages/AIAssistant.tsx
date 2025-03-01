@@ -197,7 +197,7 @@ export function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<'gemini' | 'openai' | 'xai'>('gemini');
-  const [selectedModel, setSelectedModel] = useState('gemini-2.0-pro');
+  const [selectedModel, setSelectedModel] = useState('gemini-pro');
   const [selectedDocs, setSelectedDocs] = useState<AIDocument[]>([]);
   const [systemPrompt, setSystemPrompt] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -628,7 +628,7 @@ export function AIAssistantPage() {
               {conversations
                 .filter(conv => !conv.pinned)
                 .map(conv => (
-                  <button
+                  <div
                     key={conv.id}
                     onClick={() => {
                       setCurrentConversation(conv.id);
@@ -639,7 +639,7 @@ export function AIAssistantPage() {
                       setSelectedDocs(conv.documents || []);
                     }}
                     className={cn(
-                      'w-full p-3 rounded-lg text-left transition-all duration-200',
+                      'w-full p-3 rounded-lg text-left transition-all duration-200 cursor-pointer',
                       'hover:bg-accent/50 group flex items-center justify-between',
                       currentConversation === conv.id 
                         ? 'bg-background border-2 border-primary shadow-lg text-primary font-medium' 
@@ -722,7 +722,7 @@ export function AIAssistantPage() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </button>
+                  </div>
                 ))}
             </div>
           </div>

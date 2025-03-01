@@ -18,7 +18,7 @@ export function useAI() {
   const { showError } = useNotifications();
   const [config, setConfig] = useState<AIState>({
     provider: 'gemini',
-    model: 'gemini-1.5-flash'
+    model: 'gemini-pro'
   });
 
   const openai = new OpenAI({
