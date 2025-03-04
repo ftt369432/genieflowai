@@ -5,6 +5,7 @@ import { useAIStore } from '../store/aiStore';
 import { useNotifications } from './useNotifications';
 import type { AIConfig, AIModel, Message, DocumentReference } from '../types/ai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat';
+import { mockAIService } from '../services/ai/mockOpenAI';
 
 export type AIProvider = 'openai' | 'gemini' | 'anthropic';
 
@@ -21,12 +22,13 @@ export function useAI() {
     model: 'gemini-1.5-flash'
   });
 
-  const openai = new OpenAI({
+  // Initialize AI clients only if API keys are available
+  const openai = import.meta.env.VITE_OPENAI_API_KEY ? new OpenAI({
     apiKey: import.meta.env.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
-  });
+  }) : null;
 
-  const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+  const genAI = import.meta.env.VITE_GEMINI_API_KEY ? new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY) : null;
 
   const formatContextForProvider = (
     context: DocumentReference[] | undefined,
@@ -58,12 +60,22 @@ export function useAI() {
     setError(null);
 
     try {
+      // If no API keys are available, use mock service
+      if (!import.meta.env.VITE_OPENAI_API_KEY && !import.meta.env.VITE_GEMINI_API_KEY) {
+        const mockResponse = await mockAIService.getCompletion(content, {
+          model: options?.model || config.model,
+          temperature: options?.temperature || 0.7
+        });
+        return mockResponse;
+      }
+
       const mergedConfig = { ...config, ...options };
       const contextPrefix = formatContextForProvider(mergedConfig.context, mergedConfig.provider);
       const fullContent = contextPrefix + content;
 
       switch (mergedConfig.provider) {
         case 'openai':
+          if (!openai) throw new Error('OpenAI API key not configured');
           const messages: ChatCompletionMessageParam[] = [];
           if (mergedConfig.systemPrompt) {
             messages.push({ 
@@ -85,6 +97,7 @@ export function useAI() {
           return completion.choices[0].message.content;
 
         case 'gemini':
+          if (!genAI) throw new Error('Gemini API key not configured');
           const model = genAI.getGenerativeModel({ 
             model: "gemini-1.5-flash",
           });

@@ -14,22 +14,19 @@ export interface AIConfig {
 
 export interface MessageMetadata {
   mode?: 'flash' | 'flash-lite' | 'pro';
-  model?: 'gemini-2.0-flash' | 'gemini-2.0-flash-lite' | 'gemini-2.0-pro' | 'gemini-pro';
+  model?: string;
+  provider?: string;
+  tokens?: number;
   processingTime?: number;
-  error?: boolean;
-  tokens?: {
-    prompt: number;
-    completion: number;
-    total: number;
-  };
+  context?: DocumentReference[];
+  error?: string;
 }
 
 export interface Message {
   id: string;
   content: string;
-  role: 'user' | 'assistant' | 'error';
+  role: 'user' | 'assistant' | 'system' | 'error';
   timestamp: Date;
-  documents?: DocumentReference[];
   metadata?: MessageMetadata;
 }
 
@@ -37,8 +34,7 @@ export interface DocumentReference {
   id: string;
   title: string;
   excerpt: string;
-  type: 'pdf' | 'doc' | 'txt' | 'md';
-  relevance: number; // 0-1 score for how relevant the document is
+  relevance?: number;
 }
 
 export interface AIFolder {
@@ -53,43 +49,18 @@ export interface AIDocument {
   id: string;
   title: string;
   content: string;
-  type: 'pdf' | 'doc' | 'docx' | 'txt' | 'md' | 'drive' | 'image';
-  tags: string[];
-  category?: string;
-  clientId?: string;
-  caseType?: string;
-  caseStatus?: 'active' | 'pending' | 'closed';
-  metadata?: {
+  type: 'text' | 'pdf' | 'doc' | 'docx' | 'txt' | 'md' | 'markdown' | 'drive' | 'image' |
+    'csv' | 'json' | 'yaml' | 'yml' | 'html' | 'css' | 'scss' | 'sass' | 'sql' | 'xml' |
+    'js' | 'jsx' | 'ts' | 'tsx' | 'py' | 'rb' | 'java' | 'go' | 'rs' | 'cpp' | 'c' |
+    'h' | 'hpp' | 'sh' | 'bash' | 'swift' | 'kt' | 'kotlin' | 'php';
+  metadata: {
+    dateCreated: string;
+    dateModified?: string;
+    tags?: string[];
+    size?: number;
     author?: string;
-    court?: string;
-    caseNumber?: string;
-    filingDate?: string;
-    jurisdiction?: string;
-    docType?: 'pleading' | 'motion' | 'order' | 'evidence' | 'correspondence';
+    source?: string;
   };
-  insights?: {
-    topics: string[];
-    relevance: number;
-    summary?: string;
-    citations?: string[];
-    keyPoints?: string[];
-  };
-  createdAt: string;
-  updatedAt: string;
-  folderId: string | null;
-  // Drive-specific fields
-  size?: number;
-  url?: string;
-  thumbnailUrl?: string;
-  mimeType?: string;
-  shared?: boolean;
-  ownerId?: string;
-  lastModifiedBy?: string;
-  references?: {
-    documentId: string;
-    title: string;
-    relevance: number;
-  }[];
 }
 
 export interface SearchResult {
@@ -103,4 +74,23 @@ export interface EmbeddingResponse {
     prompt_tokens: number;
     total_tokens: number;
   };
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
+  model: string;
+  provider: string;
+  systemPrompt?: string;
+  category?: 'work' | 'learning' | 'productivity' | 'personal';
+  tags?: string[];
+  pinned?: boolean;
+  documents?: AIDocument[];
+  clientId?: string;
+  caseType?: string;
+  caseStatus?: 'active' | 'pending' | 'closed';
+  lastAccessed?: Date;
 } 
