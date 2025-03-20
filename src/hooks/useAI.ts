@@ -26,7 +26,39 @@ export function useAI() {
     dangerouslyAllowBrowser: true
   });
 
+  // Debug logging for API key
+  if (import.meta.env.DEV) {
+    console.log('Gemini API Key:', {
+      exists: !!import.meta.env.VITE_GEMINI_API_KEY,
+      length: import.meta.env.VITE_GEMINI_API_KEY?.length,
+      startsWithAIza: import.meta.env.VITE_GEMINI_API_KEY?.startsWith('AIza')
+    });
+  }
+
   const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+
+  const testGeminiConnection = useCallback(async () => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      console.log('Testing Gemini connection...');
+      const result = await model.generateContent('Hello! This is a test message. Please respond with "Connection successful!"');
+      const response = await result.response;
+      console.log('Gemini test response:', response.text());
+      return true;
+    } catch (error: any) {
+      console.error('Gemini test failed:', {
+        message: error.message,
+        details: error.details,
+        status: error.status
+      });
+      return false;
+    }
+  }, [genAI]);
+
+  // Test the connection immediately in development
+  if (import.meta.env.DEV) {
+    testGeminiConnection();
+  }
 
   const formatContextForProvider = (
     context: DocumentReference[] | undefined,
@@ -85,17 +117,37 @@ export function useAI() {
           return completion.choices[0].message.content;
 
         case 'gemini':
-          const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
+          // Debug logging for Gemini request
+          if (import.meta.env.DEV) {
+            console.log('Gemini Request:', {
+              model: "gemini-pro",
+              content: fullContent.slice(0, 100) + '...',
+              temperature: mergedConfig.temperature,
+              maxOutputTokens: mergedConfig.maxTokens
+            });
+          }
+
+          const model = genAI.getGenerativeModel({
+            model: "gemini-pro",
+            generationConfig: {
+              temperature: mergedConfig.temperature,
+              maxOutputTokens: mergedConfig.maxTokens,
+            }
           });
 
-          const prompt = mergedConfig.systemPrompt 
-            ? `${mergedConfig.systemPrompt}\n\n${fullContent}`
-            : fullContent;
-
-          const result = await model.generateContent(prompt);
-          const response = await result.response;
-          return response.text();
+          try {
+            const result = await model.generateContent(fullContent);
+            const response = await result.response;
+            return response.text();
+          } catch (geminiError: any) {
+            console.error('Gemini API Error:', {
+              message: geminiError.message,
+              details: geminiError.details,
+              status: geminiError.status,
+              stack: geminiError.stack
+            });
+            throw geminiError;
+          }
 
         case 'anthropic':
           // Implement Claude/Anthropic API call
@@ -123,6 +175,7 @@ export function useAI() {
     updateConfig,
     config,
     isLoading,
-    error
+    error,
+    testGeminiConnection
   };
 } 

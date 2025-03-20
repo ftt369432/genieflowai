@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { BaseAIService, AIService } from './ai/baseAIService';
 import { Task } from '../types/task';
 import { Event } from '../types/calendar';
+import { ENV } from '../config/env';
 
 export class GeminiService extends BaseAIService implements AIService {
   private genAI: GoogleGenerativeAI;
@@ -9,6 +10,13 @@ export class GeminiService extends BaseAIService implements AIService {
   constructor() {
     super('google');
     const apiKey = this.getGeminiKey();
+    if (!apiKey) {
+      throw new Error('Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your .env.local file');
+    }
+    if (!apiKey.startsWith('AIza')) {
+      throw new Error('Invalid Gemini API key format. Key must start with "AIza"');
+    }
+    console.log('Initializing Gemini service with model:', ENV.AI_MODEL);
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
 
@@ -18,17 +26,28 @@ export class GeminiService extends BaseAIService implements AIService {
     model?: string;
   }): Promise<string> {
     try {
+      const modelName = options?.model || ENV.AI_MODEL;
+      console.log('Using Gemini model:', modelName);
+      
       const model = this.genAI.getGenerativeModel({ 
-        model: options?.model || 'gemini-pro',
+        model: modelName,
         generationConfig: {
           maxOutputTokens: options?.maxTokens,
           temperature: options?.temperature || 0.7,
         }
       });
+      
       const result = await model.generateContent(prompt);
       const response = await result.response;
       return response.text();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Gemini API error:', error);
+      if (error.message?.includes('API key not valid')) {
+        throw new Error('Invalid Gemini API key. Please get a valid key from https://makersuite.google.com/app/apikey');
+      }
+      if (error.message?.includes('model not found')) {
+        throw new Error(`Model ${options?.model || ENV.AI_MODEL} not found. Please check your model configuration.`);
+      }
       return this.handleError(error, 'Gemini');
     }
   }
@@ -118,11 +137,13 @@ export class GeminiService extends BaseAIService implements AIService {
 
   async testConnection(): Promise<string> {
     try {
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
+      console.log('Testing Gemini connection with model:', ENV.AI_MODEL);
+      const model = this.genAI.getGenerativeModel({ model: ENV.AI_MODEL });
       const result = await model.generateContent('Test connection');
       const response = await result.response;
       return response.text();
     } catch (error) {
+      console.error('Gemini connection test failed:', error);
       return this.handleError(error, 'Gemini');
     }
   }
