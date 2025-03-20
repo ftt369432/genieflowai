@@ -26,8 +26,8 @@ export const aiProviders = [
     id: 'gemini',
     name: 'Google Gemini',
     apiKeyName: 'VITE_GEMINI_API_KEY',
-    enabled: false,
-    models: ['gemini-pro'],
+    enabled: true,
+    models: ['gemini-pro', 'gemini-pro-vision'],
     defaultModel: 'gemini-pro',
     maxTokens: 2048,
     temperature: 0.7

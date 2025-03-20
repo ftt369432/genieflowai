@@ -49,16 +49,28 @@ if (import.meta.env.DEV) {
     hasGoogleApiKey: !!ENV.GOOGLE_API_KEY,
     hasGoogleClientId: !!ENV.GOOGLE_CLIENT_ID,
     hasGeminiApiKey: !!ENV.GEMINI_API_KEY,
+    geminiApiKeyPrefix: ENV.GEMINI_API_KEY.slice(0, 4),
     aiProvider: ENV.AI_PROVIDER,
     useMock: ENV.USE_MOCK
   });
 }
 
 // Validate Google API keys
-if (!ENV.GOOGLE_API_KEY || !ENV.GOOGLE_CLIENT_ID || !ENV.GEMINI_API_KEY) {
-  console.warn('Missing required Google API configuration. Some features may not work properly.');
+if (!ENV.GEMINI_API_KEY) {
+  console.error('Missing Gemini API key. Please set VITE_GEMINI_API_KEY in your .env.local file');
   ENV.USE_MOCK = true;
-} else if (!ENV.GOOGLE_API_KEY.startsWith('AIza')) {
-  console.warn('Invalid Google API key format. Key should start with "AIza".');
+} else if (!ENV.GEMINI_API_KEY.startsWith('AIza')) {
+  console.error('Invalid Gemini API key format. Key must start with "AIza"');
+  console.log('Key prefix:', ENV.GEMINI_API_KEY.slice(0, 4));
+  ENV.USE_MOCK = true;
+}
+
+if (!ENV.GOOGLE_API_KEY || !ENV.GOOGLE_CLIENT_ID) {
+  console.warn('Missing Google OAuth configuration. Some features may not work properly.');
+}
+
+// Add validation for AI provider configuration
+if (ENV.AI_PROVIDER === 'google' && !ENV.GEMINI_API_KEY) {
+  console.error('Gemini API key is required when using the Google AI provider');
   ENV.USE_MOCK = true;
 } 

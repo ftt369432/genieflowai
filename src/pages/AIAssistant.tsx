@@ -16,6 +16,7 @@ import { Tooltip } from '../components/ui/Tooltip';
 import { AIErrorBoundary } from '../components/error/AIErrorBoundary';
 import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/Popover';
 import { v4 as uuidv4 } from 'uuid';
+import { useNotifications } from '../contexts/NotificationsContext';
 
 interface MessageActions {
   like: () => void;
@@ -87,6 +88,22 @@ const modelGroups: Record<string, ModelGroup> = {
     name: 'Gemini',
     description: 'Google\'s most capable AI models',
     models: {
+      'gemini-pro': {
+        name: 'Gemini Pro',
+        description: 'Best performing for general tasks',
+        temperature: 0.7,
+        maxTokens: 8192,
+        category: 'general',
+        features: ['Advanced reasoning', 'Wide task support', 'Best performance']
+      },
+      'gemini-pro-vision': {
+        name: 'Gemini Pro Vision',
+        description: 'Optimized for multimodal tasks',
+        temperature: 0.7,
+        maxTokens: 4096,
+        category: 'multimodal',
+        features: ['Image understanding', 'Visual analysis', 'Multimodal reasoning']
+      },
       'gemini-2.0-flash': {
         name: 'Gemini 2.0 Flash',
         description: 'Next-gen features and improved capabilities',
@@ -186,13 +203,14 @@ interface FileUploadHandler {
 }
 
 export function AIAssistantPage() {
-  const { sendMessage, updateConfig, config, isLoading } = useAI();
+  const { sendMessage, updateConfig, config, isLoading, error, testGeminiConnection } = useAI();
   const { currentTheme } = useTheme();
   const { documents, addDocument, syncDriveDocuments, isIndexing, syncStatus } = useKnowledgeBase({
     enableDriveSync: true,
     autoIndex: true,
     maxResults: 10
   });
+  const { showSuccess, showError } = useNotifications();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -542,6 +560,19 @@ export function AIAssistantPage() {
       updateConversationTitle(id, newTitle);
     }
     setEditingTitle(null);
+  };
+
+  const handleTestConnection = async () => {
+    try {
+      const success = await testGeminiConnection();
+      if (success) {
+        showSuccess('Gemini API connection test successful!');
+      } else {
+        showError('Gemini API connection test failed. Check console for details.');
+      }
+    } catch (error) {
+      showError('Error testing connection');
+    }
   };
 
   return (

@@ -91,19 +91,20 @@ class ServiceContainer {
   }
 
   private initializeAIService(): AIService {
-    const provider = import.meta.env.VITE_AI_PROVIDER || 'google';
+    const provider = import.meta.env.VITE_AI_PROVIDER || 'gemini';
     
     if (process.env.NODE_ENV === 'test' || import.meta.env.VITE_USE_MOCK === 'true') {
       return mockAIService;
     }
 
     switch (provider) {
+      case 'gemini':
       case 'google':
         return geminiService;
       case 'openai':
         return new OpenAIService();
       default:
-        console.warn(`Unknown AI provider ${provider}, falling back to Google AI`);
+        console.warn(`Unknown AI provider ${provider}, falling back to Gemini AI`);
         return geminiService;
     }
   }
