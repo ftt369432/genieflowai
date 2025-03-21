@@ -158,32 +158,6 @@ const sidebarSections: SidebarSection[] = [
     ]
   },
   {
-    title: 'Communication & Contacts',
-    items: [
-      { 
-        path: '/phone', 
-        icon: Phone, 
-        label: 'Phone System', 
-        color: 'text-rose-500',
-        isPremium: true 
-      },
-      { 
-        path: '/messaging', 
-        icon: MessageCircle, 
-        label: 'Text Messages', 
-        color: 'text-pink-500',
-        isPremium: true 
-      },
-      { 
-        path: '/integrations', 
-        icon: Share2, 
-        label: 'Integrations', 
-        color: 'text-orange-500',
-        isPremium: true 
-      },
-    ]
-  },
-  {
     title: 'AI Features',
     items: [
       { 
@@ -213,6 +187,32 @@ const sidebarSections: SidebarSection[] = [
         label: 'AI Training',
         color: 'text-pink-500',
         isPremium: true
+      },
+    ]
+  },
+  {
+    title: 'Communication & Contacts',
+    items: [
+      { 
+        path: '/phone', 
+        icon: Phone, 
+        label: 'Phone System', 
+        color: 'text-rose-500',
+        isPremium: true 
+      },
+      { 
+        path: '/messaging', 
+        icon: MessageCircle, 
+        label: 'Text Messages', 
+        color: 'text-pink-500',
+        isPremium: true 
+      },
+      { 
+        path: '/integrations', 
+        icon: Share2, 
+        label: 'Integrations', 
+        color: 'text-orange-500',
+        isPremium: true 
       },
     ]
   },
@@ -337,7 +337,7 @@ const DraggableSidebarItem = ({ item, index, moveItem, isCollapsed, isActive }: 
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
     >
       {isCollapsed ? (
-        <Tooltip content={item.label} side="right">
+        <Tooltip content={item.label}>
           <Link to={item.path}>{itemContent}</Link>
         </Tooltip>
       ) : (

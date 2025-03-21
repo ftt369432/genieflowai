@@ -128,7 +128,14 @@ export function useKnowledgeBase(options: UseKnowledgeBaseOptions = {}) {
         relevance: 1
       };
 
-      await updateDocument(documentId, { insights });
+      // Update document with insights
+      await updateDocument(documentId, { 
+        metadata: { 
+          ...document.metadata,
+          // Insights should be stored separately, not directly in metadata
+        } 
+      });
+      
       return insights;
     } catch (err) {
       setError('Failed to analyze document');

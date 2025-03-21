@@ -8,12 +8,23 @@ import { Button } from '../ui/Button';
 import { TaskConversionModal } from './TaskConversionModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CalendarEvent } from '../../types/calendar';
+import { calendarService } from '../services/CalendarService';
 
 export function CalendarView() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showTaskConversion, setShowTaskConversion] = useState(false);
-  const { events, addEvent, updateEvent, deleteEvent } = useCalendarStore();
+  const { addEvent, updateEvent, deleteEvent } = useCalendarStore();
   const { tasks } = useTaskStore();
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+
+  useEffect(() => {
+    async function loadEvents() {
+      const now = new Date();
+      const events = await calendarService.fetchEvents(now, new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()));
+      setEvents(events);
+    }
+    loadEvents();
+  }, []);
 
   const handleEventClick = (event: CalendarEvent) => {
     // Handle event click
@@ -71,4 +82,4 @@ export function CalendarView() {
       />
     </motion.div>
   );
-} 
+}

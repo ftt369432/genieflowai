@@ -22,15 +22,49 @@ import {
   TrendingUp
 } from 'lucide-react';
 import type { Document, DocumentWithAnalytics, SearchOptions } from '../types/documents';
+import type { AIDocument, SearchResult } from '../types/ai';
+
+// Helper function to convert AIDocument to Document type
+const convertAIDocumentToDocument = (aiDoc: AIDocument): Document => {
+  return {
+    id: aiDoc.id,
+    name: aiDoc.title,
+    type: 'txt', // Default type
+    content: aiDoc.content,
+    tags: aiDoc.metadata.tags || [],
+    createdAt: new Date(aiDoc.metadata.dateCreated),
+    updatedAt: new Date(aiDoc.metadata.dateModified),
+    size: aiDoc.metadata.size || 0,
+    metadata: {
+      author: aiDoc.metadata.author,
+      lastModified: new Date(aiDoc.metadata.dateModified),
+    }
+  };
+};
 
 export function AIDrivePage() {
-  const { documents, addDocument, analyzeDocument, searchDocuments } = useKnowledgeBase();
+  const { documents: aiDocuments, addDocument, analyzeDocument, searchDocuments } = useKnowledgeBase();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<DocumentWithAnalytics | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [filteredDocuments, setFilteredDocuments] = useState<Document[]>(documents);
+  const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
+
+  // Convert AIDocuments to Documents
+  const documents = React.useMemo(() => {
+    return aiDocuments.map(convertAIDocumentToDocument);
+  }, [aiDocuments]);
+
+  // Update filtered documents when documents or filters change
+  useEffect(() => {
+    if (!searchQuery) {
+      const filtered = documents.filter(doc => 
+        selectedTags.length === 0 || doc.tags.some(tag => selectedTags.includes(tag))
+      );
+      setFilteredDocuments(filtered);
+    }
+  }, [documents, selectedTags, searchQuery]);
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
@@ -50,33 +84,39 @@ export function AIDrivePage() {
     };
 
     const results = await searchDocuments(query, options);
-    setFilteredDocuments(results);
+    // Convert search results to Document type
+    const documentResults = results.map((result: any) => {
+      // Handle different result formats (could be SearchResult or result with document property)
+      const aiDoc = result.document || result;
+      return convertAIDocumentToDocument(aiDoc);
+    });
+    setFilteredDocuments(documentResults);
   };
 
   const handleDocumentSelect = async (doc: Document) => {
     setIsAnalyzing(true);
     try {
       const analysis = await analyzeDocument(doc.id);
-      setSelectedDocument({
-        ...doc,
-        insights: analysis.insights,
-        references: analysis.references
-      });
+      if (analysis) {
+        setSelectedDocument({
+          ...doc,
+          insights: {
+            keyPoints: analysis.keyPoints || [],
+            topics: analysis.topics || [],
+            sentiment: analysis.sentiment || 'neutral',
+            entities: analysis.entities || [],
+            readingTime: analysis.readingTime || 0,
+            relevance: analysis.relevance || 0
+          },
+          references: [] // Set empty references array as it doesn't exist in the analysis
+        });
+      }
     } catch (error) {
       console.error('Error analyzing document:', error);
     } finally {
       setIsAnalyzing(false);
     }
   };
-
-  useEffect(() => {
-    if (!searchQuery) {
-      const filtered = documents.filter(doc => 
-        selectedTags.length === 0 || doc.tags.some(tag => selectedTags.includes(tag))
-      );
-      setFilteredDocuments(filtered);
-    }
-  }, [documents, selectedTags, searchQuery]);
 
   return (
     <div className="flex h-full">

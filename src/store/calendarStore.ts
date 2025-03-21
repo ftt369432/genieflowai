@@ -1,44 +1,36 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { CalendarEvent } from '../types/calendar';
+import { CalendarEvent } from '../services/CalendarService';
 
-interface CalendarStore {
+interface CalendarState {
   events: CalendarEvent[];
-  addEvent: (event: Omit<CalendarEvent, 'id'>) => void;
-  updateEvent: (id: string, updates: Partial<CalendarEvent>) => void;
-  deleteEvent: (id: string) => void;
-  getEventById: (id: string) => CalendarEvent | undefined;
+  isGoogleCalendarConnected: boolean;
+  addEvent: (event: CalendarEvent) => void;
+  updateEvent: (event: CalendarEvent) => void;
+  deleteEvent: (eventId: string) => void;
+  connectGoogleCalendar: () => void;
+  disconnectGoogleCalendar: () => void;
 }
 
-export const useCalendarStore = create<CalendarStore>()(
+export const useCalendarStore = create<CalendarState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       events: [],
-
-      addEvent: (eventData) => set((state) => ({
-        events: [
-          ...state.events,
-          {
-            ...eventData,
-            id: crypto.randomUUID(),
-          },
-        ],
-      })),
-
-      updateEvent: (id, updates) => set((state) => ({
-        events: state.events.map((event) =>
-          event.id === id ? { ...event, ...updates } : event
-        ),
-      })),
-
-      deleteEvent: (id) => set((state) => ({
-        events: state.events.filter((event) => event.id !== id),
-      })),
-
-      getEventById: (id) => get().events.find((event) => event.id === id),
+      isGoogleCalendarConnected: false,
+      addEvent: (event: CalendarEvent) => set((state) => ({ events: [...state.events, event] })),
+      updateEvent: (event: CalendarEvent) =>
+        set((state) => ({
+          events: state.events.map((e) => (e.id === event.id ? event : e)),
+        })),
+      deleteEvent: (eventId: string) =>
+        set((state) => ({
+          events: state.events.filter((e) => e.id !== eventId),
+        })),
+      connectGoogleCalendar: () => set({ isGoogleCalendarConnected: true }),
+      disconnectGoogleCalendar: () => set({ isGoogleCalendarConnected: false }),
     }),
     {
-      name: 'calendar-store',
+      name: 'calendar-storage',
     }
   )
-); 
+);

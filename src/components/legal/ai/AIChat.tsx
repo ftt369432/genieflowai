@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Paperclip, Loader } from 'lucide-react';
 import type { AIMessage } from '../../../types/legal';
 import { generateLegalResponse } from '../../../services/ai/legalAssistant';
+import ReactMarkdown from 'react-markdown';
 
 interface AIChatProps {
   messages: AIMessage[];
@@ -61,18 +62,26 @@ export function AIChat({ messages, onSend }: AIChatProps) {
         {messages.map((message) => (
           <div
             key={message.id}
-            className={`flex ${
+            className={`flex w-full ${
               message.role === 'user' ? 'justify-end' : 'justify-start'
             }`}
           >
             <div
-              className={`max-w-[80%] rounded-lg p-3 ${
+              className={`w-full rounded-lg p-4 ${
                 message.role === 'user'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-blue-600 text-white max-w-[70%] ml-auto'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              {message.role === 'assistant' ? (
+                <ReactMarkdown 
+                  className="prose dark:prose-invert max-w-none prose-headings:mb-2 prose-headings:mt-2 prose-p:my-1 prose-ul:my-1 prose-li:my-0.5"
+                >
+                  {message.content}
+                </ReactMarkdown>
+              ) : (
+                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              )}
               {message.attachments && message.attachments.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {message.attachments.map((attachment, index) => (
@@ -86,7 +95,7 @@ export function AIChat({ messages, onSend }: AIChatProps) {
                   ))}
                 </div>
               )}
-              <span className="text-xs opacity-70 mt-1 block">
+              <span className="text-xs opacity-70 mt-2 block">
                 {message.timestamp.toLocaleTimeString()}
               </span>
             </div>
@@ -101,20 +110,16 @@ export function AIChat({ messages, onSend }: AIChatProps) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask your legal question..."
-            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            placeholder="Type your message..."
+            className="flex-1 p-2 rounded-lg border dark:border-gray-600 bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isLoading}
           />
           <button
             type="submit"
+            className="p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             disabled={isLoading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? (
-              <Loader size={20} className="animate-spin" />
-            ) : (
-              <Send size={20} />
-            )}
+            {isLoading ? <Loader className="animate-spin" /> : <Send />}
           </button>
         </div>
       </form>

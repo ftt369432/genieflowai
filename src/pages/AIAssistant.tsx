@@ -3,8 +3,9 @@ import { useAI } from '../hooks/useAI';
 import { useTheme } from '../contexts/ThemeContext';
 import { useKnowledgeBase } from '../hooks/useKnowledgeBase';
 import { cn } from '../lib/utils';
-import { Bot, Send, Mic, Settings, Loader2, Check, ChevronDown, Plus, Save, Library, Sparkles, Trash2, LineChart, Pin, Edit2, FileText, Image, File, Search, X, User } from 'lucide-react';
-import type { MessageMetadata, Message, AIDocument, DocumentReference } from '../types/ai';
+import { Bot, Send, Mic, Settings, Loader2, Check, ChevronDown, Plus, Save, Library, Sparkles, Trash2, LineChart, Pin, Edit2, FileText, Image, File, Search, X, User, ExternalLink, Code, PenTool, BarChart, GraduationCap } from 'lucide-react';
+import type { Message, AIDocument, DocumentReference, SearchFilters, DocumentProcessingOptions } from '../types/ai';
+import type { MessageMetadata as BaseMessageMetadata } from '../types/ai';
 import { AIModelSelector } from '../components/ai/AIModelSelector';
 import { SystemPrompt } from '../components/ai/SystemPrompt';
 import { DocumentPicker } from '../components/ai/DocumentPicker';
@@ -16,7 +17,7 @@ import { Tooltip, TooltipProvider } from '../components/ui/Tooltip';
 import { AIErrorBoundary } from '../components/error/AIErrorBoundary';
 import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/Popover';
 import { v4 as uuidv4 } from 'uuid';
-import { searchWeb, SearchResult, SearchFilters } from '../services/searchService';
+import { searchWeb, SearchResult as SearchResultType, SearchFilters as SearchFiltersType } from '../services/searchService';
 import { SearchPanel } from '../components/search/SearchPanel';
 import { MessageContextMenu } from '../components/ai/MessageContextMenu';
 import { MessageEditor } from '../components/ai/MessageEditor';
@@ -25,6 +26,28 @@ import { DocumentList } from '../components/ai/DocumentList';
 import { Badge } from '../components/ui/Badge';
 import { Switch } from '../components/ui/Switch';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/Dialog';
+import { Textarea } from '../components/ui/Textarea';
+import { Checkbox } from '../components/ui/Checkbox';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
+import { FolderPlus, Eye } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { readFileContent, extractTextFromDocument, generateDocumentSummary, detectDocumentLanguage, extractDocumentMetadata, performOCROnImage, splitIntoChunks, generateEmbedding } from '../utils/documentProcessing';
+import { Separator } from '../components/ui/Separator';
+
+interface MessageMetadata extends BaseMessageMetadata {
+  edited?: boolean;
+  threadId?: string;
+  parentId?: string;
+  reactions?: { [key: string]: string[] };
+  formatting?: {
+    isBold?: boolean;
+    isItalic?: boolean;
+    isCode?: boolean;
+    language?: string;
+  };
+}
 
 interface MessageActions {
   like: () => void;
@@ -33,6 +56,10 @@ interface MessageActions {
   share: () => void;
   toggleCode: () => void;
   bookmark: () => void;
+  react: (emoji: string) => void;
+  reply: () => void;
+  thread: () => void;
+  format: (type: 'bold' | 'italic' | 'code', language?: string) => void;
 }
 
 interface ModelConfig {
@@ -104,6 +131,49 @@ interface SideChatConfig {
     sortBy: string;
   };
 }
+
+export type ButtonSize = 'default' | 'sm' | 'lg' | 'icon' | 'xs';
+
+interface WebSearchResult {
+  id: string;
+  title: string;
+  content: string;
+  snippet: string;
+  link: string;
+  credibilityScore: number;
+  citations: number;
+  date: string;
+  type: 'article' | 'news' | 'blog' | 'academic';
+  language: string;
+  excerpt: string;
+  position: number;
+  source: string;
+  lastUpdated?: Date;
+}
+
+interface CitationStyle {
+  id: string;
+  name: string;
+  format: (result: WebSearchResult) => string;
+}
+
+const citationStyles: CitationStyle[] = [
+  {
+    id: 'apa',
+    name: 'APA',
+    format: (result) => `${result.title}. (${new Date(result.date || Date.now()).getFullYear()}). Retrieved from ${result.link}`
+  },
+  {
+    id: 'mla',
+    name: 'MLA',
+    format: (result) => `"${result.title}." ${result.link}, ${new Date(result.date || Date.now()).toLocaleDateString()}`
+  },
+  {
+    id: 'chicago',
+    name: 'Chicago',
+    format: (result) => `${result.title}. Accessed ${new Date(result.date || Date.now()).toLocaleDateString()}`
+  }
+];
 
 const modelGroups: Record<string, ModelGroup> = {
   gemini: {
@@ -233,7 +303,7 @@ interface FileUploadHandler {
 }
 
 interface AIAssistantState {
-  searchResults: SearchResult[];
+  searchResults: WebSearchResult[];
 }
 
 const formatDate = (date: Date | undefined | string) => {
@@ -241,113 +311,85 @@ const formatDate = (date: Date | undefined | string) => {
   return new Date(date).toLocaleDateString();
 };
 
-const aiModePresets = {
-  cyborg: {
-    name: 'Cyborg Mode',
-    description: 'Direct, analytical responses with technical precision',
-    systemPrompt: 'You are a highly analytical AI assistant operating in cyborg mode. Provide direct, precise, and technically accurate responses. Focus on efficiency and factual accuracy.',
-    temperature: 0.3,
-    maxTokens: 8192,
-    style: 'bg-cyan-500/10 text-cyan-500'
-  },
-  creative: {
-    name: 'Creative Mode',
-    description: 'Imaginative and innovative thinking',
-    systemPrompt: 'You are a creative AI assistant. Think outside the box, generate innovative ideas, and help explore new possibilities.',
-    temperature: 0.9,
-    maxTokens: 8192,
-    style: 'bg-purple-500/10 text-purple-500'
-  },
-  balanced: {
-    name: 'Balanced Mode',
-    description: 'Well-rounded responses with balanced perspective',
-    systemPrompt: 'You are a balanced AI assistant. Provide comprehensive responses that consider multiple perspectives while maintaining clarity and usefulness.',
+interface AIMode {
+  id: string;
+  name: string;
+  description: string;
+  icon: LucideIcon;
+  style: string;
+  systemPrompt: string;
+  temperature: number;
+  maxTokens: number;
+  features: string[];
+  tools?: string[];
+  contextWindow?: number;
+}
+
+const aiModePresets: Record<string, AIMode> = {
+  researcher: {
+    id: 'researcher',
+    name: 'Research Mode',
+    description: 'Deep analysis and academic research',
+    icon: Search,
+    style: 'text-blue-500',
+    systemPrompt: 'You are a research assistant focused on deep analysis and academic research.',
     temperature: 0.7,
-    maxTokens: 8192,
-    style: 'bg-primary/10 text-primary'
-  },
-  expert: {
-    name: 'Expert Mode',
-    description: 'Deep, specialized knowledge and analysis',
-    systemPrompt: 'You are an expert AI assistant. Provide in-depth analysis and leverage specialized knowledge to solve complex problems.',
-    temperature: 0.5,
-    maxTokens: 12288,
-    style: 'bg-amber-500/10 text-amber-500'
-  },
-  legal: {
-    name: 'Legal Assistant',
-    description: 'Specialized in legal analysis and documentation',
-    systemPrompt: 'You are a legal AI assistant specializing in law. Provide accurate legal information, analysis, and help with legal documentation while maintaining professional standards.',
-    temperature: 0.4,
-    maxTokens: 16384,
-    style: 'bg-red-500/10 text-red-500'
-  },
-  teacher: {
-    name: 'Teaching Mode',
-    description: 'Educational and explanatory responses',
-    systemPrompt: 'You are an educational AI assistant. Explain concepts clearly, provide examples, and help users learn effectively. Break down complex topics into understandable parts.',
-    temperature: 0.6,
-    maxTokens: 12288,
-    style: 'bg-green-500/10 text-green-500'
+    maxTokens: 4096,
+    features: ['Citation support', 'Academic writing', 'Literature review'],
+    tools: ['search', 'summarize', 'cite'],
+    contextWindow: 8192
   },
   coder: {
+    id: 'coder',
     name: 'Code Assistant',
-    description: 'Specialized in programming and development',
-    systemPrompt: 'You are a coding AI assistant. Provide precise technical solutions, code examples, and debugging help. Focus on best practices and clean code.',
+    description: 'Programming and development help',
+    icon: Code,
+    style: 'text-green-500',
+    systemPrompt: 'You are a coding assistant focused on helping with programming tasks.',
     temperature: 0.3,
-    maxTokens: 16384,
-    style: 'bg-blue-500/10 text-blue-500'
+    maxTokens: 2048,
+    features: ['Code completion', 'Bug fixing', 'Code review'],
+    tools: ['code', 'debug', 'test'],
+    contextWindow: 4096
   },
-  researcher: {
-    name: 'Research Mode',
-    description: 'Academic and research-focused analysis',
-    systemPrompt: 'You are a research AI assistant. Provide thorough analysis, cite sources, and maintain academic rigor in responses. Help with research methodology and literature review.',
-    temperature: 0.4,
-    maxTokens: 16384,
-    style: 'bg-violet-500/10 text-violet-500'
-  },
-  legalPro: {
-    name: 'Legal Professional',
-    description: 'Specialized in comprehensive legal analysis',
-    systemPrompt: `You are a highly knowledgeable legal assistant specializing in law and complex research. 
-    Provide detailed, factual analysis with citations to relevant statutes and cases where applicable. 
-    Maintain a professional, confident tone while delivering thorough legal insights.`,
-    temperature: 0.7,
-    maxTokens: 2000,
-    style: 'bg-indigo-500/10 text-indigo-500'
-  },
-  businessCoach: {
-    name: 'Business Coach',
-    description: 'Strategic business guidance and leadership development',
-    systemPrompt: `You are an experienced business coach with expertise in leadership, strategy, and organizational development. 
-    Provide actionable insights, strategic frameworks, and practical solutions to business challenges. 
-    Focus on growth, efficiency, leadership development, and measurable outcomes. 
-    Ask thought-provoking questions and guide users through strategic thinking processes.`,
-    temperature: 0.7,
-    maxTokens: 12288,
-    style: 'bg-emerald-500/10 text-emerald-500'
-  },
-  lifeCoach: {
-    name: 'Life Coach',
-    description: 'Personal development and life optimization guidance',
-    systemPrompt: `You are a supportive life coach specializing in personal development, goal setting, and life optimization. 
-    Help users identify their goals, overcome obstacles, and develop actionable plans for personal growth. 
-    Use coaching techniques like powerful questioning, active listening, and structured goal-setting frameworks. 
-    Focus on work-life balance, personal fulfillment, habit formation, and sustainable lifestyle changes.`,
+  writer: {
+    id: 'writer',
+    name: 'Writing Assistant',
+    description: 'Creative and professional writing',
+    icon: PenTool,
+    style: 'text-purple-500',
+    systemPrompt: 'You are a writing assistant focused on helping create and improve written content.',
     temperature: 0.8,
-    maxTokens: 12288,
-    style: 'bg-orange-500/10 text-orange-500'
+    maxTokens: 3072,
+    features: ['Style suggestions', 'Grammar check', 'Content ideas'],
+    tools: ['write', 'edit', 'suggest'],
+    contextWindow: 6144
   },
-  executiveCoach: {
-    name: 'Executive Coach',
-    description: 'Leadership excellence and executive development',
-    systemPrompt: `You are an executive coach with deep experience in C-suite leadership development. 
-    Provide high-level strategic guidance, leadership insights, and executive presence development. 
-    Focus on decision-making, organizational impact, stakeholder management, and executive communication. 
-    Help leaders navigate complex challenges while maintaining authenticity and effectiveness.`,
+  analyst: {
+    id: 'analyst',
+    name: 'Data Analyst',
+    description: 'Data analysis and visualization',
+    icon: BarChart,
+    style: 'text-yellow-500',
+    systemPrompt: 'You are a data analysis assistant focused on helping interpret and visualize data.',
+    temperature: 0.4,
+    maxTokens: 2048,
+    features: ['Data visualization', 'Statistical analysis', 'Trend detection'],
+    tools: ['analyze', 'visualize', 'predict'],
+    contextWindow: 4096
+  },
+  teacher: {
+    id: 'teacher',
+    name: 'Learning Assistant',
+    description: 'Educational support and tutoring',
+    icon: GraduationCap,
+    style: 'text-red-500',
+    systemPrompt: 'You are a teaching assistant focused on helping learn and understand concepts.',
     temperature: 0.6,
-    maxTokens: 16384,
-    style: 'bg-slate-500/10 text-slate-500'
+    maxTokens: 3072,
+    features: ['Explanations', 'Practice exercises', 'Learning paths'],
+    tools: ['explain', 'quiz', 'guide'],
+    contextWindow: 6144
   }
 };
 
@@ -359,16 +401,28 @@ const cleanResponse = (text: string) => {
     .trim();
 };
 
+interface DocumentGroup {
+  id: string;
+  name: string;
+  description: string;
+  documents: AIDocument[];
+  createdAt: Date;
+  updatedAt: Date;
+  tags: string[];
+  type: 'collection' | 'project' | 'research';
+  status: 'active' | 'archived';
+}
+
 export function AIAssistantPage() {
-  const { sendMessage, updateConfig, config, isLoading } = useAI();
-  const { currentTheme } = useTheme();
-  const { documents, addDocument } = useKnowledgeBase({
+  const { sendMessage, isLoading } = useAI();
+  const { theme, isDark, toggleTheme } = useTheme();
+  const { addDocument } = useKnowledgeBase({
     enableDriveSync: true,
     autoIndex: true,
     maxResults: 10
   });
-  
-  const [messages, setMessages] = useState<Message[]>([]);
+
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<'gemini' | 'openai' | 'xai'>('gemini');
   const [selectedModel, setSelectedModel] = useState('gemini-2.0-pro');
@@ -391,7 +445,7 @@ export function AIAssistantPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResultType[]>([]);
   const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -413,6 +467,29 @@ export function AIAssistantPage() {
       sourceType: 'all',
       sortBy: 'relevance'
     }
+  });
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({
+    timeRange: 'any',
+    sourceType: 'all',
+    sortBy: 'relevance',
+    minCredibility: 0,
+    excludedDomains: [],
+    includedDomains: [],
+    language: 'en',
+    contentType: 'all'
+  });
+  const [selectedCitationStyle, setSelectedCitationStyle] = useState<string>('apa');
+  const [savedCitations, setSavedCitations] = useState<{ result: WebSearchResult; style: string }[]>([]);
+  const [enabledTools, setEnabledTools] = useState<string[]>([]);
+  const [documentGroups, setDocumentGroups] = useState<DocumentGroup[]>([]);
+  const [processingOptions, setProcessingOptions] = useState<DocumentProcessingOptions>({
+    extractText: true,
+    generateSummary: true,
+    detectLanguage: true,
+    extractMetadata: true,
+    performOCR: false,
+    splitIntoChunks: true,
+    chunkSize: 1000
   });
 
   // Create initial conversation if none exists
@@ -444,7 +521,35 @@ export function AIAssistantPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [chatMessages]);
+
+  const handleMessageSubmit = (m: Message) => {
+    setChatMessages(prev => [...prev, m]);
+  };
+
+  const handleMessageDelete = (messageIdOrMessage: string | Message) => {
+    const messageId = typeof messageIdOrMessage === 'string' ? messageIdOrMessage : messageIdOrMessage.id;
+    setChatMessages(prev => prev.filter(m => m.id !== messageId));
+    setMessageReactions(prev => {
+      const newReactions = { ...prev };
+      delete newReactions[messageId];
+      return newReactions;
+    });
+    setCodeView(prev => {
+      const newCodeView = { ...prev };
+      delete newCodeView[messageId];
+      return newCodeView;
+    });
+    setBookmarkedMessages(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(messageId);
+      return newSet;
+    });
+  };
+
+  const handleMessageEdit = (m: Message) => {
+    setChatMessages(prev => prev.map(msg => msg.id === m.id ? m : msg));
+  };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -459,7 +564,7 @@ export function AIAssistantPage() {
       metadata: { mode: getModelMode(selectedModel) }
     };
 
-    setMessages(prev => [...prev, newMessage]);
+    handleMessageSubmit(newMessage);
     setInput('');
 
     try {
@@ -487,7 +592,7 @@ export function AIAssistantPage() {
         metadata: { mode: getModelMode(selectedModel) }
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      handleMessageSubmit(assistantMessage);
       if (currentConversation) {
         setConversations(prev => prev.map(conv =>
           conv.id === currentConversation
@@ -507,7 +612,7 @@ export function AIAssistantPage() {
           error: 'Error processing request'
         }
       };
-      setMessages(prev => [...prev, errorMessage]);
+      handleMessageSubmit(errorMessage);
       if (currentConversation) {
         setConversations(prev => prev.map(conv =>
           conv.id === currentConversation
@@ -525,25 +630,6 @@ export function AIAssistantPage() {
     }
   };
 
-  const handleDeleteMessage = (messageId: string) => {
-    setMessages(prev => prev.filter(m => m.id !== messageId));
-    setMessageReactions(prev => {
-      const newReactions = { ...prev };
-      delete newReactions[messageId];
-      return newReactions;
-    });
-    setCodeView(prev => {
-      const newCodeView = { ...prev };
-      delete newCodeView[messageId];
-      return newCodeView;
-    });
-    setBookmarkedMessages(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(messageId);
-      return newSet;
-    });
-  };
-
   const handleMessageAction = (messageId: string, action: keyof MessageActions) => {
     switch (action) {
       case 'like':
@@ -553,7 +639,7 @@ export function AIAssistantPage() {
         setMessageReactions(prev => ({ ...prev, [messageId]: 'dislike' }));
         break;
       case 'copy':
-        const message = messages.find(m => m.id === messageId);
+        const message = chatMessages.find(m => m.id === messageId);
         if (message) {
           navigator.clipboard.writeText(message.content);
         }
@@ -581,12 +667,14 @@ export function AIAssistantPage() {
   const renderMessageActions = (message: Message): MessageActions => ({
     like: () => handleMessageAction(message.id, 'like'),
     dislike: () => handleMessageAction(message.id, 'dislike'),
-    copy: () => {
-      navigator.clipboard.writeText(message.content);
-    },
+    copy: () => navigator.clipboard.writeText(message.content),
     share: () => handleMessageAction(message.id, 'share'),
     toggleCode: () => handleMessageAction(message.id, 'toggleCode'),
-    bookmark: () => handleMessageAction(message.id, 'bookmark')
+    bookmark: () => handleMessageAction(message.id, 'bookmark'),
+    react: (emoji: string) => handleMessageReaction(message.id, emoji),
+    reply: () => setInput(`Replying to: "${message.content.substring(0, 50)}..."\n\n`),
+    thread: () => handleMessageThread(message.id),
+    format: (type: 'bold' | 'italic' | 'code', language?: string) => handleMessageFormat(message.id, type, language)
   });
 
   const handleFileInput = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
@@ -606,12 +694,12 @@ export function AIAssistantPage() {
             id: uuidv4(),
             title: file.name,
             content,
-            type: file.type.includes('image') ? 'image' : 'text',
+            type: file.type.includes('image') ? 'image' : 'text' as const,
             metadata: {
-              source: 'upload',
               dateCreated: new Date().toISOString(),
               dateModified: new Date().toISOString(),
-              tags: []
+              tags: [],
+              source: 'upload'
             }
           };
           
@@ -666,7 +754,7 @@ export function AIAssistantPage() {
     
     setConversations(prev => [newConversation, ...prev]);
     setCurrentConversation(newConversation.id);
-    setMessages([]);
+    setChatMessages([]);
     setShowNewChat(false);
     setSystemPrompt(newConversation.systemPrompt ?? '');
   };
@@ -761,7 +849,7 @@ export function AIAssistantPage() {
     setConversations(prev => prev.filter(conv => conv.id !== id));
     if (currentConversation === id) {
       setCurrentConversation(null);
-      setMessages([]);
+      setChatMessages([]);
     }
   };
 
@@ -789,12 +877,11 @@ export function AIAssistantPage() {
       setSearchResults(results);
     } catch (error) {
       console.error('Error performing search:', error);
-      // You might want to show an error message to the user here
     }
   };
 
   const handlePinMessage = (messageId: string) => {
-    const message = messages.find(m => m.id === messageId);
+    const message = chatMessages.find(m => m.id === messageId);
     if (message) {
       const pinnedMessage: PinnedMessage = {
         ...message,
@@ -808,34 +895,71 @@ export function AIAssistantPage() {
     setPinnedMessages(prev => prev.filter(m => m.id !== messageId));
   };
 
-  const handleEditMessage = (messageId: string) => {
-    setEditingMessageId(messageId);
+  const handleMessageReaction = (messageId: string, emoji: string) => {
+    setChatMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        const reactions = (msg.metadata as MessageMetadata)?.reactions || {};
+        const userReactions = reactions[emoji] || [];
+        const hasReacted = userReactions.includes('user');
+        
+        return {
+          ...msg,
+          metadata: {
+            ...msg.metadata,
+            reactions: {
+              ...reactions,
+              [emoji]: hasReacted 
+                ? userReactions.filter(u => u !== 'user')
+                : [...userReactions, 'user']
+            }
+          }
+        };
+      }
+      return msg;
+    }));
   };
 
-  const handleSaveEdit = (messageId: string, newContent: string) => {
-    setMessages(prev => prev.map(m => 
-      m.id === messageId 
-        ? { ...m, content: newContent, metadata: { ...m.metadata, edited: true } }
-        : m
-    ));
-    setEditingMessageId(null);
+  const handleMessageFormat = (messageId: string, type: 'bold' | 'italic' | 'code', language?: string) => {
+    setChatMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        return {
+          ...msg,
+          metadata: {
+            ...msg.metadata,
+            formatting: {
+              ...(msg.metadata as MessageMetadata)?.formatting,
+              [type === 'bold' ? 'isBold' : type === 'italic' ? 'isItalic' : 'isCode']: true,
+              ...(type === 'code' && language ? { language } : {})
+            }
+          }
+        };
+      }
+      return msg;
+    }));
   };
 
-  const handleCancelEdit = () => {
-    setEditingMessageId(null);
+  const handleMessageThread = (messageId: string) => {
+    const threadId = uuidv4();
+    setChatMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        return {
+          ...msg,
+          metadata: {
+            ...msg.metadata,
+            threadId
+          }
+        };
+      }
+      return msg;
+    }));
   };
 
-  const handleNavigateToMessage = (messageId: string) => {
-    const messageElement = document.getElementById(`message-${messageId}`);
-    if (messageElement) {
-      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      messageElement.classList.add('highlight');
-      setTimeout(() => messageElement.classList.remove('highlight'), 2000);
-    }
+  const handleTimeRangeChange = (value: 'any' | 'day' | 'week' | 'month' | 'year') => {
+    setSearchFilters(prev => ({ ...prev, timeRange: value }));
   };
 
   const handleDownloadMessage = (messageId: string) => {
-    const message = messages.find(m => m.id === messageId);
+    const message = chatMessages.find(m => m.id === messageId);
     if (message) {
       const blob = new Blob([message.content], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -849,180 +973,169 @@ export function AIAssistantPage() {
     }
   };
 
+  const handleNavigateToMessage = (messageId: string) => {
+    const messageElement = document.getElementById(`message-${messageId}`);
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      messageElement.classList.add('highlight');
+      setTimeout(() => messageElement.classList.remove('highlight'), 2000);
+    }
+  };
+
   const handleDocumentUpload = async (type: 'document' | 'image') => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = type === 'document' ? '.pdf,.doc,.docx,.txt,.md' : 'image/*';
+    input.multiple = true;
+    input.accept = type === 'document' 
+      ? '.pdf,.doc,.docx,.txt,.md'
+      : '.jpg,.jpeg,.png,.gif';
     
     input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          const content = e.target?.result as string;
-          const fileType = file.name.split('.').pop()?.toLowerCase();
-          let docType: AIDocument['type'] = 'text';
-          
-          if (type === 'image') {
-            docType = 'image';
-          } else if (fileType === 'pdf') {
-            docType = 'pdf';
-          } else if (fileType === 'doc' || fileType === 'docx') {
-            docType = 'doc';
-          } else if (fileType === 'md') {
-            docType = 'md';
-          } else if (fileType === 'txt') {
-            docType = 'txt';
-          }
+      const files = (e.target as HTMLInputElement).files;
+      if (!files) return;
 
-          const newDoc: AIDocument = {
-            id: uuidv4(),
-            title: file.name,
-            content,
-            type: docType,
-            metadata: {
-              source: 'upload',
-              dateCreated: new Date().toISOString(),
-              dateModified: new Date().toISOString(),
-              tags: []
-            }
-          };
-          
-          await addDocument(newDoc);
-          
-          if (currentConversation) {
-            setConversations(prev => prev.map(conv => 
-              conv.id === currentConversation
-                ? { ...conv, documents: [...(conv.documents || []), newDoc] }
-                : conv
-            ));
-          }
+      const newDocs: AIDocument[] = [];
+      const groupId = uuidv4();
+      const groupName = `Upload ${new Date().toLocaleString()}`;
+
+      for (const file of Array.from(files)) {
+        try {
+          const doc = await processDocument(file, processingOptions);
+          newDocs.push(doc);
+        } catch (error) {
+          console.error(`Error processing ${file.name}:`, error);
+        }
+      }
+
+      if (newDocs.length > 0) {
+        const newGroup: DocumentGroup = {
+          id: groupId,
+          name: groupName,
+          description: `Uploaded ${newDocs.length} files`,
+          documents: newDocs,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          tags: [],
+          type: 'collection',
+          status: 'active'
         };
-        reader.readAsDataURL(file);
+
+        setDocumentGroups(prev => [...prev, newGroup]);
+        setSelectedDocs(prev => [...prev, ...newDocs]);
       }
     };
-    
+
     input.click();
   };
 
-  const handleDocumentRemove = (id: string) => {
-    if (currentConversation) {
-      setConversations(prev => prev.map(conv =>
-        conv.id === currentConversation
-          ? { ...conv, documents: (conv.documents || []).filter(d => d.id !== id) }
-          : conv
-      ));
+  const processDocument = async (
+    file: File, 
+    options: DocumentProcessingOptions
+  ): Promise<AIDocument> => {
+    const content = await readFileContent(file);
+    let processedContent = content;
+    let summary = '';
+    let language = 'en';
+    let chunks: string[] = [];
+    let embedding: number[] = [];
+
+    if (options.extractText) {
+      processedContent = await extractTextFromDocument(content);
     }
-  };
 
-  const handleSideSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    
-    if (!sideInput.trim() || isLoading) return;
+    if (options.generateSummary) {
+      summary = await generateDocumentSummary(processedContent);
+    }
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content: sideInput,
-      role: 'user',
-      timestamp: new Date(),
-      metadata: { mode: getModelMode(selectedModel) }
+    if (options.detectLanguage) {
+      language = await detectDocumentLanguage(processedContent);
+    }
+
+    if (options.performOCR && file.type.startsWith('image/')) {
+      processedContent = await performOCROnImage(file);
+    }
+
+    if (options.splitIntoChunks) {
+      chunks = splitIntoChunks(processedContent, options.chunkSize || 1000);
+    }
+
+    embedding = await generateEmbedding(processedContent);
+
+    return {
+      id: uuidv4(),
+      title: file.name,
+      content: processedContent,
+      type: file.type.includes('image') ? 'image' : 'text',
+      metadata: {
+        dateCreated: new Date().toISOString(),
+        dateModified: new Date().toISOString(),
+        tags: [],
+        source: 'upload',
+        size: file.size
+      },
+      summary: summary || 'No summary available',
+      language,
+      chunks: chunks.length > 0 ? chunks : [processedContent],
+      embedding: embedding.length > 0 ? embedding : new Array(384).fill(0)
     };
-
-    setSideChat(prev => [...prev, newMessage]);
-    setSideInput('');
-
-    try {
-      // Get context from main chat if enabled
-      const context = sideChatConfig.useMainContext 
-        ? messages.map(msg => ({
-            id: msg.id,
-            title: 'Chat Message',
-            excerpt: msg.content.substring(0, 200),
-            type: 'text',
-            relevance: 1
-          } as DocumentReference))
-        : [];
-      
-      const response = await sendMessage(sideInput, {
-        systemPrompt: `You are a research assistant helping to explore and analyze information. ${
-          sideChatConfig.mode === 'research' 
-            ? 'Focus on finding and citing relevant information.'
-            : sideChatConfig.mode === 'explore' 
-            ? 'Help explore new ideas and possibilities related to the topic.'
-            : 'Provide detailed analysis and insights.'
-        }`,
-        context: [...context, ...selectedDocs.map(doc => ({
-          id: doc.id,
-          title: doc.title,
-          excerpt: doc.content.substring(0, 200) + '...',
-          type: doc.type,
-          relevance: 1
-        }))]
-      });
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: response || 'Sorry, I encountered an error.',
-        role: 'assistant',
-        timestamp: new Date(),
-        metadata: { mode: getModelMode(selectedModel) }
-      };
-
-      setSideChat(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Error in side chat:', error);
-    }
   };
+
+  // Use theme values in the UI
+  const containerClassName = `min-h-screen bg-${theme === 'dark' ? 'gray-900' : 'white'} text-${isDark ? 'white' : 'gray-900'}`;
+  const headerClassName = `flex items-center justify-between p-4 border-b border-${isDark ? 'gray-700' : 'gray-200'}`;
 
   return (
     <AIErrorBoundary>
       <TooltipProvider>
-        <div className="h-screen flex bg-background overflow-hidden">
-          {/* Left Sidebar - Now fixed */}
-          <div className="w-72 flex flex-col border-r bg-card/50 backdrop-blur-sm">
-            {/* New Chat Button - Fixed at top */}
-            <div className="p-3 border-b">
+        <div className={containerClassName}>
+          {/* Left Sidebar - Now with gradient */}
+          <div className="w-72 flex flex-col border-r bg-card/90 backdrop-blur-md">
+            {/* New Chat Button - Fixed at top with improved styling */}
+            <div className="p-3 border-b bg-background/50">
               <Button
-                className="w-full justify-start gap-2 bg-primary/10 hover:bg-primary/20 text-primary"
+                className="w-full justify-start gap-2 bg-gradient-to-r from-primary/20 to-primary/10 hover:from-primary/30 hover:to-primary/20 text-primary shadow-sm"
                 onClick={handleNewChat}
               >
                 <Plus className="w-4 h-4" />
                 <span>New Chat</span>
               </Button>
-          </div>
+            </div>
           
-            {/* Conversations List - Scrollable */}
-            <div className="flex-1 overflow-y-auto py-2 px-2 space-y-2">
+            {/* Conversations List - With improved styling */}
+            <div className="flex-1 overflow-y-auto py-2 px-2 space-y-1.5">
               {conversations.map(conv => (
-            <button
+                <div
                   key={conv.id}
-                  onClick={() => {
-                    setCurrentConversation(conv.id);
-                    setMessages(conv.messages);
-                    setSystemPrompt(conv.systemPrompt ?? '');
-                    setSelectedModel(conv.model);
-                    setSelectedProvider(conv.provider as 'gemini' | 'openai' | 'xai');
-                    setSelectedDocs(conv.documents || []);
-                  }}
                   className={cn(
-                    'w-full p-2 rounded-lg text-left transition-all',
-                    'hover:bg-accent/50 group flex items-center gap-3',
+                    'w-full rounded-lg text-left transition-all',
+                    'group flex items-center gap-2 px-2',
                     currentConversation === conv.id 
-                      ? 'bg-primary/10 text-primary font-medium' 
-                      : 'text-muted-foreground hover:text-foreground'
+                      ? 'bg-gradient-to-r from-primary/20 to-primary/10 text-primary shadow-sm' 
+                      : 'hover:bg-accent/50 text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Bot className="w-4 h-4" />
+                  <Button
+                    variant="ghost"
+                    className="flex-1 justify-start h-9 px-2 hover:bg-transparent"
+                    onClick={() => {
+                      setCurrentConversation(conv.id);
+                      setChatMessages(conv.messages);
+                      setSystemPrompt(conv.systemPrompt ?? '');
+                      setSelectedModel(conv.model);
+                      setSelectedProvider(conv.provider as 'gemini' | 'openai' | 'xai');
+                      setSelectedDocs(conv.documents || []);
+                    }}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Bot className="w-4 h-4 shrink-0" />
                       <span className="truncate">{conv.title}</span>
                     </div>
-                  </div>
+                  </Button>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6"
+                      className="h-6 w-6 text-muted-foreground hover:text-primary"
                       onClick={(e) => {
                         e.stopPropagation();
                         pinConversation(conv.id);
@@ -1033,7 +1146,7 @@ export function AIAssistantPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteConversation(conv.id);
@@ -1042,469 +1155,293 @@ export function AIAssistantPage() {
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
-            </button>
-              ))}
-          </div>
-        </div>
-
-          {/* Main Content - Flexbox for header and chat */}
-          <div className="flex-1 flex flex-col h-screen overflow-hidden">
-            {/* Header - Fixed */}
-            <div className="flex-none flex items-center justify-between h-14 px-4 border-b bg-background/50 backdrop-blur-sm">
-              <div className="flex items-center gap-3">
-                <h1 className="text-lg font-semibold">
-                  {currentConversation 
-                    ? conversations.find(c => c.id === currentConversation)?.title
-                    : 'New Chat'
-                  }
-                </h1>
-          </div>
-
-              <div className="flex items-center gap-2">
-                <Tooltip content="Customize AI">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className={cn(
-                      "flex items-center gap-2",
-                      aiModePresets[selectedMode].style
-                    )}
-                    onClick={() => setShowCustomize(!showCustomize)}
-                  >
-                    <Settings className="w-4 h-4" />
-                    <span className="text-sm">{aiModePresets[selectedMode].name}</span>
-                  </Button>
-                </Tooltip>
-
-                <Tooltip content="Model Settings">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className="flex items-center gap-2"
-                    onClick={() => setShowSettings(!showSettings)}
-                  >
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    <span className="text-sm">{modelGroups[selectedProvider].models[selectedModel].name}</span>
-                  </Button>
-                </Tooltip>
-
-                <Tooltip content="Toggle Search">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsSearchPanelOpen(!isSearchPanelOpen)}
-                  >
-                    <Search className="w-4 h-4" />
-                  </Button>
-                </Tooltip>
-              </div>
-            </div>
-
-            {/* Customize Panel - Fixed when shown */}
-            {showCustomize && (
-              <div className="flex-none border-b bg-card/50 backdrop-blur-sm">
-                <div className="max-w-3xl mx-auto p-4 space-y-4">
-                  {/* AI Mode Presets */}
-                  <div className="grid grid-cols-4 gap-2">
-                    {Object.entries(aiModePresets).map(([key, preset]) => (
-                      <Button
-                        key={key}
-                        variant="outline"
-                        className={cn(
-                          "flex flex-col items-start p-4 h-auto gap-1",
-                          selectedMode === key && preset.style
-                        )}
-                        onClick={() => {
-                          setSelectedMode(key as keyof typeof aiModePresets);
-                          setSystemPrompt(preset.systemPrompt);
-                          setTemperature(preset.temperature);
-                          setMaxTokens(preset.maxTokens);
-                          updateConfig({
-                            systemPrompt: preset.systemPrompt,
-                            temperature: preset.temperature,
-                            maxTokens: preset.maxTokens
-                          });
-                        }}
-                      >
-                        <div className="font-medium">{preset.name}</div>
-                        <div className="text-xs text-muted-foreground">{preset.description}</div>
-                      </Button>
-                    ))}
-                  </div>
-
-                  {/* System Prompt */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">System Prompt</label>
-                    <textarea
-                      value={systemPrompt}
-                      onChange={(e) => {
-                        setSystemPrompt(e.target.value);
-                        updateConfig({ systemPrompt: e.target.value });
-                      }}
-                      className="w-full min-h-[100px] p-2 rounded-md border bg-background resize-y"
-                      placeholder="Enter a system prompt to guide the AI's behavior..."
-                    />
-                  </div>
-
-                  {/* Temperature and Max Tokens */}
-              <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Temperature</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          value={temperature}
-                          onChange={(e) => {
-                            setTemperature(parseFloat(e.target.value));
-                            updateConfig({ temperature: parseFloat(e.target.value) });
-                          }}
-                          className="flex-1"
-                        />
-                        <span className="text-sm w-12 text-right">{temperature}</span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Max Tokens</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min="1000"
-                          max="32000"
-                          step="1000"
-                          value={maxTokens}
-                          onChange={(e) => {
-                            setMaxTokens(parseInt(e.target.value));
-                            updateConfig({ maxTokens: parseInt(e.target.value) });
-                          }}
-                          className="flex-1"
-                        />
-                        <span className="text-sm w-16 text-right">{maxTokens}</span>
-              </div>
                 </div>
+              ))}
+            </div>
           </div>
 
-                  {/* Knowledge Base Selection */}
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Header */}
+            <header className={headerClassName}>
+              {/* Main Header */}
+              <div className="flex items-center gap-3">
+                  <h1 className="text-lg font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                    {currentConversation 
+                      ? conversations.find(c => c.id === currentConversation)?.title
+                      : 'New Chat'
+                    }
+            </h1>
+                  {currentConversation && (
+                    <Badge variant="outline" className="text-xs font-normal">
+                      {chatMessages.length} messages
+                    </Badge>
+                  )}
+          </div>
+          
+                <div className="flex items-center gap-2">
+                  <Tooltip content="Customize AI">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className={cn(
+                        "flex items-center gap-2 hover:bg-accent/50",
+                        aiModePresets[selectedMode].style
+                      )}
+                      onClick={() => setShowCustomize(!showCustomize)}
+                    >
+                      <Settings className="w-4 h-4" />
+                      <span className="text-sm font-medium">{aiModePresets[selectedMode].name}</span>
+                      <ChevronDown className="w-3 h-3 opacity-50" />
+                    </Button>
+                  </Tooltip>
+
+                  <Tooltip content="Model Settings">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="flex items-center gap-2 hover:bg-accent/50"
+                      onClick={() => setShowSettings(!showSettings)}
+                    >
+                      <Sparkles className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium">{modelGroups[selectedProvider].models[selectedModel].name}</span>
+                      <ChevronDown className="w-3 h-3 opacity-50" />
+                    </Button>
+                  </Tooltip>
+
+                  <div className="h-4 w-px bg-border/50" />
+
+                  <Tooltip content="Toggle Research Panel">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn("hover:bg-accent/50", showRightPanel && "text-primary")}
+                      onClick={() => setShowRightPanel(!showRightPanel)}
+                    >
+                      <Search className="w-4 h-4" />
+                    </Button>
+                  </Tooltip>
+
+                  <Tooltip content="Knowledge Base">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hover:bg-accent/50"
+                      onClick={() => setShowCustomize(true)}
+                    >
+                      <Library className="w-4 h-4" />
+                    </Button>
+                  </Tooltip>
+
+                  <Tooltip content="Chat Analytics">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hover:bg-accent/50"
+                      onClick={() => analyzeWorkflow()}
+                    >
+                      <LineChart className="w-4 h-4" />
+                    </Button>
+                  </Tooltip>
+          </div>
+        </header>
+
+            {/* Chat Area */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-3xl mx-auto p-4">
+                {currentConversation && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium">Knowledge Base</label>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDocumentUpload('document')}
-                        >
-                          <File className="w-4 h-4 mr-2" />
-                          Attach Files
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedDocs(documents)}
-                        >
-                          <Library className="w-4 h-4 mr-2" />
-                          Browse AI Drive
-                        </Button>
-        </div>
-      </div>
-
-                    {/* Knowledge Base Categories */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          "justify-start",
-                          selectedKnowledgeBase.length > 0 && "border-primary"
-                        )}
-                        onClick={() => setSelectedDocs(documents.filter(d => d.type === 'text' || d.type === 'pdf'))}
-                      >
-                        <FileText className="w-4 h-4 mr-2" />
-                        Documents
-                        {documents.filter(d => d.type === 'text' || d.type === 'pdf').length > 0 && (
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {documents.filter(d => d.type === 'text' || d.type === 'pdf').length}
-                          </span>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          "justify-start",
-                          selectedKnowledgeBase.length > 0 && "border-primary"
-                        )}
-                        onClick={() => setSelectedDocs(documents.filter(d => d.type === 'image'))}
-                      >
-                        <Image className="w-4 h-4 mr-2" />
-                        Images
-                        {documents.filter(d => d.type === 'image').length > 0 && (
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {documents.filter(d => d.type === 'image').length}
-                          </span>
-                        )}
-                      </Button>
-    </div>
-
-                    {/* Selected Documents */}
-                    {selectedDocs.length > 0 && (
-                      <div className="border rounded-lg divide-y">
-                        {selectedDocs.map(doc => (
-                          <div key={doc.id} className="flex items-center justify-between p-2 hover:bg-accent/50">
-                            <div className="flex items-center gap-2 min-w-0">
-                              {doc.type === 'image' ? (
-                                <Image className="w-4 h-4 text-primary" />
-                              ) : (
-                                <FileText className="w-4 h-4 text-primary" />
-                              )}
-                              <div className="truncate">
-                                <div className="text-sm font-medium truncate">{doc.title}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {formatDate(doc.metadata?.dateCreated)}
-                                </div>
-                              </div>
-                            </div>
+                    {pinnedMessages.length > 0 && (
+                      <div className="bg-card/50 border rounded-lg p-2 space-y-2">
+                        <div className="flex items-center justify-between px-2">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            <Pin className="w-4 h-4" />
+                            <span>Pinned Messages</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 hover:bg-accent/50"
+                            onClick={() => setPinnedMessages([])}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        {pinnedMessages.map(message => (
+                          <div
+                            key={message.id}
+                            className="flex items-center gap-2 px-2 py-1 rounded hover:bg-accent/50 cursor-pointer text-sm"
+                            onClick={() => handleNavigateToMessage(message.id)}
+                          >
+                            <div className="w-1 h-1 rounded-full bg-primary" />
+                            <span className="flex-1 truncate">{message.content}</span>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 shrink-0"
-                              onClick={() => handleDocumentRemove(doc.id)}
+                              className="h-6 w-6 hover:bg-accent/50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUnpinMessage(message.id);
+                              }}
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <X className="w-3 h-3" />
                             </Button>
                           </div>
                         ))}
                       </div>
                     )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Pinned Messages - Fixed */}
-            <div className="flex-none">
-              <PinnedMessages
-                messages={pinnedMessages}
-                onUnpin={handleUnpinMessage}
-                onNavigate={handleNavigateToMessage}
-              />
-    </div>
-
-            {/* Chat Area - Scrollable */}
-            <div className="flex-1 overflow-y-auto bg-background/50">
-              <div className="max-w-3xl mx-auto p-4">
-                {currentConversation ? (
-                  <div className="space-y-6">
-                    {/* Message bubbles - Auto-sizing */}
-    <div className="space-y-4">
-                      {messages.map((message, index) => (
-                        <MessageContextMenu
-                          key={message.id}
-                          message={message}
-                          onCopy={() => navigator.clipboard.writeText(message.content)}
-                          onShare={() => handleMessageAction(message.id, 'share')}
-                          onBookmark={() => handleMessageAction(message.id, 'bookmark')}
-                          onLike={() => handleMessageAction(message.id, 'like')}
-                          onDislike={() => handleMessageAction(message.id, 'dislike')}
-                          onToggleCode={() => handleMessageAction(message.id, 'toggleCode')}
-                          onDelete={() => handleDeleteMessage(message.id)}
-                          onDownload={() => handleDownloadMessage(message.id)}
-                          onReply={() => setInput(`Replying to: "${message.content.substring(0, 50)}..."\n\n`)}
-                          onEdit={() => handleEditMessage(message.id)}
-                          onPin={() => handlePinMessage(message.id)}
-                          isBookmarked={bookmarkedMessages.has(message.id)}
-                          isLiked={messageReactions[message.id] === 'like' ? true : messageReactions[message.id] === 'dislike' ? false : null}
-                          showingCode={codeView[message.id]}
-                          isPinned={pinnedMessages.some(m => m.id === message.id)}
-                        >
-                          <div 
-                            id={`message-${message.id}`} 
-                            className={cn(
-                              "group relative rounded-lg p-4 transition-all duration-200",
-                              "hover:shadow-md hover:bg-card/80",
-                              "w-fit max-w-full",
-                              message.role === 'assistant' 
-                                ? selectedMode === 'legalPro'
-                                  ? 'bg-indigo-500/5 border border-indigo-500/20 ml-0'
-                                  : 'bg-card/50 border border-border/50 ml-0'
-                                : 'bg-primary/5 border border-primary/10 ml-auto'
-                            )}
-                          >
-                            {/* Message Header */}
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center",
-                                message.role === 'assistant' ? 'bg-primary/10' : 'bg-primary/5'
-                              )}>
-                                {message.role === 'assistant' ? (
-                                  <Bot className="w-4 h-4 text-primary" />
-                                ) : message.role === 'error' ? (
-                                  <span className="text-destructive">!</span>
-                                ) : (
-                                  <span className="text-primary">U</span>
-                                )}
-    </div>
-                              <div className="flex-1">
-                                <div className="text-sm font-medium">
-                                  {message.role === 'assistant' ? 'AI Assistant' : 'You'}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {new Date(message.timestamp).toLocaleTimeString()}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Message Content */}
-                            <div className="prose prose-sm dark:prose-invert max-w-none">
-                              {editingMessageId === message.id ? (
-                                <MessageEditor
-                                  message={message}
-                                  onSave={(content) => handleSaveEdit(message.id, content)}
-                                  onCancel={handleCancelEdit}
-                                />
-                              ) : (
-                                <ChatHistory
-                                  messages={[message]}
-                                  onDelete={handleDeleteMessage}
-                                  renderActions={renderMessageActions}
-                                  reactions={messageReactions}
-                                  codeView={codeView}
-                                  bookmarked={bookmarkedMessages}
-                                  mode={getModelMode(selectedModel)}
-                                />
-                              )}
-                            </div>
-
-                            {/* Message Actions */}
-                            <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  onClick={() => handleMessageAction(message.id, 'like')}
-                                >
-                                  <span className={cn(
-                                    "text-sm",
-                                    messageReactions[message.id] === 'like' && "text-primary"
-                                  )}>👍</span>
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  onClick={() => handleMessageAction(message.id, 'dislike')}
-                                >
-                                  <span className={cn(
-                                    "text-sm",
-                                    messageReactions[message.id] === 'dislike' && "text-destructive"
-                                  )}>👎</span>
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </MessageContextMenu>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)] text-center space-y-4">
-                    <div className="relative">
-                      <Bot className="w-12 h-12 text-primary" />
-                      <div className="absolute inset-0 bg-primary/20 rounded-full blur-lg animate-pulse" />
-                    </div>
-                    <h2 className="text-xl font-semibold">Welcome to AI Assistant</h2>
-                    <p className="text-muted-foreground max-w-md">
-                      Start a new chat or select an existing conversation to begin.
-                    </p>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
-
-            {/* Input Area - Fixed at bottom */}
-            <div className="flex-none border-t bg-background/50 backdrop-blur-sm">
-              <div className="max-w-3xl mx-auto p-4">
-                <form onSubmit={handleSubmit} className="flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <Input
-                      value={input}
-                      onChange={e => setInput(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Message AI Assistant..."
-                      disabled={isLoading}
-                      className="pr-24 bg-card/50 border-primary/20 focus:border-primary"
-                    />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      <Tooltip content="Attach document">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDocumentUpload('document')}
-                          className="h-8 w-8"
-                        >
-                          <File className="w-4 h-4" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Attach image">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDocumentUpload('image')}
-                          className="h-8 w-8"
-                        >
-                          <Image className="w-4 h-4" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content={isListening ? 'Stop listening' : 'Start voice input'}>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={toggleListening}
+                    {chatMessages.map((message) => (
+                      <MessageContextMenu
+                        key={message.id}
+                        message={message}
+                        onCopy={() => navigator.clipboard.writeText(message.content)}
+                        onShare={() => handleMessageAction(message.id, 'share')}
+                        onBookmark={() => handleMessageAction(message.id, 'bookmark')}
+                        onLike={() => handleMessageAction(message.id, 'like')}
+                        onDislike={() => handleMessageAction(message.id, 'dislike')}
+                        onToggleCode={() => handleMessageAction(message.id, 'toggleCode')}
+                        onDelete={() => handleMessageDelete(message.id)}
+                        onDownload={() => handleDownloadMessage(message.id)}
+                        onReply={() => setInput(`Replying to: "${message.content.substring(0, 50)}..."\n\n`)}
+                        onEdit={() => handleMessageEdit(message)}
+                        onPin={() => handlePinMessage(message.id)}
+                        isBookmarked={bookmarkedMessages.has(message.id)}
+                        isLiked={messageReactions[message.id] === 'like' ? true : messageReactions[message.id] === 'dislike' ? false : null}
+                        showingCode={codeView[message.id]}
+                        isPinned={pinnedMessages.some(m => m.id === message.id)}
+                      >
+                        <div 
+                          id={`message-${message.id}`} 
                           className={cn(
-                            'h-8 w-8',
-                            isListening && 'text-primary'
+                            "group relative rounded-lg p-4 transition-all duration-200",
+                            "hover:shadow-lg",
+                            message.role === 'assistant' 
+                              ? 'bg-card/95 border border-border/50 ml-0 shadow-sm'
+                              : 'bg-primary/10 border border-primary/20 ml-auto shadow-sm'
                           )}
                         >
-                          <Mic className="w-4 h-4" />
-                        </Button>
-                      </Tooltip>
-                    </div>
-                  </div>
-                  <Button
-                    type="submit"
-                    disabled={isLoading || !input.trim()}
-                    className="bg-primary hover:bg-primary/90 min-w-[100px]"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        <span>Thinking</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4 mr-2" />
-                        <span>Send</span>
-                      </>
-                    )}
-                  </Button>
-                </form>
+                          {/* Message Header */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center",
+                              message.role === 'assistant' 
+                                ? 'bg-gradient-to-br from-primary/20 to-primary/10' 
+                                : 'bg-gradient-to-br from-primary/20 to-primary/5'
+                            )}>
+                              {message.role === 'assistant' ? (
+                                <Bot className="w-4 h-4 text-primary" />
+                              ) : message.role === 'error' ? (
+                                <span className="text-destructive">!</span>
+                              ) : (
+                                <User className="w-4 h-4 text-primary" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium">
+                                {message.role === 'assistant' ? 'AI Assistant' : 'You'}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(message.timestamp).toLocaleTimeString()}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {(message.metadata as MessageMetadata)?.edited && (
+                                <span className="text-xs text-muted-foreground">(edited)</span>
+                              )}
+                              {message.metadata?.mode && (
+                                <Badge variant="outline" className="text-xs font-normal">
+                                  {message.metadata.mode}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Message Content */}
+                          <div className="prose prose-sm dark:prose-invert max-w-none">
+                            {editingMessageId === message.id ? (
+                              <MessageEditor
+                                message={message}
+                                onSave={(content) => handleMessageEdit(message)}
+                                onCancel={() => setEditingMessageId(null)}
+                              />
+                            ) : (
+                              <ChatHistory
+                                messages={[message]}
+                                onDelete={handleMessageDelete}
+                                renderActions={renderMessageActions}
+                                reactions={messageReactions}
+                                codeView={codeView}
+                                bookmarked={bookmarkedMessages}
+                                mode={getModelMode(selectedModel)}
+                              />
+                            )}
               </div>
+
+                          {/* Message Actions */}
+                          <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 hover:bg-accent/50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMessageAction(message.id, 'like');
+                                }}
+                              >
+                                <span className={cn(
+                                  "text-sm",
+                                  messageReactions[message.id] === 'like' && "text-primary"
+                                )}>👍</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 hover:bg-accent/50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMessageAction(message.id, 'dislike');
+                                }}
+                              >
+                                <span className={cn(
+                                  "text-sm",
+                                  messageReactions[message.id] === 'dislike' && "text-destructive"
+                                )}>👎</span>
+                              </Button>
+                </div>
+          </div>
+        </div>
+                      </MessageContextMenu>
+                    ))}
+      </div>
+                )}
+                <div ref={messagesEndRef} />
+    </div>
             </div>
 
-            {/* Search Panel */}
-            <SearchPanel
-              isOpen={isSearchPanelOpen}
-              onToggle={() => setIsSearchPanelOpen(!isSearchPanelOpen)}
-              searchResults={searchResults}
-              onSearch={handleSearch}
-            />
+            {/* Input Area - With improved styling */}
+            <div className="flex-none border-t bg-background/95 backdrop-blur-md">
+              <div className="px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 hover:bg-accent/50"
+                    onClick={() => handleDocumentUpload('document')}
+                  >
+                    <FileText className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 hover:bg-accent/50"
+                    onClick={() => handleDocumentUpload('image')}
+                  >
+                    <Image className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Right Panel */}
@@ -1513,76 +1450,31 @@ export function AIAssistantPage() {
             !showRightPanel && "w-0 opacity-0"
           )}>
             {/* Right Panel Header */}
-            <div className="flex-none h-14 border-b flex items-center justify-between px-4">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold">Research Assistant</h2>
-                <Badge variant="outline" className="text-xs">
-                  {sideChatConfig.mode}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2">
-                <Tooltip content="Settings">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setShowSideSettings(!showSideSettings)}
-                  >
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </Tooltip>
-                <Tooltip content="Close Panel">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setShowRightPanel(false)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </Tooltip>
-              </div>
-            </div>
-
-            {/* Settings Panel */}
-            {showSideSettings && (
-              <div className="flex-none border-b bg-background/50 p-4 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Mode</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['research', 'explore', 'analyze'].map(mode => (
-                      <Button
-                        key={mode}
-                        variant={sideChatConfig.mode === mode ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setSideChatConfig(prev => ({ ...prev, mode: mode as any }))}
-                      >
-                        {mode}
-                      </Button>
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Research Panel</h3>
+                <Select
+                  value={selectedCitationStyle}
+                  onValueChange={setSelectedCitationStyle}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="Citation Style" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {citationStyles.map(style => (
+                      <SelectItem key={style.id} value={style.id}>
+                        {style.name}
+                      </SelectItem>
                     ))}
-                  </div>
-                </div>
+                  </SelectContent>
+                </Select>
+    </div>
 
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Use Main Chat Context</label>
-                  <Switch
-                    checked={sideChatConfig.useMainContext}
-                    onCheckedChange={(checked) => 
-                      setSideChatConfig(prev => ({ ...prev, useMainContext: checked }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Search Filters</label>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
                   <Select
-                    value={sideChatConfig.searchFilters.timeRange}
-                    onValueChange={(value) => 
-                      setSideChatConfig(prev => ({
-                        ...prev,
-                        searchFilters: { ...prev.searchFilters, timeRange: value }
-                      }))
-                    }
+                    value={searchFilters.timeRange}
+                    onValueChange={handleTimeRangeChange}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Time Range" />
@@ -1595,60 +1487,263 @@ export function AIAssistantPage() {
                       <SelectItem value="year">Past Year</SelectItem>
                     </SelectContent>
                   </Select>
-    </div>
-              </div>
-            )}
 
-            {/* Side Chat Messages */}
+                  <Select
+                    value={searchFilters.contentType}
+                    onValueChange={(value: 'all' | 'article' | 'paper' | 'book' | 'code') => 
+                      setSearchFilters(prev => ({ ...prev, contentType: value }))
+                  }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Content Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="article">Articles</SelectItem>
+                      <SelectItem value="paper">Papers</SelectItem>
+                      <SelectItem value="book">Books</SelectItem>
+                      <SelectItem value="code">Code</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Minimum Credibility</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={searchFilters.minCredibility}
+                    onChange={(e) => setSearchFilters(prev => ({ 
+                      ...prev, 
+                      minCredibility: parseInt(e.target.value) 
+                    }))}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Low</span>
+                    <span>High</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Search Results */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {sideChat.map((message) => (
+              {searchResults.map((result) => (
                 <div
-                  key={message.id}
-                  className={cn(
-                    "rounded-lg p-3 text-sm",
-                    message.role === 'assistant' 
-                      ? 'bg-card border ml-4' 
-                      : 'bg-primary/10 mr-4'
-                  )}
+                  key={result.id}
+                  className="rounded-lg border bg-card p-3 hover:shadow-md transition-shadow"
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    {message.role === 'assistant' ? (
-                      <Search className="h-4 w-4" />
-                    ) : (
-                      <User className="h-4 w-4" />
-                    )}
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge 
+                      variant={result.credibilityScore > 80 ? 'default' : 'outline'}
+                      className="text-xs"
+                    >
+                      {result.credibilityScore}% Credible
+                    </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {message.role === 'assistant' ? 'Research Assistant' : 'You'}
+                      {new Date(result.date).toLocaleDateString()}
                     </span>
                   </div>
-                  <div className="prose prose-sm dark:prose-invert">
-                    {message.content}
+                  
+                  <h4 className="font-medium mb-1">{result.title}</h4>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {result.snippet}
+                  </p>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{result.source}</Badge>
+                      <Badge variant="outline">{result.language}</Badge>
+                      {result.citations > 0 && (
+                        <span className="text-muted-foreground">
+                          {result.citations} citations
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setSavedCitations(prev => [
+                          ...prev,
+                          { result, style: selectedCitationStyle }
+                        ])}
+                      >
+                        <Save className="h-3 w-3" />
+                      </Button>
+                      {result.link && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => window.open(result.link, '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Side Chat Input */}
-            <div className="flex-none border-t p-4">
-              <form onSubmit={handleSideSubmit} className="flex gap-2">
-                <Input
-                  value={sideInput}
-                  onChange={(e) => setSideInput(e.target.value)}
-                  placeholder="Research or explore..."
-                  className="flex-1"
-                />
-                <Button type="submit" size="icon" disabled={isLoading}>
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
-              </form>
-            </div>
+            {/* Saved Citations */}
+            {savedCitations.length > 0 && (
+              <div className="flex-none border-t p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium">Saved Citations</h4>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSavedCitations([])}
+                    className="h-6 px-2 text-xs"
+                  >
+                    Clear All
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {savedCitations.map(({ result, style }, index) => (
+                    <div key={index} className="text-xs text-muted-foreground">
+                      {citationStyles.find(s => s.id === style)?.format(result)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </TooltipProvider>
+
+      {/* AI Mode Customization Dialog */}
+      {showCustomize && (
+        <Dialog open={showCustomize} onOpenChange={setShowCustomize}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Customize AI Assistant</DialogTitle>
+              <DialogDescription>
+                Choose a preset mode or customize your own AI assistant configuration.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid gap-6 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                {Object.values(aiModePresets).map((mode) => {
+                  const Icon = mode.icon;
+  return (
+                    <Button
+                      key={mode.id}
+                      variant={selectedMode === mode.id ? 'default' : 'outline'}
+                      className={cn(
+                        'h-auto flex flex-col items-start p-4 gap-2',
+                        selectedMode === mode.id && 'ring-2 ring-primary'
+                      )}
+                      onClick={() => {
+                        setSelectedMode(mode.id);
+                        setSystemPrompt(mode.systemPrompt);
+                        setTemperature(mode.temperature);
+                        setMaxTokens(mode.maxTokens);
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className={cn('h-5 w-5', mode.style)} />
+                        <span className="font-medium">{mode.name}</span>
+    </div>
+                      <p className="text-xs text-muted-foreground">
+                        {mode.description}
+                      </p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {mode.features.map((feature, index) => (
+                          <Badge
+                            key={index}
+                            variant="outline"
+                            className="text-xs"
+                          >
+                            {feature}
+                          </Badge>
+                        ))}
+                      </div>
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Separator />
+
+    <div className="space-y-4">
+                <h4 className="font-medium">Advanced Settings</h4>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">System Prompt</label>
+                  <Textarea
+                    value={systemPrompt}
+                    onChange={(e) => setSystemPrompt(e.target.value)}
+                    placeholder="Enter a custom system prompt..."
+                    className="h-20"
+                  />
+    </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Temperature</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={temperature}
+                        onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                        className="flex-1"
+                      />
+                      <span className="text-sm text-muted-foreground w-12">
+                        {temperature}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Max Tokens</label>
+                    <Select
+                      value={maxTokens.toString()}
+                      onValueChange={(value) => setMaxTokens(parseInt(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1024">1K</SelectItem>
+                        <SelectItem value="2048">2K</SelectItem>
+                        <SelectItem value="4096">4K</SelectItem>
+                        <SelectItem value="8192">8K</SelectItem>
+                        <SelectItem value="16384">16K</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowCustomize(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => {
+                setShowCustomize(false);
+                // Apply settings
+                setSystemPrompt(systemPrompt);
+                setTemperature(temperature);
+                setMaxTokens(maxTokens);
+              }}>
+                Apply Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </AIErrorBoundary>
   );
 } 

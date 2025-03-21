@@ -491,6 +491,7 @@ export namespace EmailServiceNS {
   export const emailService = EmailService.instance;
 }
 
-// Re-export the class and instance from the namespace
+// Re-export the class from the namespace
 export const EmailService = EmailServiceNS.EmailService;
+// Re-export the singleton instance
 export const emailService = EmailServiceNS.emailService;

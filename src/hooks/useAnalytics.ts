@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Email, Task, CalendarEvent } from '../types';
-import { EmailService } from '../services/email/EmailService';
+import { emailService } from '../services/email';
 import { fetchTasks } from '../services/tasks/taskService';
 import { fetchEvents } from '../services/calendar/calendarService';
 
@@ -30,7 +30,6 @@ export function useAnalytics() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const emailService = new EmailService();
 
   useEffect(() => {
     const fetchData = async () => {

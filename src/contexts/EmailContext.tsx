@@ -1,103 +1,171 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { EmailService } from '../services/email/EmailService';
-import { EmailAgent } from '../services/agents/EmailAgent';
-import type { EmailAccount, EmailMessage } from '../types/email';
-import { v4 as uuidv4 } from 'uuid';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { emailService } from '../services/email';
+import type { 
+  EmailAccount, 
+  EmailFolder, 
+  EmailFilter, 
+  EmailPreferences, 
+  EmailMessage 
+} from '../services/email';
 
 interface EmailContextType {
   accounts: EmailAccount[];
-  addAccount: (account: EmailAccount) => void;
+  selectedAccountId: string | null;
+  selectedFolderId: string | null;
+  
+  // Account operations
+  addGoogleAccount: () => Promise<EmailAccount>;
+  addIMAPAccount: (config: any) => Promise<EmailAccount>;
   removeAccount: (accountId: string) => Promise<void>;
-  processEmail: (email: EmailMessage) => Promise<any>;
-  loading: boolean;
-  error: string | null;
+  selectAccount: (accountId: string) => void;
+  
+  // Folder operations
+  getFolders: (accountId: string) => Promise<EmailFolder[]>;
+  selectFolder: (folderId: string) => void;
+  
+  // Filter operations
+  getFilters: (accountId: string) => Promise<EmailFilter[]>;
+  saveFilter: (accountId: string, filter: EmailFilter) => Promise<EmailFilter>;
+  deleteFilter: (accountId: string, filterId: string) => Promise<void>;
+  
+  // Message operations
+  getMessages: (accountId: string, options?: any) => Promise<{
+    messages: EmailMessage[];
+    nextPageToken?: string;
+  }>;
 }
 
-const EmailContext = createContext<EmailContextType | undefined>(undefined);
+const EmailContext = createContext<EmailContextType | null>(null);
 
-export function EmailProvider({ children }: { children: React.ReactNode }) {
+export function EmailProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const emailService = new EmailService();
-  const emailAgent = new EmailAgent({
-    id: uuidv4(),
-    name: 'Email Assistant',
-    type: 'email',
-    capabilities: [
-      'email-processing',
-      'email-drafting',
-      'email-categorization',
-      'calendar-management',
-      'task-management'
-    ],
-    config: {
-      modelName: 'gpt-4',
-      maxTokens: 2000,
-      temperature: 0.7,
-      basePrompt: 'You are an intelligent email assistant that helps process and manage emails.'
-    }
-  });
-
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  
+  // Load accounts from local storage on mount
   useEffect(() => {
     const loadAccounts = async () => {
       try {
-        // TODO: Load accounts from persistent storage
-        const savedAccounts = localStorage.getItem('email_accounts');
-        if (savedAccounts) {
-          setAccounts(JSON.parse(savedAccounts));
+        const storedAccounts = localStorage.getItem('email_accounts');
+        if (storedAccounts) {
+          const loadedAccounts = JSON.parse(storedAccounts) as EmailAccount[];
+          setAccounts(loadedAccounts);
+          
+          // If accounts exist, select the first one
+          if (loadedAccounts.length > 0) {
+            setSelectedAccountId(loadedAccounts[0].id);
+            
+            // Load folders for the first account
+            const accountFolders = await emailService.getFolders(loadedAccounts[0].id);
+            // Find inbox folder 
+            const inboxFolder = accountFolders.find(f => f.type === 'inbox');
+            if (inboxFolder) {
+              setSelectedFolderId(inboxFolder.id);
+            }
+          }
         }
-        setLoading(false);
-      } catch (error) {
-        console.error('Failed to load email accounts:', error);
-        setError('Failed to load email accounts');
-        setLoading(false);
+      } catch (err) {
+        console.error('Failed to load email accounts:', err);
       }
     };
-
+    
     loadAccounts();
   }, []);
-
-  useEffect(() => {
-    // Save accounts to local storage when they change
-    localStorage.setItem('email_accounts', JSON.stringify(accounts));
-  }, [accounts]);
-
-  const addAccount = (account: EmailAccount) => {
+  
+  // Account operations
+  const addGoogleAccount = async (): Promise<EmailAccount> => {
+    const account = await emailService.addGoogleAccount();
     setAccounts(prev => [...prev, account]);
+    
+    // Select the new account
+    setSelectedAccountId(account.id);
+    
+    return account;
   };
-
-  const removeAccount = async (accountId: string) => {
-    try {
-      await emailService.removeAccount(accountId);
-      setAccounts(prev => prev.filter(account => account.id !== accountId));
-    } catch (error) {
-      console.error('Failed to remove account:', error);
-      throw error;
+  
+  const addIMAPAccount = async (config: any): Promise<EmailAccount> => {
+    const account = await emailService.addIMAPAccount(config);
+    setAccounts(prev => [...prev, account]);
+    
+    // Select the new account
+    setSelectedAccountId(account.id);
+    
+    return account;
+  };
+  
+  const removeAccount = async (accountId: string): Promise<void> => {
+    await emailService.removeAccount(accountId);
+    setAccounts(prev => prev.filter(a => a.id !== accountId));
+    
+    // If the removed account was selected, select another one
+    if (selectedAccountId === accountId) {
+      const remainingAccount = accounts.find(a => a.id !== accountId);
+      if (remainingAccount) {
+        setSelectedAccountId(remainingAccount.id);
+      } else {
+        setSelectedAccountId(null);
+        setSelectedFolderId(null);
+      }
     }
   };
-
-  const processEmail = async (email: EmailMessage) => {
-    try {
-      const result = await emailAgent.executeAction('process-email', { email });
-      return result;
-    } catch (error) {
-      console.error('Failed to process email:', error);
-      throw error;
-    }
+  
+  const selectAccount = (accountId: string) => {
+    setSelectedAccountId(accountId);
   };
-
+  
+  // Folder operations
+  const getFolders = async (accountId: string): Promise<EmailFolder[]> => {
+    return emailService.getFolders(accountId);
+  };
+  
+  const selectFolder = (folderId: string) => {
+    setSelectedFolderId(folderId);
+  };
+  
+  // Message operations
+  const getMessages = async (accountId: string, options?: any) => {
+    return emailService.getMessages(accountId, options);
+  };
+  
+  // Filter operations
+  const getFilters = async (accountId: string): Promise<EmailFilter[]> => {
+    return emailService.getFilters(accountId);
+  };
+  
+  const saveFilter = async (accountId: string, filter: EmailFilter): Promise<EmailFilter> => {
+    return emailService.saveFilter(accountId, filter);
+  };
+  
+  const deleteFilter = async (accountId: string, filterId: string): Promise<void> => {
+    return emailService.deleteFilter(accountId, filterId);
+  };
+  
+  const contextValue: EmailContextType = {
+    accounts,
+    selectedAccountId,
+    selectedFolderId,
+    
+    // Account operations
+    addGoogleAccount,
+    addIMAPAccount,
+    removeAccount,
+    selectAccount,
+    
+    // Folder operations
+    getFolders,
+    selectFolder,
+    
+    // Filter operations
+    getFilters,
+    saveFilter,
+    deleteFilter,
+    
+    // Message operations
+    getMessages,
+  };
+  
   return (
-    <EmailContext.Provider
-      value={{
-        accounts,
-        addAccount,
-        removeAccount,
-        processEmail,
-        loading,
-        error
-      }}
-    >
+    <EmailContext.Provider value={contextValue}>
       {children}
     </EmailContext.Provider>
   );
@@ -105,7 +173,7 @@ export function EmailProvider({ children }: { children: React.ReactNode }) {
 
 export function useEmail() {
   const context = useContext(EmailContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useEmail must be used within an EmailProvider');
   }
   return context;

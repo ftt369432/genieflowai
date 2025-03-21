@@ -20,12 +20,22 @@ export interface MessageMetadata {
   processingTime?: number;
   context?: DocumentReference[];
   error?: string;
+  edited?: boolean;
+  threadId?: string;
+  parentId?: string;
+  reactions?: { [key: string]: string[] };
+  formatting?: {
+    isBold?: boolean;
+    isItalic?: boolean;
+    isCode?: boolean;
+    language?: string;
+  };
 }
 
 export interface Message {
   id: string;
   content: string;
-  role: 'user' | 'assistant' | 'system' | 'error';
+  role: 'user' | 'assistant' | 'error';
   timestamp: Date;
   metadata?: MessageMetadata;
 }
@@ -34,7 +44,8 @@ export interface DocumentReference {
   id: string;
   title: string;
   excerpt: string;
-  relevance?: number;
+  type: string;
+  relevance: number;
 }
 
 export interface AIFolder {
@@ -49,23 +60,32 @@ export interface AIDocument {
   id: string;
   title: string;
   content: string;
-  type: 'text' | 'pdf' | 'doc' | 'docx' | 'txt' | 'md' | 'markdown' | 'drive' | 'image' |
-    'csv' | 'json' | 'yaml' | 'yml' | 'html' | 'css' | 'scss' | 'sass' | 'sql' | 'xml' |
-    'js' | 'jsx' | 'ts' | 'tsx' | 'py' | 'rb' | 'java' | 'go' | 'rs' | 'cpp' | 'c' |
-    'h' | 'hpp' | 'sh' | 'bash' | 'swift' | 'kt' | 'kotlin' | 'php';
+  type: 'image' | 'text';
   metadata: {
     dateCreated: string;
-    dateModified?: string;
-    tags?: string[];
+    dateModified: string;
+    tags: string[];
+    source: string;
     size?: number;
     author?: string;
-    source?: string;
   };
+  summary: string;
+  language: string;
+  chunks: string[];
+  embedding: number[];
 }
 
 export interface SearchResult {
-  document: AIDocument;
-  similarity: number;
+  id: string;
+  title: string;
+  content: string;
+  snippet: string;
+  link: string;
+  credibilityScore?: number;
+  citations?: number;
+  date?: string;
+  type?: 'article' | 'news' | 'blog' | 'academic';
+  language?: string;
 }
 
 export interface EmbeddingResponse {
@@ -93,4 +113,30 @@ export interface Conversation {
   caseType?: string;
   caseStatus?: 'active' | 'pending' | 'closed';
   lastAccessed?: Date;
+}
+
+export interface AIState extends AIConfig {
+  isLoading: boolean;
+  error: string | null;
+}
+
+export interface SearchFilters {
+  timeRange: 'any' | 'day' | 'week' | 'month' | 'year';
+  sourceType: string;
+  sortBy: 'relevance' | 'date' | 'citations';
+  minCredibility: number;
+  excludedDomains: string[];
+  includedDomains: string[];
+  language: 'en' | 'es' | 'fr' | 'de' | 'zh';
+  contentType: 'all' | 'article' | 'paper' | 'book' | 'code';
+}
+
+export interface DocumentProcessingOptions {
+  extractText: boolean;
+  generateSummary: boolean;
+  detectLanguage: boolean;
+  extractMetadata: boolean;
+  performOCR: boolean;
+  splitIntoChunks: boolean;
+  chunkSize: number;
 } 

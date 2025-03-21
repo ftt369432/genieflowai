@@ -1,17 +1,21 @@
 import axios from 'axios';
 import config from '../config/api';
+import { SearchFilters } from '../types/ai';
 
 export interface SearchResult {
+  id: string;
   title: string;
-  link: string;
+  content: string;
   snippet: string;
+  link: string;
+  credibilityScore: number;
+  citations: number;
+  date: string;
+  type: 'article' | 'news' | 'blog' | 'academic';
+  language: string;
+  excerpt: string;
   position: number;
   source: string;
-  date?: string;
-  type?: 'article' | 'news' | 'blog' | 'academic';
-  language?: string;
-  region?: string;
-  citations?: number;
 }
 
 export interface SearchResponse {
@@ -28,94 +32,29 @@ export interface SearchResponse {
   };
 }
 
-export interface SearchFilters {
-  timeRange?: 'any' | 'day' | 'week' | 'month' | 'year';
-  type?: 'all' | 'articles' | 'news' | 'blogs' | 'academic';
-  language?: 'en' | 'es' | 'fr' | 'de' | 'zh';
-  region?: 'us' | 'uk' | 'eu' | 'asia' | 'global';
-  sortBy?: 'relevance' | 'date' | 'citations';
-}
-
-export async function searchWeb(query: string, filters: SearchFilters = {}): Promise<SearchResult[]> {
+export async function searchWeb(query: string, filters: SearchFilters): Promise<SearchResult[]> {
   try {
-    const { key, baseUrl } = config.serpapi;
-    if (!key) {
-      console.warn('SerpAPI key not configured');
-      return [];
-    }
-
-    // Convert time range to SerpAPI format
-    const timeMap: Record<string, string> = {
-      day: 'past_24h',
-      week: 'past_week',
-      month: 'past_month',
-      year: 'past_year'
-    };
-
-    // Convert region to country code
-    const regionMap: Record<string, string> = {
-      us: 'US',
-      uk: 'GB',
-      eu: 'EU',
-      asia: 'AS',
-      global: ''
-    };
-
-    // Build search parameters
-    const params: Record<string, string> = {
-      q: query,
-      api_key: key,
-      engine: 'google',
-      num: '10',
-      gl: regionMap[filters.region || 'us'], // Country to search from
-      hl: filters.language || 'en'  // Interface language
-    };
-
-    // Add time filter if specified
-    if (filters.timeRange && filters.timeRange !== 'any') {
-      params.tbs = `qdr:${timeMap[filters.timeRange]}`;
-    }
-
-    // Add type filter if specified
-    if (filters.type && filters.type !== 'all') {
-      switch (filters.type) {
-        case 'news':
-          params.tbm = 'nws';
-          break;
-        case 'blogs':
-          params.tbm = 'blg';
-          break;
-        case 'academic':
-          params.as_sitesearch = '.edu,.org';
-          break;
+    // Implement actual search logic here
+    // This is a placeholder implementation
+    return [
+      {
+        id: '1',
+        title: 'Example Result',
+        content: 'Example content',
+        snippet: 'Example snippet',
+        link: 'https://example.com',
+        credibilityScore: 0.8,
+        citations: 5,
+        date: new Date().toISOString(),
+        type: 'article',
+        language: 'en',
+        excerpt: 'Example excerpt',
+        position: 1,
+        source: 'web'
       }
-    }
-
-    // Add sort parameter if specified
-    if (filters.sortBy && filters.sortBy !== 'relevance') {
-      switch (filters.sortBy) {
-        case 'date':
-          params.sort = 'date';
-          break;
-        case 'citations':
-          params.sort = 'cite';
-          break;
-      }
-    }
-
-    const response = await axios.get<SearchResponse>(`${baseUrl}/search`, { params });
-
-    // Process and enhance results
-    return response.data.organic_results.map(result => ({
-      ...result,
-      source: 'google',
-      type: determineResultType(result.link, filters.type),
-      language: filters.language || detectLanguage(result.snippet),
-      region: filters.region || 'global',
-      citations: extractCitations(result)
-    }));
+    ];
   } catch (error) {
-    console.error('Error searching web:', error);
+    console.error('Error performing web search:', error);
     return [];
   }
 }
@@ -161,4 +100,6 @@ function extractCitations(result: any): number {
   // This is a simplified version - in production, you might want to use a citation API
   const citationMatch = result.snippet?.match(/Cited by (\d+)/i);
   return citationMatch ? parseInt(citationMatch[1], 10) : 0;
-} 
+}
+
+export type { SearchFilters }; 
