@@ -1,130 +1,206 @@
 import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { ThemeProvider } from './contexts/ThemeContext';
-import { EmailProvider } from './contexts/EmailContext';
-import { Layout } from './components/layout/Layout';
-import { Dashboard } from './pages/Dashboard';
-import { CalendarPage } from './pages/CalendarPage';
-import { TasksPage } from './pages/TasksPage';
-import { AIAssistantPage } from './pages/AIAssistant';
-import { SettingsPage } from './pages/SettingsPage';
-import { CyberpunkEffects } from './components/ui/CyberpunkEffects';
-import { useTheme } from './contexts/ThemeContext';
-import { ToastContainer } from './components/ui/Toast';
-import { AIAgentPage } from './pages/AIAgent';
-import { AIDrivePage } from './pages/AIDrive';
-import EmailSettingsPage from './pages/EmailSettings';
-import { LoginPage } from './pages/Login';
-import { SupabaseProvider } from './providers/SupabaseProvider';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AppLayout } from './components/layout/AppLayout';
+import { ThemeProvider, EmailProvider, NotificationProvider, AIProvider } from './contexts';
 import { useSupabase } from './providers/SupabaseProvider';
+import { 
+  HomePage, 
+  LoginPage, 
+  ProfilePage, 
+  SubscriptionPage, 
+  EmailInboxPage,
+  NotificationsPage,
+  DashboardPage,
+  AIPage,
+  AIDrivePage,
+  CalendarPage,
+  ContactsPage,
+  TasksPage,
+  LegalDocumentPage
+} from './pages';
+import { LoadingExample } from './components/examples/LoadingExample';
+import { AIAssistantPage } from './pages/AIAssistant';
 
-// Protected route component
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+// Protected route wrapper
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useSupabase();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate('/login');
-    }
-  }, [user, loading, navigate]);
-
-  if (loading) {
-    return <div className="flex h-screen items-center justify-center">Loading...</div>;
-  }
-
-  return user ? <>{children}</> : null;
-}
-
-function AppContent() {
-  const { currentTheme } = useTheme();
-  const { user } = useSupabase();
   
+  console.log("ProtectedRoute check:", { user, loading });
+  
+  // Show a loading state while checking authentication
+  if (loading) {
+    console.log("ProtectedRoute: Still loading authentication state");
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+  
+  // Redirect to login if not authenticated
+  if (!user) {
+    console.log("ProtectedRoute: No user found, redirecting to login");
+    return <Navigate to="/login" replace />;
+  }
+  
+  console.log("ProtectedRoute: User authenticated, rendering protected content");
+  return <AppLayout>{children}</AppLayout>;
+};
+
+// Home route that redirects to dashboard if authenticated
+const HomeRoute = () => {
+  const { user, loading } = useSupabase();
+  
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+  
+  if (user) {
+    console.log("User is authenticated, redirecting to dashboard");
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <HomePage />;
+};
+
+// Login route that redirects to dashboard when already logged in
+const LoginRoute = () => {
+  const { user, loading } = useSupabase();
+  
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+  
+  if (user) {
+    console.log("User is authenticated, redirecting to dashboard from login page");
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <LoginPage />;
+};
+
+function App() {
   return (
-    <div className="min-h-screen bg-background text-text-primary transition-colors duration-200">
-      {/* Only show effects for themes that enable them */}
-      {currentTheme.effects && (
-        <CyberpunkEffects
-          mode={currentTheme.id === 'cyberpunk' ? 'normal' : undefined}
-          theme={currentTheme.id}
-          className="opacity-50"
-        />
-      )}
-      
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
-        
-        {/* Protected routes */}
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Layout>
-              <Dashboard />
-            </Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/calendar" element={
-          <ProtectedRoute>
-            <Layout>
-              <CalendarPage />
-            </Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/tasks" element={
-          <ProtectedRoute>
-            <Layout>
-              <TasksPage />
-            </Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/ai-assistant" element={
-          <ProtectedRoute>
-            <Layout>
-              <AIAssistantPage />
-            </Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/settings" element={
-          <ProtectedRoute>
-            <Layout>
-              <SettingsPage />
-            </Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/agents" element={
-          <ProtectedRoute>
-            <Layout>
-              <AIAgentPage />
-            </Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/email" element={
-          <ProtectedRoute>
-            <Layout>
-              <EmailSettingsPage />
-            </Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/drive" element={
-          <ProtectedRoute>
-            <Layout>
-              <AIDrivePage />
-            </Layout>
-          </ProtectedRoute>
-        } />
-      </Routes>
-      <ToastContainer />
-    </div>
+    <Router>
+      <AIProvider>
+        <Routes>
+          {/* Public routes with conditional redirect */}
+          <Route path="/" element={<HomeRoute />} />
+          <Route path="/login" element={<LoginRoute />} />
+          <Route path="/examples/loading" element={<LoadingExample />} />
+          
+          {/* Protected routes */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Redirect from authenticated root to dashboard */}
+          <Route
+            path="/app"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/dashboard" replace />
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/subscription" 
+            element={
+              <ProtectedRoute>
+                <SubscriptionPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/email/*" 
+            element={
+              <ProtectedRoute>
+                <EmailInboxPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/notifications" 
+            element={
+              <ProtectedRoute>
+                <NotificationsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/ai" 
+            element={
+              <ProtectedRoute>
+                <AIPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/assistant" 
+            element={
+              <ProtectedRoute>
+                <AIAssistantPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/drive" 
+            element={
+              <ProtectedRoute>
+                <AIDrivePage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/calendar" 
+            element={
+              <ProtectedRoute>
+                <CalendarPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/contacts" 
+            element={
+              <ProtectedRoute>
+                <ContactsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/tasks" 
+            element={
+              <ProtectedRoute>
+                <TasksPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Add the legal document route */}
+          <Route path="/documents" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <LegalDocumentPage />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          
+          {/* Fallback route */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AIProvider>
+    </Router>
   );
 }
 
-export function App() {
-  return (
-    <SupabaseProvider>
-      <ThemeProvider>
-        <EmailProvider>
-          <AppContent />
-        </EmailProvider>
-      </ThemeProvider>
-    </SupabaseProvider>
-  );
-}
+export default App;

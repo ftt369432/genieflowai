@@ -1,151 +1,227 @@
-export interface PlanFeature {
-  title: string;
-  description: string;
-}
-
+// Types for subscription plans
 export interface Plan {
   id: string;
   name: string;
   description: string;
-  monthlyPrice: number;
-  yearlyPrice: number;
-  features: PlanFeature[];
-  maxUsers?: number;
-  pricePerExtraUser?: number;
+  price: number;
+  stripePriceId: string;
+  stripePriceIdYearly?: string;
+  discountPercentage?: number;
+  features: string[];
+  mostPopular?: boolean;
 }
 
+export interface PlanFeature {
+  name: string;
+  included: boolean;
+  limited?: boolean;
+  info?: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  billingPeriod: 'monthly' | 'yearly' | 'forever';
+  discountPercentage?: number;
+  features: PlanFeature[];
+  mostPopular?: boolean;
+  buttonText: string;
+}
+
+// Common features shared across all plans
+const commonFeatures = [
+  'Access to AI assistant',
+  'Email management',
+  'Calendar integration'
+];
+
+// Convert plan features for component use
+export const convertToComponentFeatures = (features: string[]): PlanFeature[] => {
+  const result: PlanFeature[] = [];
+  
+  // Common features are always included
+  commonFeatures.forEach(feature => {
+    result.push({ name: feature, included: true });
+  });
+  
+  // Process additional features
+  features.forEach(feature => {
+    if (feature.startsWith('!')) {
+      // Features starting with ! are not included
+      result.push({ 
+        name: feature.substring(1), 
+        included: false 
+      });
+    } else if (feature.includes('(limited)')) {
+      // Features with (limited) text
+      const baseName = feature.replace('(limited)', '').trim();
+      result.push({ 
+        name: baseName, 
+        included: true,
+        limited: true,
+        info: 'This feature has usage limitations'
+      });
+    } else {
+      // Regular included features
+      result.push({ name: feature, included: true });
+    }
+  });
+  
+  return result;
+};
+
+// Individual plans
 export const individualPlans: Plan[] = [
   {
-    id: 'basic',
-    name: 'Basic',
-    description: 'Perfect for freelancers and self-employed professionals',
-    monthlyPrice: 15,
-    yearlyPrice: 150,
+    id: 'free',
+    name: 'Free',
+    description: 'Basic features for personal use',
+    price: 0,
+    stripePriceId: 'price_free',
     features: [
-      {
-        title: 'Task Automation',
-        description: 'Automate repetitive tasks and calendar management'
-      },
-      {
-        title: 'Email Assistant',
-        description: 'AI-powered email response suggestions'
-      },
-      {
-        title: 'Basic Templates',
-        description: 'Access to essential document templates'
-      }
+      'Access to AI assistant',
+      'Email management (5 per day)',
+      'Basic document analysis',
+      '5 AI requests per day'
     ]
   },
   {
     id: 'pro',
     name: 'Pro',
-    description: 'For professionals who need advanced features',
-    monthlyPrice: 35,
-    yearlyPrice: 350,
+    description: 'Advanced features for professionals',
+    price: 10,
+    stripePriceId: 'price_pro_monthly',
+    stripePriceIdYearly: 'price_pro_yearly',
+    discountPercentage: 20,
+    mostPopular: true,
     features: [
-      {
-        title: 'Everything in Basic',
-        description: 'All features from the Basic plan'
-      },
-      {
-        title: 'Industry Templates',
-        description: 'Specialized templates for your field'
-      },
-      {
-        title: 'Presentation Generator',
-        description: 'Create slideshows from text automatically'
-      },
-      {
-        title: 'Training Library',
-        description: 'Access to reference materials and guides'
-      }
-    ]
-  }
-];
-
-export const businessPlans: Plan[] = [
-  {
-    id: 'team',
-    name: 'Team',
-    description: 'Ideal for small to medium-sized teams',
-    monthlyPrice: 100,
-    yearlyPrice: 1000,
-    maxUsers: 10,
-    pricePerExtraUser: 10,
-    features: [
-      {
-        title: 'Everything in Pro',
-        description: 'All features from the Pro plan'
-      },
-      {
-        title: 'Team Collaboration',
-        description: 'Shared tasks and document storage'
-      },
-      {
-        title: 'Custom Training',
-        description: 'Customizable training modules'
-      },
-      {
-        title: 'Role Management',
-        description: 'Advanced user permissions and roles'
-      }
+      'Access to AI assistant',
+      'Unlimited email management',
+      'Advanced document analysis',
+      'Unlimited AI requests',
+      'Priority support',
+      'Basic analytics'
     ]
   },
   {
-    id: 'advanced-team',
-    name: 'Advanced Team',
-    description: 'For larger teams with complex needs',
-    monthlyPrice: 200,
-    yearlyPrice: 2000,
-    maxUsers: 20,
-    pricePerExtraUser: 15,
+    id: 'enterprise',
+    name: 'Enterprise',
+    description: 'Complete solution for power users',
+    price: 19,
+    stripePriceId: 'price_enterprise_monthly',
+    stripePriceIdYearly: 'price_enterprise_yearly',
+    discountPercentage: 20,
     features: [
-      {
-        title: 'Everything in Team',
-        description: 'All features from the Team plan'
-      },
-      {
-        title: 'Advanced Presentations',
-        description: 'Interactive presentation tools'
-      },
-      {
-        title: 'Progress Tracking',
-        description: 'Detailed analytics and reporting'
-      },
-      {
-        title: 'Third-party Integration',
-        description: 'Connect with your existing tools'
-      }
+      'Access to AI assistant',
+      'Unlimited email management',
+      'Advanced document analysis',
+      'Unlimited AI requests',
+      'Priority support',
+      'Advanced analytics',
+      'Custom AI model training',
+      'Dedicated account manager'
     ]
   }
 ];
 
-export const enterprisePlan: Plan = {
-  id: 'enterprise',
-  name: 'Enterprise',
-  description: 'Custom solution for large organizations',
-  monthlyPrice: 1500,
-  yearlyPrice: 15000,
-  features: [
-    {
-      title: 'Custom Platform',
-      description: 'Fully customizable platform and branding'
-    },
-    {
-      title: 'Advanced AI',
-      description: 'Complex workflow automation'
-    },
-    {
-      title: 'API Access',
-      description: 'Build custom integrations'
-    },
-    {
-      title: 'Dedicated Support',
-      description: 'Priority support and onboarding'
-    },
-    {
-      title: 'Advanced Analytics',
-      description: 'Company-wide productivity tracking'
-    }
-  ]
+// Business plans
+export const businessPlans: Plan[] = [
+  {
+    id: 'free-business',
+    name: 'Free Team',
+    description: 'Basic features for small teams',
+    price: 0,
+    stripePriceId: 'price_free_business',
+    features: [
+      'Access to AI assistant',
+      'Email management (5 per day)',
+      'Basic document analysis',
+      '5 AI requests per day',
+      'Up to 3 team members'
+    ]
+  },
+  {
+    id: 'business',
+    name: 'Business',
+    description: 'Advanced features for growing teams',
+    price: 25,
+    stripePriceId: 'price_business_monthly',
+    stripePriceIdYearly: 'price_business_yearly',
+    discountPercentage: 20,
+    mostPopular: true,
+    features: [
+      'Access to AI assistant',
+      'Unlimited email management',
+      'Advanced document analysis',
+      'Unlimited AI requests',
+      'Priority support',
+      'Team collaboration',
+      'Basic analytics',
+      'Up to 10 team members'
+    ]
+  },
+  {
+    id: 'enterprise-business',
+    name: 'Enterprise',
+    description: 'Complete solution for large organizations',
+    price: 50,
+    stripePriceId: 'price_enterprise_business_monthly',
+    stripePriceIdYearly: 'price_enterprise_business_yearly',
+    discountPercentage: 20,
+    features: [
+      'Access to AI assistant',
+      'Unlimited email management',
+      'Advanced document analysis',
+      'Unlimited AI requests',
+      'Priority support',
+      'Team collaboration',
+      'Advanced analytics',
+      'Custom AI model training',
+      'Dedicated account manager',
+      'Unlimited team members',
+      'Custom integration'
+    ]
+  }
+];
+
+// Get plan by ID
+export const getPlanById = (planId: string): Plan | undefined => {
+  return [...individualPlans, ...businessPlans].find(plan => plan.id === planId);
+};
+
+// Get plan by Stripe price ID
+export const getPlanByPriceId = (priceId: string): Plan | undefined => {
+  return [...individualPlans, ...businessPlans].find(
+    plan => plan.stripePriceId === priceId || plan.stripePriceIdYearly === priceId
+  );
+};
+
+// Calculate yearly price
+export const getYearlyPrice = (plan: Plan): number => {
+  if (plan.price === 0) return 0;
+  const monthlyPrice = plan.price;
+  const discount = plan.discountPercentage || 0;
+  return Math.round((monthlyPrice * 12 * (100 - discount)) / 100);
+};
+
+// Convert a Plan to a SubscriptionPlan for the component
+export const toSubscriptionPlan = (
+  plan: Plan, 
+  isYearly: boolean = false
+): SubscriptionPlan => {
+  return {
+    id: plan.id,
+    name: plan.name,
+    description: plan.description,
+    price: isYearly ? getYearlyPrice(plan) / 12 : plan.price,
+    billingPeriod: isYearly ? 'yearly' : 'monthly',
+    discountPercentage: isYearly ? plan.discountPercentage : undefined,
+    features: convertToComponentFeatures(plan.features),
+    mostPopular: plan.mostPopular,
+    buttonText: plan.price === 0 ? 'Get Started' : 
+                plan.id.includes('enterprise') ? 'Contact Sales' : 
+                'Subscribe Now'
+  };
 };

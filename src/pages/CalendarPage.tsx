@@ -1,284 +1,485 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, MoreVertical } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { useTheme } from '../contexts/ThemeContext';
-import { cn } from '../utils/cn';
+import React, { useState, useEffect } from 'react';
+import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
+import format from 'date-fns/format';
+import parse from 'date-fns/parse';
+import startOfWeek from 'date-fns/startOfWeek';
+import getDay from 'date-fns/getDay';
+import { useTheme } from 'next-themes';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
+import enUS from 'date-fns/locale/en-US';
 
-interface CalendarEvent {
-  id: string;
-  title: string;
-  description: string;
-  startTime: Date;
-  endTime: Date;
-  type: 'meeting' | 'task' | 'reminder';
-  priority: 'low' | 'medium' | 'high';
-  attendees?: Array<{
-    name: string;
-    avatar: string;
-  }>;
-}
+import { useCalendarStore } from '../store/calendarStore';
+import { useTaskStore } from '../store/taskStore';
+import { parseISO } from 'date-fns';
+import { ProductivityInsights } from '../components/calendar/ProductivityInsights';
+import { TaskOverlayToggle } from '../components/calendar/TaskOverlayToggle';
+import { SmartScheduler } from '../components/calendar/SmartScheduler';
+import { CalendarEventModal } from '../components/calendar/CalendarEventModal';
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '../components/ui';
 
-const SAMPLE_EVENTS: CalendarEvent[] = [
-  {
-    id: '1',
-    title: 'Team Meeting',
-    description: 'Weekly sync with the development team',
-    startTime: new Date(2024, 1, 15, 10, 0),
-    endTime: new Date(2024, 1, 15, 11, 0),
-    type: 'meeting',
-    priority: 'high',
-    attendees: [
-      { name: 'Alice', avatar: '👩‍💼' },
-      { name: 'Bob', avatar: '👨‍💼' },
-      { name: 'Charlie', avatar: '👨‍💻' }
-    ]
-  },
-  {
-    id: '2',
-    title: 'Project Deadline',
-    description: 'Submit final deliverables',
-    startTime: new Date(2024, 1, 20, 17, 0),
-    endTime: new Date(2024, 1, 20, 18, 0),
-    type: 'task',
-    priority: 'high'
+import {
+  Check,
+  ChevronDown,
+  Clock,
+  Plus,
+  MoreHorizontal,
+  Sparkles,
+  Calendar as CalendarIcon,
+  Filter,
+  Settings2,
+} from 'lucide-react';
+
+// Create a drag-and-drop capable calendar
+const DragAndDropCalendar = withDragAndDrop(Calendar);
+
+// Set up localization for the calendar
+const locales = {
+  'en-US': enUS,
+};
+
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek,
+  getDay,
+  locales,
+});
+
+// Define event styles based on type
+const eventStyleGetter = (event: any) => {
+  let style = {
+    backgroundColor: '#3182ce',
+    borderColor: '#2b6cb0',
+    color: 'white',
+    borderRadius: '4px',
+    border: 'none',
+    padding: '2px 5px',
+    fontSize: '90%',
+  };
+  
+  if (event.type === 'deep-work') {
+    style.backgroundColor = '#4f46e5'; // indigo
+  } else if (event.type === 'meeting') {
+    style.backgroundColor = '#0891b2'; // cyan
+  } else if (event.type === 'admin') {
+    style.backgroundColor = '#6366f1'; // blue
+  } else if (event.type === 'learning') {
+    style.backgroundColor = '#8b5cf6'; // violet
+  } else if (event.type === 'break') {
+    style.backgroundColor = '#d946ef'; // fuchsia
+  } else if (event.type === 'task') {
+    style.backgroundColor = '#059669'; // emerald
+  } else if (event.type === 'automation') {
+    style.backgroundColor = '#f59e0b'; // amber
   }
-];
-
-export function CalendarPage() {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>(SAMPLE_EVENTS);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const { colors } = useTheme();
-
-  const getDaysInMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  
+  return {
+    style
   };
+};
 
-  const getFirstDayOfMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  };
-
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentDate(new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + (direction === 'next' ? 1 : -1),
-      1
-    ));
-  };
-
-  const getDayEvents = (date: Date) => {
-    return events.filter(event => 
-      event.startTime.getDate() === date.getDate() &&
-      event.startTime.getMonth() === date.getMonth() &&
-      event.startTime.getFullYear() === date.getFullYear()
-    );
-  };
-
-  const renderCalendarDays = () => {
-    const daysInMonth = getDaysInMonth(currentDate);
-    const firstDay = getFirstDayOfMonth(currentDate);
-    const days = [];
-
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < firstDay; i++) {
-      days.push(
-        <div key={`empty-${i}`} className="h-24 border border-border/50" />
-      );
-    }
-
-    // Add cells for each day of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-      const dayEvents = getDayEvents(date);
-      const isToday = date.toDateString() === new Date().toDateString();
-      const isSelected = selectedDate?.toDateString() === date.toDateString();
-
-      days.push(
-        <div
-          key={day}
-          className={cn(
-            "h-24 border border-border/50 p-1 cursor-pointer transition-colors",
-            isToday && "bg-primary/5",
-            isSelected && "border-primary",
-            "hover:border-primary/50"
-          )}
-          onClick={() => setSelectedDate(date)}
-        >
-          <div className="flex justify-between items-start">
-            <span className={cn(
-              "text-sm font-medium",
-              isToday ? "text-primary" : "text-text-primary"
-            )}>
-              {day}
-            </span>
-            {dayEvents.length > 0 && (
-              <span className="text-xs text-primary bg-primary/10 px-1.5 rounded-full">
-                {dayEvents.length}
-              </span>
-            )}
-          </div>
-          
-          {dayEvents.slice(0, 2).map(event => (
-            <div
-              key={event.id}
-              className={cn(
-                "text-xs p-1 rounded truncate",
-                event.type === 'meeting' && "bg-primary/10 text-primary",
-                event.type === 'task' && "bg-warning/10 text-warning",
-                event.type === 'reminder' && "bg-info/10 text-info"
-              )}
-            >
+// Custom overlay component for tasks
+const TaskOverlay = ({ event }: any) => {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        borderLeft: '3px solid #059669',
+        backgroundColor: 'rgba(5, 150, 105, 0.15)',
+        color: '#059669',
+        borderRadius: '2px',
+        padding: '2px 4px',
+        fontSize: '80%',
+        cursor: 'pointer',
+        zIndex: 1,
+        width: '98%',
+        textOverflow: 'ellipsis',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <span style={{ marginRight: '4px' }}>●</span>
               {event.title}
             </div>
-          ))}
-          {dayEvents.length > 2 && (
-            <div className="text-xs text-text-secondary">
-              +{dayEvents.length - 2} more
-            </div>
-          )}
         </div>
       );
-    }
+};
 
-    return days;
+export function CalendarPage() {
+  const { theme } = useTheme();
+  const { events, timeBlocks, addEvent, updateEvent, deleteEvent } = useCalendarStore();
+  const { tasks } = useTaskStore();
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [showSmartScheduler, setShowSmartScheduler] = useState(false);
+  const [viewMode, setViewMode] = useState('week');
+  const [calendarDate, setCalendarDate] = useState(new Date());
+
+  // Convert events and timeBlocks to calendar events
+  const calendarEvents = [
+    ...events.map(event => ({
+      id: event.id,
+      title: event.title,
+      start: parseISO(event.start),
+      end: parseISO(event.end),
+      type: event.category || 'default',
+      source: 'event',
+      description: event.description || '',
+      location: event.location || '',
+    })),
+    ...timeBlocks.map(block => ({
+      id: block.id,
+      title: block.title,
+      start: parseISO(block.start),
+      end: parseISO(block.end),
+      type: block.type || 'default',
+      source: 'timeBlock',
+      description: block.description || '',
+      taskIds: block.taskIds || [],
+    })),
+  ];
+
+  // Create task overlays if enabled
+  const taskOverlays = tasks.filter(task => !task.completed && task.dueDate).map(task => ({
+    id: `task-${task.id}`,
+    title: task.title,
+    start: parseISO(task.dueDate!),
+    end: parseISO(task.dueDate!),
+    type: 'task',
+    source: 'task',
+    description: task.description || '',
+    component: TaskOverlay,
+    taskId: task.id,
+  }));
+
+  // Add task overlays to calendar events if enabled
+  const allEvents = [...calendarEvents, ...taskOverlays];
+
+  // Handle event selection
+  const handleSelectEvent = (event: any) => {
+    setSelectedEvent(event);
+    setShowEventModal(true);
+  };
+
+  // Handle event creation
+  const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+    const title = '';
+    setSelectedEvent({
+      title,
+      start,
+      end,
+      type: 'default',
+      source: 'timeBlock', // Default to creating a time block
+      description: '',
+    });
+    setShowEventModal(true);
+  };
+
+  // Handle event drag and drop
+  const moveEvent = ({ event, start, end }: { event: any; start: Date; end: Date }) => {
+    if (event.source === 'event') {
+      updateEvent({
+        id: event.id,
+        start: start.toISOString(),
+        end: end.toISOString(),
+      });
+    } else if (event.source === 'timeBlock') {
+      // Update time block
+      const updatedBlock = {
+        id: event.id,
+        start: start.toISOString(),
+        end: end.toISOString(),
+      };
+      // Call appropriate update function
+    }
+  };
+
+  // Handle event resize
+  const resizeEvent = ({ event, start, end }: { event: any; start: Date; end: Date }) => {
+    moveEvent({ event, start, end });
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Calendar</h1>
-          <p className="text-text-secondary">Schedule and manage your events</p>
-        </div>
-        <Button className="flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          New Event
+    <div className="container mx-auto p-4 max-w-[1400px]">
+      <div className="flex flex-col space-y-4">
+        {/* Header section */}
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Calendar</h1>
+          
+          <div className="flex items-center space-x-2">
+            <TaskOverlayToggle />
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filter
         </Button>
-      </div>
-
-      {/* Calendar Navigation */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-text-primary">
-            {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </h2>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigateMonth('prev')}
-            >
-              <ChevronLeft className="w-4 h-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem>
+                  <Check className="mr-2 h-4 w-4" />
+                  <span>Deep Work</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Check className="mr-2 h-4 w-4" />
+                  <span>Meetings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Check className="mr-2 h-4 w-4" />
+                  <span>Admin Tasks</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  <span>Calendar Settings</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            <Button size="sm" onClick={() => setShowSmartScheduler(true)}>
+              <Sparkles className="h-4 w-4 mr-2" />
+              Optimize Schedule
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigateMonth('next')}
-            >
-              <ChevronRight className="w-4 h-4" />
+            
+            <Button size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              New Event
             </Button>
           </div>
         </div>
-        <Button variant="outline" onClick={() => setCurrentDate(new Date())}>
+        
+        <div className="grid grid-cols-12 gap-4">
+          {/* Main Calendar */}
+          <div className="col-span-12 md:col-span-9">
+            <div className="bg-background rounded-lg shadow-md p-4 h-[800px]">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <Tabs value={viewMode} onValueChange={setViewMode} className="w-64">
+                    <TabsList>
+                      <TabsTrigger value="day">Day</TabsTrigger>
+                      <TabsTrigger value="week">Week</TabsTrigger>
+                      <TabsTrigger value="month">Month</TabsTrigger>
+                      <TabsTrigger value="agenda">Agenda</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                
+                <div className="flex items-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const newDate = new Date(calendarDate);
+                      if (viewMode === 'day') {
+                        newDate.setDate(newDate.getDate() - 1);
+                      } else if (viewMode === 'week') {
+                        newDate.setDate(newDate.getDate() - 7);
+                      } else if (viewMode === 'month') {
+                        newDate.setMonth(newDate.getMonth() - 1);
+                      }
+                      setCalendarDate(newDate);
+                    }}
+                  >
+                    Previous
+                  </Button>
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCalendarDate(new Date())}
+                  >
           Today
         </Button>
-      </div>
-
-      {/* Calendar Grid */}
-      <Card>
-        <CardContent className="p-4">
-          {/* Day Headers */}
-          <div className="grid grid-cols-7 gap-px mb-px">
-            {DAYS.map(day => (
-              <div
-                key={day}
-                className="p-2 text-center text-sm font-medium text-text-secondary"
-              >
-                {day}
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const newDate = new Date(calendarDate);
+                      if (viewMode === 'day') {
+                        newDate.setDate(newDate.getDate() + 1);
+                      } else if (viewMode === 'week') {
+                        newDate.setDate(newDate.getDate() + 7);
+                      } else if (viewMode === 'month') {
+                        newDate.setMonth(newDate.getMonth() + 1);
+                      }
+                      setCalendarDate(newDate);
+                    }}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
-            ))}
+              
+              <DragAndDropCalendar
+                localizer={localizer}
+                events={allEvents}
+                startAccessor="start"
+                endAccessor="end"
+                selectable
+                resizable
+                style={{ 
+                  height: "700px", 
+                  margin: '0 auto',
+                  fontFamily: 'inherit',
+                }}
+                defaultView={viewMode}
+                view={viewMode as any}
+                onView={(view) => setViewMode(view)}
+                date={calendarDate}
+                onNavigate={(date) => setCalendarDate(date)}
+                eventPropGetter={eventStyleGetter}
+                onSelectEvent={handleSelectEvent}
+                onSelectSlot={handleSelectSlot}
+                onEventDrop={moveEvent}
+                onEventResize={resizeEvent}
+                dayLayoutAlgorithm="no-overlap"
+                components={{
+                  event: (props) => {
+                    // Use custom component if specified
+                    if (props.event.component) {
+                      const EventComponent = props.event.component;
+                      return <EventComponent event={props.event} />;
+                    }
+                    
+                    return (
+                      <div>
+                        <div>{props.title}</div>
+                        {props.event.description && (
+                          <div style={{ fontSize: '80%' }}>{props.event.description}</div>
+                        )}
+                      </div>
+                    );
+                  },
+                }}
+                popup
+                formats={{
+                  dayHeaderFormat: date => format(date, 'EEEE, MMMM do'),
+                }}
+              />
+            </div>
           </div>
 
-          {/* Calendar Days */}
-          <div className="grid grid-cols-7 gap-px bg-border">
-            {renderCalendarDays()}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Selected Date Events */}
-      {selectedDate && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Events for {selectedDate.toLocaleDateString()}
+          {/* Sidebar */}
+          <div className="col-span-12 md:col-span-3 space-y-4">
+            <ProductivityInsights />
+            
+            <Card className="shadow-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-medium flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  Upcoming
             </CardTitle>
+                <CardDescription>
+                  Your schedule for today
+                </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {getDayEvents(selectedDate).map(event => (
+                <div className="space-y-2">
+                  {calendarEvents
+                    .filter(event => {
+                      const today = new Date();
+                      const eventDate = new Date(event.start);
+                      return (
+                        eventDate.getDate() === today.getDate() &&
+                        eventDate.getMonth() === today.getMonth() &&
+                        eventDate.getFullYear() === today.getFullYear()
+                      );
+                    })
+                    .sort((a, b) => a.start.getTime() - b.start.getTime())
+                    .map(event => (
                 <div
                   key={event.id}
-                  className={cn(
-                    "flex items-start gap-4 p-4 rounded-lg border border-border",
-                    "hover:border-primary/20"
-                  )}
-                >
-                  <div className={cn(
-                    "p-2 rounded-lg",
-                    event.type === 'meeting' && "bg-primary/10",
-                    event.type === 'task' && "bg-warning/10",
-                    event.type === 'reminder' && "bg-info/10"
-                  )}>
-                    {event.type === 'meeting' ? <Calendar className="w-5 h-5" /> :
-                     event.type === 'task' ? <Clock className="w-5 h-5" /> :
-                     <Calendar className="w-5 h-5" />}
+                        className="flex items-start p-2 rounded-md hover:bg-muted transition-colors cursor-pointer"
+                        onClick={() => handleSelectEvent(event)}
+                      >
+                        <div
+                          className="w-2 h-2 mt-1.5 rounded-full mr-2"
+                          style={{ backgroundColor: event.type === 'deep-work' ? '#4f46e5' : 
+                                  event.type === 'meeting' ? '#0891b2' : 
+                                  event.type === 'admin' ? '#6366f1' :
+                                  event.type === 'learning' ? '#8b5cf6' :
+                                  '#3182ce' }}
+                        ></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{event.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(event.start, 'h:mm a')} - {format(event.end, 'h:mm a')}
+                          </p>
                   </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-medium text-text-primary">{event.title}</h4>
-                        <p className="text-sm text-text-secondary">{event.description}</p>
-                      </div>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    <div className="mt-2 flex items-center gap-4">
-                      <div className="text-sm text-text-secondary">
-                        {event.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -
-                        {event.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                      {event.attendees && (
-                        <div className="flex -space-x-2">
-                          {event.attendees.map((attendee, index) => (
-                            <div
-                              key={index}
-                              className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs ring-2 ring-paper"
-                              title={attendee.name}
-                            >
-                              {attendee.avatar}
+                        <button className="ml-2 text-muted-foreground hover:text-foreground">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
                             </div>
                           ))}
+                    
+                  {calendarEvents.filter(event => {
+                    const today = new Date();
+                    const eventDate = new Date(event.start);
+                    return (
+                      eventDate.getDate() === today.getDate() &&
+                      eventDate.getMonth() === today.getMonth() &&
+                      eventDate.getFullYear() === today.getFullYear()
+                    );
+                  }).length === 0 && (
+                    <div className="text-center py-4 text-sm text-muted-foreground">
+                      No events scheduled for today
                         </div>
                       )}
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>
+          </div>
+        </div>
+      </div>
+      
+      {/* Event Modal */}
+      {showEventModal && (
+        <CalendarEventModal
+          isOpen={showEventModal}
+          onClose={() => {
+            setShowEventModal(false);
+            setSelectedEvent(null);
+          }}
+          event={selectedEvent}
+        />
       )}
+      
+      {/* Smart Scheduler */}
+      <SmartScheduler
+        isOpen={showSmartScheduler}
+        onClose={() => setShowSmartScheduler(false)}
+      />
     </div>
   );
 }

@@ -12,6 +12,25 @@ export class GeminiService extends BaseAIService implements AIService {
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
 
+  async sendMessage(content: string, model: string = 'gemini-pro'): Promise<string> {
+    try {
+      console.log(`Sending message to Gemini model: ${model}`);
+      const geminiModel = this.genAI.getGenerativeModel({ 
+        model: model || 'gemini-pro'
+      });
+      
+      const result = await geminiModel.generateContent(content);
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      console.error('Error in Gemini sendMessage:', error);
+      if (error instanceof Error) {
+        throw new Error(`Gemini API Error: ${error.message}`);
+      }
+      throw new Error('Unknown Gemini API Error');
+    }
+  }
+
   async getCompletion(prompt: string, options?: {
     maxTokens?: number;
     temperature?: number;

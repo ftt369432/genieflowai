@@ -18,7 +18,7 @@ interface Agent {
   performance: number;
 }
 
-export function AIAgentsPage() {
+export function AgentsPageComponent() {
   const [agents, setAgents] = useState<Agent[]>([
     {
       id: '1',
@@ -176,4 +176,7 @@ export function AIAgentsPage() {
       </div>
     </div>
   );
-} 
+}
+
+// For backward compatibility
+export const AIAgentsPage = AgentsPageComponent; 

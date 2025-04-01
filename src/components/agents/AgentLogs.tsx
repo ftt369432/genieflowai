@@ -1,126 +1,269 @@
 import React, { useState } from 'react';
-import { Agent } from '../../types/agents';
 import { useAgentStore } from '../../store/agentStore';
-import { format } from 'date-fns';
-import { Search, Filter, AlertCircle, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../ui/Card';
+import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
 import { Input } from '../ui/Input';
-import { Select } from '../ui/Select';
+import { Agent, AgentAction } from '../../types/agent';
+import { 
+  AlertTriangle, 
+  CheckCircle, 
+  Clock, 
+  Calendar, 
+  Search,
+  Filter,
+  Download,
+  RefreshCw,
+  ArrowUpDown
+} from 'lucide-react';
 
 interface AgentLogsProps {
   agent: Agent;
 }
 
 export function AgentLogs({ agent }: AgentLogsProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState<'all' | 'success' | 'error' | 'pending'>('all');
   const { actions } = useAgentStore();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const agentActions = actions
-    .filter(action => action.agentId === agent.id)
-    .filter(action => {
-      if (filter === 'all') return true;
-      return action.status === filter;
-    })
-    .filter(action => 
-      action.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      action.input?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-      action.output?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+  // Filter actions for this agent
+  const agentActions = actions.filter(action => action.agentId === agent.id);
+
+  // Apply filters
+  const filteredActions = agentActions.filter(action => {
+    // Apply search filter
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = 
+      !searchQuery || 
+      action.type.toLowerCase().includes(searchLower) || 
+      (action.input && JSON.stringify(action.input).toLowerCase().includes(searchLower)) ||
+      (action.output && JSON.stringify(action.output).toLowerCase().includes(searchLower));
+    
+    // Apply status filter
+    const matchesStatus = !statusFilter || action.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Apply sorting
+  const sortedActions = [...filteredActions].sort((a, b) => {
+    const dateA = new Date(a.startedAt).getTime();
+    const dateB = new Date(b.startedAt).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      'pending': 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
+      'completed': 'bg-green-100 text-green-800 hover:bg-green-200',
+      'failed': 'bg-red-100 text-red-800 hover:bg-red-200'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800 hover:bg-gray-200';
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Clock className="h-4 w-4" />;
+      case 'completed':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'failed':
+        return <AlertTriangle className="h-4 w-4" />;
+      default:
+        return null;
+    }
+  };
+
+  const formatJson = (json: any) => {
+    try {
+      if (typeof json === 'string') {
+        return json;
+      }
+      return JSON.stringify(json, null, 2);
+    } catch (e) {
+      return 'Invalid JSON';
+    }
+  };
+
+  const formatDate = (date: string | Date) => {
+    return new Date(date).toLocaleString();
+  };
+  
+  const handleExportLogs = () => {
+    const exportData = agentActions.map(action => ({
+      id: action.id,
+      type: action.type,
+      status: action.status,
+      startedAt: action.startedAt,
+      completedAt: action.completedAt,
+      input: action.input,
+      output: action.output,
+      error: action.error
+    }));
+    
+    const jsonString = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agent_${agent.id}_logs_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/40 w-4 h-4" />
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search logs..."
-            className="pl-10"
-          />
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold mb-1">Agent Logs</h2>
+          <p className="text-sm text-muted-foreground">
+            {agentActions.length} total actions recorded
+          </p>
         </div>
-        <Select
-          value={filter}
-          onChange={(value: any) => setFilter(value)}
-          options={[
-            { label: 'All', value: 'all' },
-            { label: 'Success', value: 'success' },
-            { label: 'Error', value: 'error' },
-            { label: 'Pending', value: 'pending' }
-          ]}
-          icon={Filter}
-        />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportLogs}>
+            <Download className="h-4 w-4 mr-2" />
+            Export Logs
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}>
+            <ArrowUpDown className="h-4 w-4 mr-2" />
+            {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
+          </Button>
+        </div>
       </div>
-
-      {/* Logs */}
-      <div className="space-y-4">
-        {agentActions.map((action) => (
-          <div key={action.id} className="bg-white/5 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <div className={`p-2 rounded-lg ${
-                action.status === 'completed'
-                  ? 'bg-green-500/20 text-green-400'
-                  : action.status === 'failed'
-                  ? 'bg-red-500/20 text-red-400'
-                  : 'bg-yellow-500/20 text-yellow-400'
-              }`}>
-                {action.status === 'completed' ? (
-                  <CheckCircle className="w-4 h-4" />
-                ) : action.status === 'failed' ? (
-                  <XCircle className="w-4 h-4" />
-                ) : (
-                  <Clock className="w-4 h-4" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium">{action.type}</p>
-                  <span className="text-sm text-white/40">
-                    {format(action.startedAt, 'MMM dd, yyyy HH:mm:ss')}
-                  </span>
-                </div>
-                {action.input && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-sm text-white/60">Input:</p>
-                    <pre className="text-sm bg-black/20 rounded p-2 overflow-x-auto">
-                      {JSON.stringify(action.input, null, 2)}
-                    </pre>
-                  </div>
-                )}
-                {action.output && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-sm text-white/60">Output:</p>
-                    <pre className="text-sm bg-black/20 rounded p-2 overflow-x-auto">
-                      {JSON.stringify(action.output, null, 2)}
-                    </pre>
-                  </div>
-                )}
-                {action.error && (
-                  <div className="mt-2 flex items-start gap-2 text-red-400">
-                    <AlertCircle className="w-4 h-4 mt-0.5" />
-                    <p className="text-sm">{action.error}</p>
-                  </div>
-                )}
-                {action.completedAt && (
-                  <p className="mt-2 text-sm text-white/40">
-                    Duration: {
-                      Math.round((action.completedAt.getTime() - action.startedAt.getTime()) / 1000)
-                    }s
-                  </p>
-                )}
-              </div>
+      
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search logs..."
+                className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <Badge 
+                className={!statusFilter ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}
+                onClick={() => setStatusFilter(null)}
+                variant="outline"
+              >
+                All
+              </Badge>
+              <Badge 
+                className={statusFilter === 'completed' ? getStatusColor('completed') : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}
+                onClick={() => setStatusFilter('completed')}
+                variant="outline"
+              >
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Completed
+              </Badge>
+              <Badge 
+                className={statusFilter === 'pending' ? getStatusColor('pending') : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}
+                onClick={() => setStatusFilter('pending')}
+                variant="outline"
+              >
+                <Clock className="h-3 w-3 mr-1" />
+                Pending
+              </Badge>
+              <Badge 
+                className={statusFilter === 'failed' ? getStatusColor('failed') : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}
+                onClick={() => setStatusFilter('failed')}
+                variant="outline"
+              >
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                Failed
+              </Badge>
             </div>
           </div>
-        ))}
-
-        {agentActions.length === 0 && (
-          <div className="text-center py-8 text-white/40">
-            No logs found {searchTerm && 'matching your search'}
-          </div>
+        </CardHeader>
+        
+        <CardContent>
+          {sortedActions.length > 0 ? (
+            <div className="space-y-4">
+              {sortedActions.map((action) => (
+                <Card key={action.id} className="overflow-hidden">
+                  <CardHeader className="py-3">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <Badge className={getStatusColor(action.status)}>
+                          <span className="flex items-center gap-1">
+                            {getStatusIcon(action.status)}
+                            {action.status}
+                          </span>
+                        </Badge>
+                        <span className="font-medium">{action.type}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(action.startedAt)}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="py-3 border-t">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Input</h4>
+                        <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">
+                          {formatJson(action.input)}
+                        </pre>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">
+                          {action.status === 'failed' ? 'Error' : 'Output'}
+                        </h4>
+                        <pre className={`text-xs p-2 rounded overflow-auto max-h-40 ${
+                          action.status === 'failed' 
+                            ? 'bg-red-50' 
+                            : 'bg-gray-50'
+                        }`}>
+                          {action.status === 'failed' 
+                            ? action.error || 'Unknown error' 
+                            : action.output ? formatJson(action.output) : 'No output'}
+                        </pre>
+                      </div>
+                    </div>
+                    
+                    {action.completedAt && (
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Duration: {((new Date(action.completedAt).getTime() - new Date(action.startedAt).getTime()) / 1000).toFixed(2)}s
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium">No logs found</h3>
+              <p className="text-muted-foreground">
+                {searchQuery || statusFilter 
+                  ? 'Try adjusting your search or filters' 
+                  : 'This agent has not executed any actions yet'}
+              </p>
+            </div>
+          )}
+        </CardContent>
+        
+        {agentActions.length > 10 && filteredActions.length > 10 && (
+          <CardFooter>
+            <Button variant="outline" className="w-full">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Load More Logs
+            </Button>
+          </CardFooter>
         )}
-      </div>
+      </Card>
     </div>
   );
 } 

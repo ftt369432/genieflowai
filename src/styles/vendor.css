@@ -1,3 +1,1 @@
-/* Import vendor CSS files */
-@import '../../node_modules/react-grid-layout/css/styles.css';
-@import '../../node_modules/react-resizable/css/styles.css'; 
+/* Third-party styles that may be needed by components */

@@ -2,13 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg-primary: theme('colors.white');
-  --bg-secondary: theme('colors.gray.50');
-  --bg-paper: theme('colors.white');
-  --text-primary: theme('colors.gray.900');
-  --text-secondary: theme('colors.gray.600');
-  --text-muted: theme('colors.gray.400');
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    
+    --bg-primary: theme('colors.white');
+    --bg-secondary: theme('colors.gray.50');
+    --bg-paper: theme('colors.white');
+    --text-primary: theme('colors.gray.900');
+    --text-secondary: theme('colors.gray.600');
+    --text-muted: theme('colors.gray.400');
+  }
+
+  body {
+    @apply bg-white text-gray-900;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  [data-theme='dark'] {
+    --bg-primary: theme('colors.gray.900');
+    --bg-secondary: theme('colors.gray.800');
+    --bg-paper: theme('colors.gray.900');
+    --text-primary: theme('colors.gray.100');
+    --text-secondary: theme('colors.gray.300');
+    --text-muted: theme('colors.gray.500');
+  }
+
+  [data-theme='dark'] body {
+    @apply bg-gray-900 text-gray-100;
+  }
+
+  [data-theme='cyberpunk'] {
+    --bg-primary: theme('colors.cyberpunk.dark');
+    --bg-secondary: theme('colors.cyberpunk.darker');
+    --bg-paper: theme('colors.cyberpunk.dark');
+    --text-primary: theme('colors.cyberpunk.neon');
+    --text-secondary: theme('colors.cyberpunk.pink');
+    --text-muted: theme('colors.cyberpunk.yellow');
+  }
 }
 
 .dark {
@@ -29,19 +61,13 @@
   --text-muted: theme('colors.cyberpunk.yellow');
 }
 
-@layer base {
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
 @layer components {
   .neon-border {
-    @apply border border-cyberpunk-neon shadow-neon;
+    @apply border border-cyan-400 shadow-lg;
   }
   
   .neon-text {
-    @apply text-cyberpunk-neon animate-glow;
+    @apply text-cyan-400;
   }
 
   .grid-item {
@@ -63,11 +89,11 @@
   }
 
   .cyberpunk .grid-item {
-    @apply border border-cyberpunk-neon shadow-neon bg-cyberpunk-darker;
+    @apply border border-cyan-400 shadow-lg bg-gray-900;
   }
 
   .dark .grid-item {
-    @apply bg-dark-paper border-gray-700;
+    @apply bg-gray-800 border-gray-700;
   }
 }
 

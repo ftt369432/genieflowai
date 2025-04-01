@@ -1,7 +1,120 @@
+/**
+ * AI Types
+ * 
+ * This file defines the types related to AI functionality in the application.
+ */
+
+export interface AIDocument {
+  id: string;
+  content: string;
+  metadata: {
+    source: string;
+    title?: string;
+    author?: string;
+    date?: Date;
+    category?: string;
+    tags?: string[];
+  };
+  embedding?: number[];
+  relevanceScore?: number;
+}
+
+export interface AIFolder {
+  id: string;
+  name: string;
+  documents: AIDocument[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AIPrompt {
+  id: string;
+  name: string;
+  content: string;
+  category: string;
+  tags?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface AIModel {
   id: string;
   name: string;
-  provider: 'openai' | 'google' | 'anthropic';
+  provider: 'openai' | 'anthropic' | 'google' | 'local' | 'other';
+  capabilities: AICapability[];
+  contextSize: number;
+  apiKey?: string;
+  endpoint?: string;
+  parameters?: Record<string, any>;
+}
+
+export type AICapability = 
+  | 'text-generation' 
+  | 'chat' 
+  | 'embeddings' 
+  | 'image-generation' 
+  | 'text-to-speech'
+  | 'speech-to-text'
+  | 'code-generation'
+  | 'summarization'
+  | 'translation';
+
+export interface AIAssistant {
+  id: string;
+  name: string;
+  description?: string;
+  model: AIModel;
+  systemPrompt?: string;
+  knowledgeBase?: AIFolder[];
+  avatarUrl?: string;
+  settings: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+    presencePenalty?: number;
+    frequencyPenalty?: number;
+  };
+}
+
+export interface AIMessage {
+  id: string;
+  role: 'system' | 'user' | 'assistant' | 'function';
+  content: string;
+  createdAt: Date;
+  metadata?: {
+    tokens?: number;
+    processingTime?: number;
+    sources?: string[];
+    functionCall?: {
+      name: string;
+      arguments: Record<string, any>;
+    };
+  };
+}
+
+export interface AIConversation {
+  id: string;
+  title: string;
+  messages: AIMessage[];
+  assistant: AIAssistant;
+  createdAt: Date;
+  updatedAt: Date;
+  metadata?: {
+    totalTokens?: number;
+    tags?: string[];
+    summary?: string;
+  };
+}
+
+export interface AIAnalysis {
+  summary: string;
+  entities?: string[];
+  keyPhrases?: string[];
+  sentiment?: 'positive' | 'negative' | 'neutral';
+  topics?: string[];
+  language?: string;
+  classification?: Record<string, number>;
+  complexity?: 'simple' | 'moderate' | 'complex';
 }
 
 export interface AIConfig {
@@ -46,33 +159,6 @@ export interface DocumentReference {
   excerpt: string;
   type: string;
   relevance: number;
-}
-
-export interface AIFolder {
-  id: string;
-  name: string;
-  parentId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface AIDocument {
-  id: string;
-  title: string;
-  content: string;
-  type: 'image' | 'text';
-  metadata: {
-    dateCreated: string;
-    dateModified: string;
-    tags: string[];
-    source: string;
-    size?: number;
-    author?: string;
-  };
-  summary: string;
-  language: string;
-  chunks: string[];
-  embedding: number[];
 }
 
 export interface SearchResult {

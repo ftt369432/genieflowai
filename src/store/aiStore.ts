@@ -20,10 +20,18 @@ interface AIDocument {
 
 interface AIState {
   messages: Message[];
-  conversationHistory: Conversation[];
+  isLoading: boolean;
   selectedModel: AIModel;
+  linkedDocs: Array<{
+    id: string;
+    title: string;
+    content: string;
+    type: string;
+  }>;
+  conversationHistory: Conversation[];
   documents: AIDocument[];
   addMessage: (message: Message) => void;
+  setLoading: (loading: boolean) => void;
   clearMessages: () => void;
   saveConversation: (title?: string) => void;
   deleteConversation: (id: string) => void;
@@ -31,24 +39,32 @@ interface AIState {
   setSelectedModel: (model: AIModel) => void;
   addDocument: (doc: AIDocument) => void;
   removeDocument: (id: string) => void;
+  startNewConversation: () => void;
 }
 
 export const useAIStore = create<AIState>()(
   persist(
     (set, get) => ({
       messages: [],
-      conversationHistory: [],
+      isLoading: false,
       selectedModel: {
-        id: 'gpt-4',
-        name: 'GPT-4',
-        provider: 'openai'
+        id: 'gemini-2.0-flash',
+        name: 'Gemini 2.0 Flash',
+        provider: 'google',
+        capabilities: ['chat', 'text-generation'],
+        contextSize: 32000
       },
+      linkedDocs: [],
+      conversationHistory: [],
       documents: [],
 
       addMessage: (message) =>
         set((state) => ({
           messages: [...state.messages, message]
         })),
+
+      setLoading: (loading) =>
+        set({ isLoading: loading }),
 
       clearMessages: () =>
         set({ messages: [] }),
@@ -94,7 +110,10 @@ export const useAIStore = create<AIState>()(
 
       removeDocument: (id) => set((state) => ({
         documents: state.documents.filter(d => d.id !== id)
-      }))
+      })),
+
+      startNewConversation: () =>
+        set({ messages: [], linkedDocs: [], conversationHistory: [], documents: [] })
     }),
     {
       name: 'ai-storage',

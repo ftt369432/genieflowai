@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useThemeStore } from '../../store/themeStore';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
 
 export function CyberpunkBackground() {
   const { style, color } = useThemeStore();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Mail, 
@@ -14,7 +14,7 @@ import {
   Bell,
   User
 } from 'lucide-react';
-import { useTheme } from '../theme/ThemeProvider';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useSidebar } from '../../hooks/useSidebar';
 import { Sidebar } from './Sidebar';
 import { Button } from '../ui/Button';
@@ -28,7 +28,7 @@ const navigation = [
   { name: 'Chat', href: '/chat', icon: MessageSquare },
 ];
 
-export function ModernLayout({ children }: { children: React.ReactNode }) {
+export function ModernLayout() {
   const { theme, toggleTheme } = useTheme();
   const { isSidebarOpen, toggleSidebar } = useSidebar();
 
@@ -73,17 +73,20 @@ export function ModernLayout({ children }: { children: React.ReactNode }) {
         <aside 
           className={`fixed lg:sticky top-[60px] left-0 h-[calc(100vh-60px)]
             bg-white dark:bg-dark-paper border-r border-gray-200 dark:border-gray-700/50
-            transition-all duration-200 ease-in-out
+            transition-all duration-200 ease-in-out w-64
             ${!isSidebarOpen ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}`}
         >
           <div className="h-full overflow-y-auto">
-            <Sidebar />
+            <Sidebar 
+              isCollapsed={!isSidebarOpen} 
+              onToggle={toggleSidebar} 
+            />
           </div>
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-h-[calc(100vh-60px)] p-6 bg-gray-50 dark:bg-dark transition-colors duration-200">
-          {children}
+        <main className="flex-1 min-h-[calc(100vh-60px)] p-6 lg:ml-64 bg-gray-50 dark:bg-dark transition-colors duration-200">
+          <Outlet />
         </main>
 
         {/* Mobile Backdrop */}

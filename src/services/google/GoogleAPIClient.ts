@@ -1,42 +1,53 @@
-declare global {
-  interface Window {
-    gapi: any;
-    google: any;
-  }
+/**
+ * GoogleAPIClient.ts
+ * 
+ * This class handles authentication and API calls to Google services.
+ * For development and testing, this uses mock data when environment variables aren't available.
+ */
+
+import { getEnv } from '../../config/env';
+
+// Types for Google API responses and parameters
+export interface GoogleAuthResponse {
+  access_token: string;
+  expires_in: number;
+  scope: string;
+  token_type: string;
+  id_token?: string;
 }
 
+export interface GoogleUserInfo {
+  id: string;
+  email: string;
+  name: string;
+  picture: string;
+}
+
+// Interface for request options
+interface RequestOptions {
+  path: string;
+  params?: Record<string, any>;
+  method?: string;
+  body?: any;
+  headers?: Record<string, string>;
+}
+
+/**
+ * Google API Client for handling authentication and API requests
+ */
 export class GoogleAPIClient {
   private static instance: GoogleAPIClient;
-  private initialized = false;
-  private clientId: string;
-  private apiKey: string;
-  private tokenClient: any;
-  private discoveryDocs = [
-    'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest',
-    'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
-    'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
-  ];
-  private scopes = [
-    'https://www.googleapis.com/auth/userinfo.profile',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/calendar',
-    'https://www.googleapis.com/auth/gmail.modify',
-    'https://www.googleapis.com/auth/drive.file'
-  ];
+  private accessToken: string | null = null;
+  private oauth2Client: any = null;
+  private gapi: any = null;
+  private isInitialized: boolean = false;
+  private isAuthenticated: boolean = false;
 
-  private constructor() {
-    this.clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    this.apiKey = import.meta.env.VITE_GOOGLE_API_KEY || '';
+  private constructor() {}
 
-    if (!this.clientId) {
-      throw new Error('Google Client ID is not configured. Please set VITE_GOOGLE_CLIENT_ID in your .env file.');
-    }
-
-    if (!this.apiKey) {
-      throw new Error('Google API Key is not configured. Please set VITE_GOOGLE_API_KEY in your .env file.');
-    }
-  }
-
+  /**
+   * Get instance (singleton)
+   */
   static getInstance(): GoogleAPIClient {
     if (!GoogleAPIClient.instance) {
       GoogleAPIClient.instance = new GoogleAPIClient();
@@ -44,149 +55,272 @@ export class GoogleAPIClient {
     return GoogleAPIClient.instance;
   }
 
+  /**
+   * Initialize the Google API client
+   */
   async initialize(): Promise<void> {
-    if (this.initialized) return;
-
-    return new Promise((resolve, reject) => {
-      const handleError = (error: Error) => {
-        console.error('Google API initialization error:', error);
-        reject(error);
-      };
-
-      // Load the Google Identity Services script
-      const gisScript = document.createElement('script');
-      gisScript.src = 'https://accounts.google.com/gsi/client';
-      gisScript.async = true;
-      gisScript.defer = true;
-      gisScript.onload = () => {
-        // Load the Google API client script
-        const gapiScript = document.createElement('script');
-        gapiScript.src = 'https://apis.google.com/js/api.js';
-        gapiScript.onload = () => this.initializeGapi(resolve, handleError);
-        gapiScript.onerror = () => handleError(new Error('Failed to load Google API client'));
-        document.body.appendChild(gapiScript);
-      };
-      gisScript.onerror = () => handleError(new Error('Failed to load Google Identity Services'));
-      document.body.appendChild(gisScript);
-    });
-  }
-
-  private async initializeGapi(resolve: () => void, reject: (error: Error) => void): Promise<void> {
-    try {
-      await new Promise<void>((res, rej) => {
-        window.gapi.load('client', {
-          callback: res,
-          onerror: () => rej(new Error('Failed to load GAPI client')),
-          timeout: 5000,
-          ontimeout: () => rej(new Error('Failed to load GAPI client - timeout'))
-        });
-      });
-
-      await window.gapi.client.init({
-        apiKey: this.apiKey,
-        discoveryDocs: this.discoveryDocs
-      }).catch((error: any) => {
-        console.error('GAPI client init error:', error);
-        throw new Error(`Failed to initialize GAPI client: ${error.message || 'Unknown error'}`);
-      });
-
-      this.tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: this.clientId,
-        scope: this.scopes.join(' '),
-        callback: (tokenResponse: any) => {
-          if (tokenResponse.error) {
-            reject(new Error(`Token error: ${tokenResponse.error}`));
-            return;
-          }
-          this.initialized = true;
-          resolve();
-        }
-      });
-
-      this.initialized = true;
-      resolve();
-    } catch (error) {
-      console.error('Google API initialization error:', error);
-      reject(error instanceof Error ? error : new Error('Failed to initialize Google API client'));
+    const { useMock } = getEnv();
+    
+    if (useMock) {
+      console.log('GoogleAPIClient: Running in mock mode');
+      this.isInitialized = true;
+      return;
     }
-  }
-
-  async signIn(): Promise<void> {
-    if (!this.initialized) {
-      await this.initialize();
-    }
-    return new Promise((resolve, reject) => {
-      try {
-        this.tokenClient.requestAccessToken({
-          prompt: 'consent',
-          error_callback: (error: any) => {
-            console.error('Sign in error:', error);
-            reject(new Error(`Sign in failed: ${error.message || 'Unknown error'}`));
-          }
-        });
-        resolve();
-      } catch (error) {
-        console.error('Sign in error:', error);
-        reject(error instanceof Error ? error : new Error('Sign in failed'));
-      }
-    });
-  }
-
-  async signOut(): Promise<void> {
-    if (!this.initialized) return;
     
     try {
-      const token = window.gapi.client.getToken();
-      if (token) {
-        window.google.accounts.oauth2.revoke(token.access_token);
-        window.gapi.client.setToken(null);
+      console.log('GoogleAPIClient: Initializing Google API client');
+      
+      // Check if gapi is available
+      if (typeof window !== 'undefined' && window.gapi) {
+        this.gapi = window.gapi;
+        
+        // Load the necessary libraries
+        await new Promise<void>((resolve, reject) => {
+          this.gapi.load('client:auth2', {
+            callback: () => {
+              console.log('GoogleAPIClient: Google API client loaded');
+              resolve();
+            },
+            onerror: (err: any) => {
+              console.error('GoogleAPIClient: Error loading Google API client', err);
+              reject(new Error('Failed to load Google API client'));
+            }
+          });
+        });
+        
+        // Initialize the client
+        await this.gapi.client.init({
+          apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
+          clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          scope: [
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/gmail.modify'
+          ].join(' '),
+          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest']
+        });
+        
+        // Get the OAuth2 client
+        this.oauth2Client = this.gapi.auth2.getAuthInstance();
+        
+        // Check if the user is signed in
+        this.isAuthenticated = this.oauth2Client.isSignedIn.get();
+        
+        if (this.isAuthenticated) {
+          const googleUser = this.oauth2Client.currentUser.get();
+          const authResponse = googleUser.getAuthResponse(true);
+          this.accessToken = authResponse.access_token;
+          console.log('GoogleAPIClient: User is already signed in');
+        } else {
+          console.log('GoogleAPIClient: User is not signed in');
+        }
+        
+        this.isInitialized = true;
+        console.log('GoogleAPIClient: Initialization complete');
+      } else {
+        console.warn('GoogleAPIClient: Google API client not available');
+        throw new Error('Google API client not available');
       }
     } catch (error) {
-      console.error('Error during sign out:', error);
-      throw error instanceof Error ? error : new Error('Sign out failed');
+      console.error('GoogleAPIClient: Error initializing', error);
+      throw error;
     }
   }
 
+  /**
+   * Sign in the user
+   */
+  async signIn(): Promise<void> {
+    const { useMock } = getEnv();
+    
+    if (useMock) {
+      this.isAuthenticated = true;
+      this.accessToken = 'mock-access-token';
+      return;
+    }
+    
+    try {
+      if (!this.isInitialized) {
+        await this.initialize();
+      }
+      
+      if (!this.oauth2Client) {
+        throw new Error('OAuth2 client not initialized');
+      }
+      
+      // Perform the sign in
+      const googleUser = await this.oauth2Client.signIn({
+        prompt: 'select_account'
+      });
+      
+      // Get the auth response
+      const authResponse = googleUser.getAuthResponse(true);
+      this.accessToken = authResponse.access_token;
+      this.isAuthenticated = true;
+      
+      console.log('GoogleAPIClient: Sign in successful');
+    } catch (error) {
+      console.error('GoogleAPIClient: Error signing in', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sign out the user
+   */
+  async signOut(): Promise<void> {
+    const { useMock } = getEnv();
+    
+    if (useMock) {
+      this.isAuthenticated = false;
+      this.accessToken = null;
+      return;
+    }
+    
+    try {
+      if (!this.isInitialized || !this.oauth2Client) {
+        throw new Error('OAuth2 client not initialized');
+      }
+      
+      await this.oauth2Client.signOut();
+      this.isAuthenticated = false;
+      this.accessToken = null;
+      
+      console.log('GoogleAPIClient: Sign out successful');
+    } catch (error) {
+      console.error('GoogleAPIClient: Error signing out', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if the user is signed in
+   */
   isSignedIn(): boolean {
-    return this.initialized && !!window.gapi.client.getToken();
-  }
-
-  async getAccessToken(): Promise<string> {
-    if (!this.initialized || !this.isSignedIn()) {
-      throw new Error('Not authenticated');
+    const { useMock } = getEnv();
+    
+    if (useMock) {
+      return this.isAuthenticated;
     }
-    const token = window.gapi.client.getToken();
-    return token?.access_token;
+    
+    if (!this.isInitialized || !this.oauth2Client) {
+      return false;
+    }
+    
+    return this.oauth2Client.isSignedIn.get();
   }
 
+  /**
+   * Get the access token
+   */
+  async getAccessToken(): Promise<string> {
+    const { useMock } = getEnv();
+    
+    if (useMock) {
+      return 'mock-access-token';
+    }
+    
+    if (!this.isInitialized || !this.oauth2Client) {
+      throw new Error('OAuth2 client not initialized');
+    }
+    
+    if (!this.isSignedIn()) {
+      throw new Error('User not signed in');
+    }
+    
+    // Refresh the token if needed
+    const googleUser = this.oauth2Client.currentUser.get();
+    const authResponse = googleUser.getAuthResponse(true);
+    
+    if (!authResponse.access_token) {
+      throw new Error('Failed to get access token');
+    }
+    
+    this.accessToken = authResponse.access_token;
+    return this.accessToken as string;
+  }
+
+  /**
+   * Make a request to the Google API
+   */
   async request<T>(options: {
     path: string;
     method?: string;
     params?: Record<string, any>;
     body?: any;
   }): Promise<T> {
-    if (!this.initialized) {
-      await this.initialize();
+    const { useMock } = getEnv();
+    
+    if (useMock) {
+      // Return mock data
+      console.log('GoogleAPIClient: Mock request', options);
+      return { email: 'user@gmail.com', name: 'Mock User' } as unknown as T;
     }
-
-    if (!this.isSignedIn()) {
-      await this.signIn();
+    
+    if (!this.isInitialized) {
+      throw new Error('Google API client not initialized');
     }
-
-    const { path, method = 'GET', params = {}, body } = options;
-
+    
+    if (!this.accessToken) {
+      await this.getAccessToken();
+    }
+    
+    const { path, method = 'GET', params, body } = options;
+    
     try {
-      const response = await window.gapi.client.request({
-        path,
+      // If gapi client is available, use it
+      if (this.gapi && this.gapi.client) {
+        const request = {
+          path,
+          method,
+          params,
+          body,
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`
+          }
+        };
+        
+        const response = await this.gapi.client.request(request);
+        return response.result as T;
+      }
+      
+      // Fallback to fetch API
+      const url = new URL(path);
+      
+      // Add query parameters
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          url.searchParams.append(key, value);
+        });
+      }
+      
+      const response = await fetch(url.toString(), {
         method,
-        params,
-        body
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: body ? JSON.stringify(body) : undefined
       });
-
-      return response.result;
-    } catch (error: any) {
-      console.error('API request error:', error);
-      throw new Error(error.message || 'API request failed');
+      
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.statusText}`);
+      }
+      
+      return await response.json() as T;
+    } catch (error) {
+      console.error('GoogleAPIClient: Error making request', error);
+      throw error;
     }
   }
-} 
+
+  /**
+   * Get the OAuth2 client
+   */
+  getOAuth2Client(): any {
+    return this.oauth2Client;
+  }
+}
+
+// Export the singleton instance
+export const googleApiClient = GoogleAPIClient.getInstance(); 

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import type { Email, Task, CalendarEvent } from '../types';
+import { EmailMessage } from '../types/email';
+import { Task } from '../types/task';
+import { CalendarEvent } from '../types/calendar';
 import { emailService } from '../services/email';
-import { fetchTasks } from '../services/tasks/taskService';
-import { fetchEvents } from '../services/calendar/calendarService';
+import { taskService } from '../services/tasks';
+import { calendarService } from '../services/calendar';
 
 interface AnalyticsData {
   emails: {
@@ -58,19 +60,19 @@ export function useAnalytics() {
         };
 
         // Fetch tasks
-        const tasks = await fetchTasks();
+        const tasks = await taskService.getTasks();
         const taskStats = {
           total: tasks.length,
-          completed: tasks.filter(task => task.completed).length,
+          completed: tasks.filter(task => task.status === 'done').length,
           byPriority: {} as Record<string, number>,
           byStatus: {} as Record<string, number>
         };
 
         // Fetch calendar events
-        const events = await fetchEvents();
+        const events = await calendarService.getEvents();
         const calendarStats = {
           total: events.length,
-          upcoming: events.filter(event => new Date(event.start) > new Date()).length,
+          upcoming: events.filter(event => new Date(event.startTime) > new Date()).length,
           byType: {} as Record<string, number>,
           byMonth: [] as Array<{ month: string; count: number }>
         };

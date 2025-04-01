@@ -1,52 +1,41 @@
-// Re-export the EmailService class and singleton
-import { EmailService, emailService } from './EmailService';
-import type { EmailMessage } from './EmailService';
+/**
+ * Email Service Module
+ * 
+ * Exports the EmailService class and creates a default instance
+ */
 
-// Re-export the IMAPService
-import { IMAPService } from './IMAPService';
+// Import the service class
+import { EmailService } from './EmailService';
 
-// Re-export email-related types from types/email.ts
-import type {
-  EmailAccount,
-  EmailFolder,
-  EmailAttachment,
-  EmailDraft,
-  EmailLabel,
-  EmailFilter,
-  EmailSignature,
-  EmailPreferences,
-  EmailAnalysis,
-  EmailTemplate,
-  EmailAnalytics,
-  Credentials
-} from '../../types/email';
-
-// Export everything
-export {
-  // Services
-  EmailService,
-  emailService,
-  IMAPService,
-};
-
-// Export types
-export type {
+// Import types from the types file
+import type { 
   EmailMessage,
-  EmailAccount,
   EmailFolder,
-  EmailAttachment,
-  EmailDraft,
   EmailLabel,
+  EmailAccount,
   EmailFilter,
-  EmailSignature,
-  EmailPreferences,
-  EmailAnalysis,
-  EmailTemplate,
-  EmailAnalytics,
-  Credentials
+  EmailQuery,
+  IMAPConfig,
+  EmailPreferences
+} from './types';
+
+// Create a singleton instance for backward compatibility
+const emailService = new EmailService();
+
+// Re-export types
+export type { 
+  EmailMessage,
+  EmailFolder,
+  EmailLabel,
+  EmailAccount,
+  EmailFilter,
+  EmailQuery,
+  IMAPConfig,
+  EmailPreferences
 };
 
-// Re-export other types and utilities
-export * from './types';
-export * from './emailActions';
-export * from './emailConfig'; 
+// Export the service class and the singleton instance
+export { EmailService, emailService };
+
+// Default export for convenience
+export default emailService; 

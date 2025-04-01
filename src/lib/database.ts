@@ -2,13 +2,24 @@ import { supabase } from './supabase';
 import type { AIDocument, AIFolder } from '../types/ai';
 import type { Document } from '../types/documents';
 
+// Try importing the real supabase client, if it fails, use the mock
+let supabaseClient;
+try {
+  supabaseClient = supabase;
+} catch (error) {
+  console.warn('Using mock Supabase client');
+  // Import the mock client
+  const { supabaseMock } = require('./supabaseMock');
+  supabaseClient = supabaseMock;
+}
+
 // Document operations
 export const documentService = {
   /**
    * Get all documents for the current user
    */
   async getDocuments(): Promise<Document[]> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('documents')
       .select('*')
       .order('updated_at', { ascending: false });
@@ -25,7 +36,7 @@ export const documentService = {
    * Create a new document
    */
   async createDocument(document: Omit<Document, 'id'>): Promise<Document | null> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('documents')
       .insert(mapDocumentToDB(document))
       .select()
@@ -43,7 +54,7 @@ export const documentService = {
    * Update an existing document
    */
   async updateDocument(id: string, updates: Partial<Document>): Promise<Document | null> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('documents')
       .update(mapDocumentToDB(updates as Document))
       .eq('id', id)
@@ -62,7 +73,7 @@ export const documentService = {
    * Delete a document
    */
   async deleteDocument(id: string): Promise<boolean> {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('documents')
       .delete()
       .eq('id', id);
@@ -80,7 +91,7 @@ export const documentService = {
    */
   async searchDocuments(query: string): Promise<Document[]> {
     // Utilizing Postgres text search
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('documents')
       .select('*')
       .textSearch('content', query)
