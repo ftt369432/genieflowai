@@ -12,14 +12,16 @@ import {
   NotificationsPage,
   DashboardPage,
   AIPage,
-  AIDrivePage,
   CalendarPage,
   ContactsPage,
   TasksPage,
-  LegalDocumentPage
+  LegalDocumentPage,
+  NotebooksPage
 } from './pages';
+import { AIDrivePage } from './pages/AIDrive';
 import { LoadingExample } from './components/examples/LoadingExample';
 import { AIAssistantPage } from './pages/AIAssistant';
+import { TeamsPage } from './pages/TeamsPage';
 
 // Protected route wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -194,6 +196,26 @@ function App() {
               </AppLayout>
             </ProtectedRoute>
           } />
+          
+          {/* Add the notebooks route */}
+          <Route 
+            path="/notebooks" 
+            element={
+              <ProtectedRoute>
+                <NotebooksPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Add the teams route */}
+          <Route 
+            path="/teams" 
+            element={
+              <ProtectedRoute>
+                <TeamsPage />
+              </ProtectedRoute>
+            } 
+          />
           
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" replace />} />

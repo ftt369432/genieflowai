@@ -1,3 +1,8 @@
+/**
+ * Main LoginPage component - This is the preferred login page implementation
+ * that should be used throughout the application.
+ */
+
 import React, { useState, useEffect, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';

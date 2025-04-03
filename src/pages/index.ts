@@ -18,6 +18,10 @@ export * from './AIAgents';
 export { AgentsPageComponent } from './AgentsPage';
 export * from './AgentDetail';
 export * from './TestAI';
+export * from './AIPage';
+
+// Collaboration pages
+export * from './TeamsPage';
 
 // Calendar and Task pages
 export * from './CalendarPage';
@@ -41,19 +45,9 @@ export * from './ModulesPage';
 export * from './ModuleDetailPage';
 export * from './TemplatesPage';
 
+// Notebook pages
+export * from './NotebooksPage';
+
 // Miscellaneous pages
 export * from './PricingPage';
-export * from './DemoPage';
-
-export { HomePage } from './HomePage';
-export { LoginPage } from './LoginPage';
-export { ProfilePage } from './ProfilePage';
-export { SubscriptionPage } from './SubscriptionPage';
-export { EmailInboxPage } from './EmailInboxPage';
-export { NotificationsPage } from './NotificationsPage';
-export { DashboardPage } from './DashboardPage';
-export { AIPage } from './AIPage';
-export { CalendarPage } from './CalendarPage';
-export { ContactsPage } from './ContactsPage';
-export { TasksPage } from './TasksPage';
-export { LegalDocumentPage } from './LegalDocumentPage'; 
+export * from './DemoPage'; 

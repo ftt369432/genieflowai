@@ -39,8 +39,8 @@ class AIConfig {
   }
 
   getServiceProvider(serviceName: 'ai-drive' | 'ai-assistant' | 'ai-agent'): string {
-    const envKey = `VITE_${serviceName.toUpperCase()}_PROVIDER`;
-    return import.meta.env[envKey] || 'openai'; // Default to OpenAI
+    // Always return 'google' as the provider regardless of environment settings
+    return 'google';
   }
 }
 

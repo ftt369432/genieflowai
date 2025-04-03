@@ -95,8 +95,8 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
         );
       }
       
-      // Call the AI service
-      const response = await sendToAI(enhancedMessage, selectedModel);
+      // Call the AI service with the new signature
+      const response = await sendToAI(enhancedMessage);
       
       // Create and add the AI response message
       const assistantMessage: Message = {
@@ -123,7 +123,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
         content: error instanceof Error 
           ? `Error: ${error.message}` 
           : 'An unknown error occurred',
-        role: 'error',
+        role: 'assistant',
         timestamp: new Date()
       };
       

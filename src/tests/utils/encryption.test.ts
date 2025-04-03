@@ -1,4 +1,4 @@
-import { encrypt, decrypt, generateEncryptionKey, secureCompare } from '../../utils/encryption';
+import { encrypt, decrypt, generateEncryptionKey, secureCompare } from '../../lib/utils';
 
 describe('Encryption Utils', () => {
   describe('encrypt and decrypt', () => {

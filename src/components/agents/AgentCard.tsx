@@ -1,102 +1,57 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-import { Brain, Play, Pause, Settings, Trash2, Bot, Activity, Power } from 'lucide-react';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { useAgent } from '../../hooks/useAgent';
-import type { Agent } from '../../types/agent';
-import type { AgentType, AgentStatus, AutonomyLevel } from '../../store/agentStore';
-import { useNavigate } from 'react-router-dom';
-import { Badge } from '../ui/Badge';
+import { cn } from '../../lib/utils';
+import { Agent, AgentStatus } from '../../types/agent';
+import { Bot, Circle } from 'lucide-react';
 
 interface AgentCardProps {
   agent: Agent;
-  onActivate?: (id: string) => void;
-  onDeactivate?: (id: string) => void;
+  isSelected?: boolean;
+  onClick?: () => void;
 }
 
-export function AgentCard({ agent, onActivate, onDeactivate }: AgentCardProps) {
-  const navigate = useNavigate();
-  const { isActive, activate, deactivate } = useAgent(agent?.id);
-
-  const statusColors = {
-    active: 'bg-green-500',
-    inactive: 'bg-gray-500',
-    training: 'bg-yellow-500'
-  };
-
-  if (!agent) {
-    return null;
-  }
-
-  const handleToggleActive = () => {
-    if (isActive) {
-      deactivate();
-    } else {
-      activate();
+export function AgentCard({ agent, isSelected, onClick }: AgentCardProps) {
+  const getStatusColor = (status: AgentStatus) => {
+    switch (status) {
+      case 'active':
+        return 'text-green-500';
+      case 'idle':
+        return 'text-yellow-500';
+      case 'error':
+        return 'text-red-500';
+      case 'training':
+        return 'text-blue-500';
+      default:
+        return 'text-gray-500';
     }
   };
 
-  const capabilities = agent?.capabilities || [];
-  const metrics = agent?.metrics || { 
-    tasksCompleted: 0,
-    accuracy: 0,
-    responseTime: 0
-  };
-
   return (
-    <Card 
-      className="p-4 hover:shadow-lg transition-shadow cursor-pointer"
-      onClick={() => navigate(`/agents/monitor/${agent.id}`)}
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors rounded-lg',
+        isSelected
+          ? 'bg-gray-800 text-white'
+          : 'text-white hover:bg-gray-800/50'
+      )}
     >
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold">{agent.name}</h3>
-        <Badge className={statusColors[agent.status]}>
-          {agent.status}
-        </Badge>
+      <div className="relative">
+        <Bot className="w-5 h-5" />
+        <Circle
+          className={cn(
+            'absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full fill-current',
+            getStatusColor(agent.status)
+          )}
+        />
       </div>
       
-      <div className="space-y-2">
-        <p className="text-sm text-gray-600">Type: {agent.type}</p>
-        <div className="flex flex-wrap gap-2">
-          {capabilities.map((capability) => (
-            <Badge key={capability} variant="outline">
-              {capability}
-            </Badge>
-          ))}
+      <div className="flex-1 text-left">
+        <div className="font-medium truncate">{agent.name}</div>
+        <div className="text-xs text-gray-400 truncate">
+          {agent.capabilities.slice(0, 2).join(', ')}
+          {agent.capabilities.length > 2 && '...'}
         </div>
       </div>
-
-      {agent.metrics && (
-        <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <p className="text-gray-600">Success Rate</p>
-            <p className="font-medium">{agent.metrics.successRate}%</p>
-          </div>
-          <div>
-            <p className="text-gray-600">Response Time</p>
-            <p className="font-medium">{agent.metrics.responseTime}ms</p>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-6 flex justify-end gap-2">
-        {isActive ? (
-          <button
-            onClick={onDeactivate}
-            className="px-3 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200"
-          >
-            Deactivate
-          </button>
-        ) : (
-          <button
-            onClick={onActivate}
-            className="px-3 py-1 bg-green-100 text-green-800 rounded hover:bg-green-200"
-          >
-            Activate
-          </button>
-        )}
-      </div>
-    </Card>
+    </button>
   );
 } 

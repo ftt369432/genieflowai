@@ -1,130 +1,136 @@
 import React, { useState } from 'react';
-import { PanelGroup, Panel } from 'react-resizable-panels';
-import { AIChat } from '../legal/ai/AIChat';
-import { ResearchAssistant } from '../research/ResearchAssistant';
-import { Plus, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ResizeHandle } from './ResizeHandle';
-import * as Collapsible from '@radix-ui/react-collapsible';
+import { nanoid } from 'nanoid';
+import { LeftPanel } from './LeftPanel';
+import { AIChat } from '../ai/AIChat';
+import { useAgentStore } from '../../store/agentStore';
+import type { Message } from '../../types/ai';
 
-interface ChatSession {
+interface Conversation {
   id: string;
   title: string;
+  messages: Message[];
   timestamp: Date;
+  isFavorite?: boolean;
+  unread?: boolean;
 }
 
 export function MainLayout() {
-  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [selectedSession, setSelectedSession] = useState<string | null>(null);
-  const [previousData, setPreviousData] = useState<{ id: string; content: string }[]>([]);
+  // Conversation state
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<string>();
 
+  // Agent state from store
+  const {
+    agents,
+    selectedAgentId,
+    selectAgent,
+    createAgent,
+    deleteAgent,
+    updateAgentStatus
+  } = useAgentStore();
+
+  // Conversation handlers
   const handleNewChat = () => {
-    const newSession: ChatSession = {
-      id: crypto.randomUUID(),
+    const newConversation: Conversation = {
+      id: nanoid(),
       title: 'New Chat',
-      timestamp: new Date(),
+      messages: [],
+      timestamp: new Date()
     };
-    setChatSessions([newSession, ...chatSessions]);
-    setSelectedSession(newSession.id);
+    setConversations(prev => [newConversation, ...prev]);
+    setSelectedConversationId(newConversation.id);
   };
 
-  const handleSaveBot = (bot: { name: string; actions: any[] }) => {
-    console.log('Saving bot:', bot);
-    // Implement bot saving logic
+  const handleNewCase = () => {
+    const newConversation: Conversation = {
+      id: nanoid(),
+      title: 'New Case',
+      messages: [],
+      timestamp: new Date()
+    };
+    setConversations(prev => [newConversation, ...prev]);
+    setSelectedConversationId(newConversation.id);
+  };
+
+  const handleDeleteConversation = (id: string) => {
+    setConversations(prev => prev.filter(conv => conv.id !== id));
+    if (selectedConversationId === id) {
+      setSelectedConversationId(undefined);
+    }
+  };
+
+  const handleToggleFavorite = (id: string) => {
+    setConversations(prev =>
+      prev.map(conv =>
+        conv.id === id ? { ...conv, isFavorite: !conv.isFavorite } : conv
+      )
+    );
+  };
+
+  // Agent handlers
+  const handleCreateAgent = () => {
+    // For now, create a default research agent
+    createAgent(
+      'New Research Agent',
+      'research',
+      ['web-search', 'document-analysis', 'natural-language']
+    );
+  };
+
+  const selectedConversation = conversations.find(
+    conv => conv.id === selectedConversationId
+  );
+
+  const handleSendMessage = (content: string) => {
+    if (!selectedConversationId) return;
+
+    const newMessage: Message = {
+      id: nanoid(),
+      role: 'user',
+      content,
+      timestamp: new Date()
+    };
+
+    setConversations(prev =>
+      prev.map(conv =>
+        conv.id === selectedConversationId
+          ? {
+              ...conv,
+              messages: [...conv.messages, newMessage]
+            }
+          : conv
+      )
+    );
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-      <PanelGroup direction="horizontal" className="w-full">
-        {/* Left Panel - Chat History */}
-        <Collapsible.Root open={isLeftPanelOpen} onOpenChange={setIsLeftPanelOpen}>
-          <div className="flex h-full">
-            <Collapsible.Content className="h-full">
-              <Panel defaultSize={20} minSize={15} maxSize={30}>
-                <div className="h-full flex flex-col bg-white dark:bg-gray-800">
-                  <div className="p-4 border-b dark:border-gray-700">
-                    <button
-                      onClick={handleNewChat}
-                      className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      <Plus size={16} />
-                      <span>New Chat</span>
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-2">
-                    {chatSessions.map((session) => (
-                      <button
-                        key={session.id}
-                        onClick={() => setSelectedSession(session.id)}
-                        className={`w-full flex items-center space-x-2 p-2 rounded-lg mb-1 transition-colors ${
-                          selectedSession === session.id
-                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        <MessageSquare size={16} />
-                        <span className="flex-1 text-left truncate">{session.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </Panel>
-            </Collapsible.Content>
+    <div className="flex h-screen bg-gray-900">
+      <LeftPanel
+        conversations={conversations}
+        selectedConversationId={selectedConversationId}
+        agents={agents}
+        selectedAgentId={selectedAgentId}
+        onSelectConversation={setSelectedConversationId}
+        onSelectAgent={selectAgent}
+        onNewChat={handleNewChat}
+        onNewCase={handleNewCase}
+        onCreateAgent={handleCreateAgent}
+        onDeleteConversation={handleDeleteConversation}
+        onToggleFavorite={handleToggleFavorite}
+      />
 
-            <Collapsible.Trigger asChild>
-              <button
-                className="p-2 bg-gray-100 dark:bg-gray-800 border-r dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"
-                aria-label="Toggle chat history"
-              >
-                {isLeftPanelOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-              </button>
-            </Collapsible.Trigger>
+      <main className="flex-1 flex flex-col">
+        {selectedConversation ? (
+          <AIChat
+            messages={selectedConversation.messages}
+            onSendMessage={handleSendMessage}
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-400">
+            <p>Select a conversation or start a new one</p>
           </div>
-        </Collapsible.Root>
-
-        {/* Main Chat Area */}
-        <Panel 
-          defaultSize={60} 
-          minSize={40} 
-          maxSize={isLeftPanelOpen && isRightPanelOpen ? 60 : 85}
-        >
-          <div className="h-full border-x dark:border-gray-700">
-            <AIChat
-              messages={[]}
-              onSend={(message) => {
-                setPreviousData([
-                  ...previousData,
-                  { id: message.id, content: message.content }
-                ]);
-              }}
-            />
-          </div>
-        </Panel>
-
-        {/* Right Panel - Research Assistant */}
-        <Collapsible.Root open={isRightPanelOpen} onOpenChange={setIsRightPanelOpen}>
-          <div className="flex h-full">
-            <Collapsible.Trigger asChild>
-              <button
-                className="p-2 bg-gray-100 dark:bg-gray-800 border-l dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"
-                aria-label="Toggle research panel"
-              >
-                {isRightPanelOpen ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-              </button>
-            </Collapsible.Trigger>
-
-            <Collapsible.Content className="h-full">
-              <Panel defaultSize={20} minSize={15} maxSize={30}>
-                <ResearchAssistant
-                  previousData={previousData}
-                  onSaveBot={handleSaveBot}
-                />
-              </Panel>
-            </Collapsible.Content>
-          </div>
-        </Collapsible.Root>
-      </PanelGroup>
+        )}
+      </main>
     </div>
   );
 } 

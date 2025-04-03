@@ -10,16 +10,22 @@
     - [x] Consolidated encryption utilities
     - [x] Consolidated key validation utilities
     - [ ] Consolidate remaining utility functions
+  - [x] Clean up duplicate exports in page indices
+  - [x] Mark deprecated components with proper annotations
+  - [x] Fix deprecated utility imports
   - [ ] Remove redundant styles and standardize CSS approach
   - [ ] Fix linter errors throughout codebase (especially in UI components)
   - [ ] Convert remaining JavaScript files to TypeScript
   - [ ] Standardize component interfaces and patterns
+  - [ ] Remove or refactor duplicate page components (Login.tsx → LoginPage.tsx)
 
 - [ ] **Bug Fixes**
-  - [x] Fix CSS import issues in remaining components
+  - [x] Fix CSS import issues in remaining components 
+  - [x] Fix duplicate component imports (AIDrivePage)
   - [ ] Fix Calendar component date picking functionality
   - [ ] Resolve type errors in AI Document interfaces
   - [ ] Address missing dependencies in UI components
+  - [ ] Fix linter errors in test files 
 
 - [ ] **Performance Improvements**
   - [ ] Implement code splitting for large pages
@@ -42,10 +48,12 @@
   - [ ] Add E2E tests for main application paths
 
 - [ ] **Documentation**
+  - [x] Document codebase structure and architecture
   - [ ] Document component API for UI library
   - [ ] Add JSDoc comments to utility functions
   - [ ] Create user guide for application features
   - [ ] Add developer onboarding guide
+  - [ ] Create code style guide for naming conventions
 
 ## Low Priority
 
@@ -59,4 +67,5 @@
   - [ ] PWA support for offline functionality
   - [ ] Add client-side caching strategies
   - [ ] Optimize for mobile touch interactions
-  - [ ] Implement advanced animation transitions 
+  - [ ] Implement advanced animation transitions
+  - [ ] Add linting rules to prevent usage of deprecated components 

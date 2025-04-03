@@ -40,12 +40,9 @@ export interface AIPrompt {
 export interface AIModel {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'google' | 'local' | 'other';
-  capabilities: AICapability[];
+  provider: string;
+  capabilities: string[];
   contextSize: number;
-  apiKey?: string;
-  endpoint?: string;
-  parameters?: Record<string, any>;
 }
 
 export type AICapability = 
@@ -118,11 +115,20 @@ export interface AIAnalysis {
 }
 
 export interface AIConfig {
-  model: string;
-  temperature?: number;
+  provider: string;
+  defaultModel: AIModel;
+  apiKey?: string;
+  apiEndpoint?: string;
   maxTokens?: number;
-  systemPrompt?: string;
-  context?: DocumentReference[];
+  temperature?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  stopSequences?: string[];
+  maxRetries?: number;
+  retryDelay?: number;
+  timeout?: number;
+  debug?: boolean;
 }
 
 export interface MessageMetadata {
@@ -147,31 +153,28 @@ export interface MessageMetadata {
 
 export interface Message {
   id: string;
+  role: 'user' | 'assistant';
   content: string;
-  role: 'user' | 'assistant' | 'error';
   timestamp: Date;
-  metadata?: MessageMetadata;
+  attachments?: string[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface DocumentReference {
   id: string;
   title: string;
-  excerpt: string;
   type: string;
-  relevance: number;
+  url?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SearchResult {
   id: string;
   title: string;
   content: string;
-  snippet: string;
-  link: string;
-  credibilityScore?: number;
-  citations?: number;
-  date?: string;
-  type?: 'article' | 'news' | 'blog' | 'academic';
-  language?: string;
+  url?: string;
+  score: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface EmbeddingResponse {
@@ -207,14 +210,11 @@ export interface AIState extends AIConfig {
 }
 
 export interface SearchFilters {
-  timeRange: 'any' | 'day' | 'week' | 'month' | 'year';
-  sourceType: string;
-  sortBy: 'relevance' | 'date' | 'citations';
-  minCredibility: number;
-  excludedDomains: string[];
-  includedDomains: string[];
-  language: 'en' | 'es' | 'fr' | 'de' | 'zh';
-  contentType: 'all' | 'article' | 'paper' | 'book' | 'code';
+  timeRange?: string;
+  sourceType?: string;
+  sortBy?: string;
+  language?: string;
+  region?: string;
 }
 
 export interface DocumentProcessingOptions {

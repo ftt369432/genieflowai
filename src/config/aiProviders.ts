@@ -1,3 +1,5 @@
+import type { AIModel } from '../types/ai';
+
 export interface AIProvider {
   id: string;
   name: string;
@@ -7,6 +9,14 @@ export interface AIProvider {
   defaultModel?: string;
   maxTokens?: number;
   temperature?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  stopSequences?: string[];
+  maxRetries?: number;
+  retryDelay?: number;
+  timeout?: number;
+  debug?: boolean;
 }
 
 export const defaultProvider = 'google';

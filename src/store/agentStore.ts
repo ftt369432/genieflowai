@@ -9,6 +9,7 @@ import {
   AgentType,
   AgentCapability 
 } from '../types/agent';
+import { nanoid } from 'nanoid';
 
 // Define a sample agent for testing
 const defaultAgent: Agent = {
@@ -57,6 +58,7 @@ interface AgentState {
   activeAgents: string[];
   isLoading: boolean;
   error: string | null;
+  selectedAgentId: string | undefined;
   
   // Basic CRUD
   setAgents: (agents: Agent[]) => void;
@@ -65,7 +67,7 @@ interface AgentState {
   removeAgent: (id: string) => void;
   
   // Agent Management
-  createAgent: (agent: Omit<Agent, 'metrics' | 'id' | 'lastActive' | 'performance' | 'tasks'>) => void;
+  createAgent: (name: string, type: AgentType, capabilities: AgentCapability[]) => void;
   deleteAgent: (id: string) => void;
   
   // Agent Actions
@@ -85,17 +87,101 @@ interface AgentState {
   // Agent Operations
   executeAction: (agentId: string, actionType: string, input: any) => Promise<any>;
   trainAgent: (agentId: string) => Promise<void>;
+
+  // New methods
+  selectAgent: (id: string | undefined) => void;
+  getAgent: (id: string) => Agent | undefined;
 }
+
+const DEFAULT_AGENTS: Agent[] = [
+  {
+    id: 'research-agent',
+    name: 'Research Assistant',
+    type: 'research',
+    description: 'Helps with research and information gathering',
+    status: 'active',
+    autonomyLevel: 'semi-autonomous',
+    capabilities: ['web-search', 'document-analysis', 'natural-language'],
+    config: {
+      id: 'research-agent',
+      name: 'Research Assistant',
+      type: 'research',
+      model: 'gpt-4',
+      temperature: 0.7,
+      maxTokens: 2000,
+      systemPrompt: 'You are a research assistant focused on gathering and analyzing information.',
+      capabilities: ['web-search', 'document-analysis', 'natural-language'],
+      autonomyLevel: 'semi-autonomous'
+    },
+    metrics: {
+      performance: 0.95,
+      tasks: {
+        completed: 0,
+        total: 0
+      },
+      responseTime: 1200,
+      successRate: 0.95,
+      lastUpdated: new Date(),
+      accuracy: 0.92,
+      uptime: 100
+    },
+    lastActive: new Date(),
+    performance: 0.95,
+    tasks: {
+      completed: 0,
+      total: 0
+    }
+  },
+  {
+    id: 'coding-agent',
+    name: 'Code Assistant',
+    type: 'development',
+    description: 'Helps with coding and development tasks',
+    status: 'idle',
+    autonomyLevel: 'supervised',
+    capabilities: ['code-generation', 'code-review', 'debugging'],
+    config: {
+      id: 'coding-agent',
+      name: 'Code Assistant',
+      type: 'development',
+      model: 'gpt-4',
+      temperature: 0.3,
+      maxTokens: 2000,
+      systemPrompt: 'You are a coding assistant focused on helping with development tasks.',
+      capabilities: ['code-generation', 'code-review', 'debugging'],
+      autonomyLevel: 'supervised'
+    },
+    metrics: {
+      performance: 0.88,
+      tasks: {
+        completed: 0,
+        total: 0
+      },
+      responseTime: 800,
+      successRate: 0.9,
+      lastUpdated: new Date(),
+      accuracy: 0.95,
+      uptime: 100
+    },
+    lastActive: new Date(),
+    performance: 0.88,
+    tasks: {
+      completed: 0,
+      total: 0
+    }
+  }
+];
 
 export const useAgentStore = create<AgentState>()(
   persist(
     (set, get) => ({
-      agents: [defaultAgent],
+      agents: DEFAULT_AGENTS,
       actions: [],
       feedback: [],
-      activeAgents: [defaultAgent.id],
+      activeAgents: ['research-agent', 'coding-agent'],
       isLoading: false,
       error: null,
+      selectedAgentId: undefined,
 
       setAgents: (agents) => set({ agents }),
       
@@ -114,25 +200,44 @@ export const useAgentStore = create<AgentState>()(
           activeAgents: state.activeAgents.filter((agentId) => agentId !== id),
         })),
 
-      createAgent: (agentData) => {
+      createAgent: (name, type, capabilities) => {
         const newAgent: Agent = {
-          ...agentData,
-          id: crypto.randomUUID(),
+          id: nanoid(),
+          name,
+          type,
+          description: `AI assistant for ${type} tasks`,
+          status: 'idle',
+          autonomyLevel: 'supervised',
+          capabilities,
+          config: {
+            id: nanoid(),
+            name,
+            type,
+            model: 'gpt-4',
+            temperature: 0.7,
+            maxTokens: 2000,
+            systemPrompt: `You are an AI assistant focused on ${type} tasks.`,
+            capabilities,
+            autonomyLevel: 'supervised'
+          },
+          metrics: {
+            performance: 1,
+            tasks: {
+              completed: 0,
+              total: 0
+            },
+            responseTime: 0,
+            successRate: 1,
+            lastUpdated: new Date(),
+            accuracy: 1,
+            uptime: 100
+          },
           lastActive: new Date(),
-          performance: 0,
+          performance: 1,
           tasks: {
             completed: 0,
             total: 0
-          },
-          metrics: {
-            performance: 0,
-            tasks: { completed: 0, total: 0 },
-            responseTime: 0,
-            successRate: 0,
-            lastUpdated: new Date(),
-            accuracy: 0,
-            uptime: 0,
-          },
+          }
         };
         
         set((state) => ({ agents: [...state.agents, newAgent] }));
@@ -142,6 +247,7 @@ export const useAgentStore = create<AgentState>()(
         set((state) => ({
           agents: state.agents.filter((agent) => agent.id !== id),
           activeAgents: state.activeAgents.filter((agentId) => agentId !== id),
+          selectedAgentId: state.selectedAgentId === id ? undefined : state.selectedAgentId
         }));
       },
 
@@ -270,6 +376,14 @@ export const useAgentStore = create<AgentState>()(
           throw error;
         }
       },
+
+      selectAgent: (id) => {
+        set({ selectedAgentId: id });
+      },
+
+      getAgent: (id) => {
+        return get().agents.find(agent => agent.id === id);
+      }
     }),
     {
       name: 'agent-store',

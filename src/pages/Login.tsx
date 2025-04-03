@@ -1,3 +1,8 @@
+/**
+ * @deprecated This component is deprecated. Please use LoginPage from src/pages/LoginPage.tsx instead.
+ * This component is kept for backward compatibility but will be removed in a future version.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSupabase } from '../providers/SupabaseProvider';
@@ -115,7 +120,11 @@ function SupabaseDebug() {
   );
 }
 
-export function LoginPage() {
+/**
+ * Original login page implementation, renamed for internal use
+ * @deprecated Use LoginPage from src/pages/LoginPage.tsx instead
+ */
+function LoginPageImplementation() {
   const navigate = useNavigate();
   const { signIn, signUp, signInWithMagicLink } = useSupabase();
   const [email, setEmail] = useState('');
@@ -277,4 +286,16 @@ export function LoginPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * @deprecated Use LoginPage from src/pages/LoginPage.tsx instead
+ */
+export function LoginPage() {
+  // Add deprecation warning
+  useEffect(() => {
+    console.warn('Warning: LoginPage from Login.tsx is deprecated. Please use LoginPage from src/pages/LoginPage.tsx instead.');
+  }, []);
+
+  return <LoginPageImplementation />;
 } 

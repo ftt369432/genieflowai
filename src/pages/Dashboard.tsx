@@ -1,9 +1,22 @@
+/**
+ * @deprecated This component is deprecated. Please use DashboardPage from src/pages/DashboardPage.tsx instead.
+ * This component is kept for backward compatibility but will be removed in a future version.
+ */
+
 import React, { useEffect } from 'react';
 import { DashboardOverview } from '../components/dashboard/DashboardOverview';
 import { useNotifications } from '../contexts/NotificationContext';
 
+/**
+ * @deprecated Use DashboardPage from src/pages/DashboardPage.tsx instead
+ */
 export function Dashboard() {
   const { addNotification, notifications } = useNotifications();
+
+  // Add deprecation warning
+  useEffect(() => {
+    console.warn('Warning: Dashboard component is deprecated. Please use DashboardPage from src/pages/DashboardPage.tsx instead.');
+  }, []);
 
   // Add demo notifications when component mounts, but only once
   useEffect(() => {

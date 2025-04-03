@@ -148,6 +148,12 @@ const sidebarSections: SidebarSection[] = [
         href: '/team',
         color: 'text-lime-500',
       },
+      {
+        title: 'Teams',
+        icon: Users,
+        href: '/teams',
+        color: 'text-blue-400',
+      },
     ],
   },
   {

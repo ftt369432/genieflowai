@@ -1,4 +1,4 @@
-import { ClassValue, clsx } from 'clsx';
+import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { formatDistanceToNow, parseISO, format } from 'date-fns';
 
@@ -62,9 +62,40 @@ export function formatRelativeTime(dateString: string | Date): string {
 /**
  * Format a date to a standard format (e.g., "Jan 1, 2023")
  */
-export function formatDate(dateString: string | Date, formatString: string = 'MMM d, yyyy'): string {
-  const date = typeof dateString === 'string' ? parseISO(dateString) : dateString;
-  return format(date, formatString);
+export function formatDate(date: Date | string | number | null | undefined): string {
+  try {
+    // Handle null or undefined
+    if (date === null || date === undefined) {
+      return 'N/A';
+    }
+    
+    // Convert string to Date if needed
+    let dateObj: Date;
+    if (typeof date === 'string') {
+      // Try to parse ISO string
+      dateObj = new Date(date);
+    } else if (typeof date === 'number') {
+      // Assume timestamp
+      dateObj = new Date(date);
+    } else {
+      dateObj = date;
+    }
+    
+    // Check if date is valid
+    if (isNaN(dateObj.getTime())) {
+      return 'Invalid date';
+    }
+    
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+    }).format(dateObj);
+  } catch (error) {
+    console.warn('Error formatting date:', error);
+    return 'Invalid date';
+  }
 }
 
 /**

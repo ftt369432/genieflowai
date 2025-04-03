@@ -1,3 +1,8 @@
+/**
+ * @deprecated This component is deprecated. Please use AgentsPageComponent from src/pages/AgentsPage.tsx instead.
+ * This component is kept for backward compatibility but will be removed in a future version.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import { Bot, Plus, Settings, Activity, Zap, Search, Brain, MessageSquare } from 'lucide-react';
@@ -11,7 +16,15 @@ import { AgentChat } from '../components/agents/AgentChat';
 import { AnalyticsPanel } from '../components/ai/AnalyticsPanel';
 import type { Agent, AgentType, AgentStatus, AutonomyLevel } from '../types/agent';
 
+/**
+ * @deprecated Use AgentsPageComponent from src/pages/AgentsPage.tsx instead
+ */
 export function AIAgentsPage() {
+  // Add deprecation warning
+  useEffect(() => {
+    console.warn('Warning: AIAgentsPage component is deprecated. Please use AgentsPageComponent from src/pages/AgentsPage.tsx instead.');
+  }, []);
+
   const {
     agents,
     addAgent,
