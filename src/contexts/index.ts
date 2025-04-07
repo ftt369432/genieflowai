@@ -8,4 +8,7 @@ export { EmailProvider, useEmail } from './EmailContext';
 export { NotificationProvider, useNotifications } from './NotificationContext';
 
 // Export AI Context
-export { AIProvider, useAI } from './AIContext'; 
+export { AIProvider, useAI } from './AIContext';
+
+// Export Team Context
+export { TeamProvider, useTeam } from './TeamContext'; 
