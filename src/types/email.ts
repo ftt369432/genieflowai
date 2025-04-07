@@ -1,3 +1,9 @@
+/**
+ * Email Types
+ * 
+ * This file defines the types related to email functionality in the application.
+ */
+
 export type EmailCategory = 'inbox' | 'sent' | 'archive' | 'trash' | 'follow-up' | 'important' | 'work' | 'personal';
 
 export interface EmailCategoryRule {
@@ -16,36 +22,52 @@ export interface EmailTemplate {
   id: string;
   name: string;
   subject: string;
-  content: string;
-  category: string;
-  tags: string[];
-  usageCount: number;
+  body: string;
+  category?: string;
+  variables?: string[];
   lastUsed?: Date;
+  usageCount?: number;
 }
 
 export interface EmailAnalytics {
-  sentCount: number;
+  totalSent: number;
+  totalReceived: number;
   responseRate: number;
   averageResponseTime: number;
-  topRecipients: Array<{ email: string; count: number }>;
-  byHour: Array<{ hour: number; count: number }>;
-  byDay: Array<{ day: string; count: number }>;
+  topSenders: {
+    email: string;
+    count: number;
+  }[];
+  topRecipients: {
+    email: string;
+    count: number;
+  }[];
+  busyHours: {
+    hour: number;
+    count: number;
+  }[];
+  emailsByDay: {
+    date: string;
+    sent: number;
+    received: number;
+  }[];
 }
 
 export interface Credentials {
-  access_token: string;
-  refresh_token?: string;
-  scope: string;
-  token_type: string;
-  expiry_date?: number;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  scopes?: string[];
 }
 
 export interface EmailAccount {
   id: string;
-  type: 'mock';
   email: string;
-  connected: boolean;
-  tokens?: Credentials;
+  name: string;
+  provider: 'gmail' | 'outlook' | 'yahoo' | 'custom';
+  isDefault?: boolean;
+  credentials?: Credentials;
+  settings?: EmailPreferences;
 }
 
 export interface EmailFolder {
@@ -61,10 +83,11 @@ export interface EmailFolder {
 
 export interface EmailAttachment {
   id: string;
-  filename: string;
-  contentType: string;
+  name: string;
   size: number;
+  type: string;
   url?: string;
+  content?: Blob;
 }
 
 export interface EmailMessage {
@@ -84,19 +107,14 @@ export interface EmailMessage {
 
 export interface EmailDraft {
   id: string;
-  accountId: string;
   to: string[];
   cc?: string[];
   bcc?: string[];
   subject: string;
   body: string;
-  attachments?: Array<{
-    filename: string;
-    content: Buffer;
-    contentType: string;
-  }>;
-  inReplyTo?: string;
+  attachments?: EmailAttachment[];
   savedAt: Date;
+  lastEditedAt: Date;
 }
 
 export interface EmailLabel {
@@ -113,16 +131,16 @@ export interface EmailLabel {
 export interface EmailFilter {
   id: string;
   name: string;
-  conditions: Array<{
-    field: 'from' | 'to' | 'subject' | 'body';
-    operator: 'contains' | 'equals' | 'startsWith' | 'endsWith';
+  conditions: {
+    field: 'from' | 'to' | 'subject' | 'body' | 'has-attachment';
+    operator: 'contains' | 'equals' | 'not-contains' | 'not-equals' | 'exists';
     value: string;
-  }>;
-  actions: Array<{
-    type: 'move' | 'label' | 'star' | 'markRead' | 'forward';
-    value: string;
-  }>;
-  enabled: boolean;
+  }[];
+  actions: {
+    type: 'move' | 'mark-read' | 'star' | 'label' | 'delete' | 'archive';
+    value?: string;
+  }[];
+  isActive: boolean;
 }
 
 export interface EmailSignature {
@@ -133,51 +151,29 @@ export interface EmailSignature {
 }
 
 export interface EmailPreferences {
-  defaultSignatureId?: string;
-  defaultReplySignatureId?: string;
-  sendAndArchive: boolean;
-  confirmBeforeSending: boolean;
-  defaultFontFamily: string;
-  defaultFontSize: number;
-  defaultComposeFormat: 'plain' | 'rich';
-  showSnippets: boolean;
-  autoAdvance: 'newer' | 'older' | 'none';
-  messageDisplay: 'default' | 'comfortable' | 'compact';
-  inlineImages: boolean;
-  starredPosition: 'left' | 'right';
-  keyboard: {
-    shortcuts: boolean;
-    custom?: Record<string, string>;
-  };
-  notifications: {
-    desktop: boolean;
-    sound: boolean;
-    browserTab: boolean;
-    priority: 'all' | 'important' | 'none';
-  };
-  vacation: {
+  signature?: EmailSignature;
+  sendingName?: string;
+  replyTo?: string;
+  defaultFolder?: string;
+  autoReply?: {
     enabled: boolean;
+    message: string;
     startDate?: Date;
     endDate?: Date;
-    subject?: string;
-    message?: string;
-    respondTo: 'all' | 'contacts' | 'domain';
+  };
+  notifications?: {
+    desktop: boolean;
+    mobile: boolean;
+    digests: boolean;
   };
 }
 
 export interface EmailAnalysis {
-  priority: 'high' | 'medium' | 'low';
-  topics: string[];
-  requiredActions: string[];
-  requiresResponse: boolean;
-  sentiment: 'positive' | 'neutral' | 'negative';
-  deadlines: Array<{
-    date: Date;
-    description: string;
-  }>;
-  meetingRequests: Array<{
-    proposedTime: Date;
-    duration: number;
-    attendees: string[];
-  }>;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  urgency: 'low' | 'medium' | 'high';
+  category?: string;
+  actionItems?: string[];
+  summary?: string;
+  keyPhrases?: string[];
+  suggestedReply?: string;
 } 

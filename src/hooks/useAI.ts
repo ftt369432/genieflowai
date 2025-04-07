@@ -5,6 +5,7 @@ import { useAIStore } from '../store/aiStore';
 import { useNotifications } from './useNotifications';
 import type { AIConfig, AIModel, Message, DocumentReference } from '../types/ai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat';
+import { mockAIService } from '../services/ai/mockOpenAI';
 
 export type AIProvider = 'openai' | 'gemini' | 'anthropic';
 
@@ -18,47 +19,16 @@ export function useAI() {
   const { showError } = useNotifications();
   const [config, setConfig] = useState<AIState>({
     provider: 'gemini',
-    model: 'gemini-pro'
+    model: 'gemini-1.5-flash'
   });
 
-  const openai = new OpenAI({
+  // Initialize AI clients only if API keys are available
+  const openai = import.meta.env.VITE_OPENAI_API_KEY ? new OpenAI({
     apiKey: import.meta.env.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
-  });
+  }) : null;
 
-  // Debug logging for API key
-  if (import.meta.env.DEV) {
-    console.log('Gemini API Key:', {
-      exists: !!import.meta.env.VITE_GEMINI_API_KEY,
-      length: import.meta.env.VITE_GEMINI_API_KEY?.length,
-      startsWithAIza: import.meta.env.VITE_GEMINI_API_KEY?.startsWith('AIza')
-    });
-  }
-
-  const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-
-  const testGeminiConnection = useCallback(async () => {
-    try {
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-      console.log('Testing Gemini connection...');
-      const result = await model.generateContent('Hello! This is a test message. Please respond with "Connection successful!"');
-      const response = await result.response;
-      console.log('Gemini test response:', response.text());
-      return true;
-    } catch (error: any) {
-      console.error('Gemini test failed:', {
-        message: error.message,
-        details: error.details,
-        status: error.status
-      });
-      return false;
-    }
-  }, [genAI]);
-
-  // Test the connection immediately in development
-  if (import.meta.env.DEV) {
-    testGeminiConnection();
-  }
+  const genAI = import.meta.env.VITE_GEMINI_API_KEY ? new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY) : null;
 
   const formatContextForProvider = (
     context: DocumentReference[] | undefined,
@@ -90,12 +60,22 @@ export function useAI() {
     setError(null);
 
     try {
+      // If no API keys are available, use mock service
+      if (!import.meta.env.VITE_OPENAI_API_KEY && !import.meta.env.VITE_GEMINI_API_KEY) {
+        const mockResponse = await mockAIService.getCompletion(content, {
+          model: options?.model || config.model,
+          temperature: options?.temperature || 0.7
+        });
+        return mockResponse;
+      }
+
       const mergedConfig = { ...config, ...options };
       const contextPrefix = formatContextForProvider(mergedConfig.context, mergedConfig.provider);
       const fullContent = contextPrefix + content;
 
       switch (mergedConfig.provider) {
         case 'openai':
+          if (!openai) throw new Error('OpenAI API key not configured');
           const messages: ChatCompletionMessageParam[] = [];
           if (mergedConfig.systemPrompt) {
             messages.push({ 
@@ -117,37 +97,18 @@ export function useAI() {
           return completion.choices[0].message.content;
 
         case 'gemini':
-          // Debug logging for Gemini request
-          if (import.meta.env.DEV) {
-            console.log('Gemini Request:', {
-              model: "gemini-pro",
-              content: fullContent.slice(0, 100) + '...',
-              temperature: mergedConfig.temperature,
-              maxOutputTokens: mergedConfig.maxTokens
-            });
-          }
-
-          const model = genAI.getGenerativeModel({
-            model: "gemini-pro",
-            generationConfig: {
-              temperature: mergedConfig.temperature,
-              maxOutputTokens: mergedConfig.maxTokens,
-            }
+          if (!genAI) throw new Error('Gemini API key not configured');
+          const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash",
           });
 
-          try {
-            const result = await model.generateContent(fullContent);
-            const response = await result.response;
-            return response.text();
-          } catch (geminiError: any) {
-            console.error('Gemini API Error:', {
-              message: geminiError.message,
-              details: geminiError.details,
-              status: geminiError.status,
-              stack: geminiError.stack
-            });
-            throw geminiError;
-          }
+          const prompt = mergedConfig.systemPrompt 
+            ? `${mergedConfig.systemPrompt}\n\n${fullContent}`
+            : fullContent;
+
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          return response.text();
 
         case 'anthropic':
           // Implement Claude/Anthropic API call
@@ -175,7 +136,6 @@ export function useAI() {
     updateConfig,
     config,
     isLoading,
-    error,
-    testGeminiConnection
+    error
   };
 } 

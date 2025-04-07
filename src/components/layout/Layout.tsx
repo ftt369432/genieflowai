@@ -1,40 +1,50 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
+import { useSidebarStore } from '../../store/sidebarStore';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
-  const { colors } = useTheme();
+  const theme = useTheme();
+  const { isOpen, autoCollapse } = useSidebarStore();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
 
+  // Sync sidebar collapse state with store if auto-collapse is enabled
+  useEffect(() => {
+    if (autoCollapse) {
+      // Let the sidebar component handle the auto-collapse
+      // This is just to track the state
+    }
+  }, [autoCollapse]);
+
+  const handleSidebarToggle = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed);
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen overflow-hidden">
+    <div className="min-h-screen bg-background overflow-hidden">
+      <div className="flex h-screen">
         <Sidebar 
           isCollapsed={isSidebarCollapsed} 
-          onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
+          onToggle={handleSidebarToggle} 
         />
         
-        <div className={cn(
-          "flex flex-col flex-1",
-          "transition-all duration-300 ease-in-out",
-          isSidebarCollapsed ? "ml-16" : "ml-64"
-        )}>
-          <Header 
-            showSearch
-            className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
-          />
+        <div className="flex flex-col flex-1">
+          <Header />
           
           <main className="flex-1 overflow-y-auto">
-            <div className="container mx-auto p-6">
-              {children}
-            </div>
+            {children}
           </main>
+        </div>
+      </div>
+    </div>
+  );
+} 
         </div>
       </div>
     </div>

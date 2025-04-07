@@ -1,455 +1,398 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { useDrag, useDrop } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
-import { DndProvider } from 'react-dnd';
-import { Tooltip } from '../ui/Tooltip';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
+import { useSidebarStore } from '../../store/sidebarStore';
+import { AutoCollapseToggle } from './AutoCollapseToggle';
 import {
   Home,
-  Mail,
-  Calendar,
-  MessageSquare,
-  Brain,
-  Activity,
-  Database,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  HardDrive,
   Users,
   BarChart2,
   BookOpen,
+  Wand2,
+  MessageSquare,
+  Bell,
+  Cog,
+  UserCircle,
+  Layers,
+  FolderKanban,
   Zap,
-  Phone,
-  MessageCircle,
-  Smartphone,
-  Headphones,
-  PhoneCall,
-  MessagesSquare,
-  Contact,
-  Network,
-  Share2,
-  Users2,
-  Workflow
+  CalendarDays,
+  Clock,
+  LineChart,
+  Brain,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Menu,
+  ListFilter,
+  KanbanSquare,
+  Database,
+  FileText,
+  ListTodo,
+  HardDrive,
+  PanelLeftClose,
+  Mail,
+  FolderOpen
 } from 'lucide-react';
 
-const sidebarItems = [
-  // Core Features
-  { path: '/', icon: Home, label: 'Dashboard', color: 'text-blue-500' },
-  { path: '/email', icon: Mail, label: 'Email', color: 'text-indigo-500' },
-  { path: '/calendar', icon: Calendar, label: 'Calendar', color: 'text-green-500' },
-  { path: '/documents', icon: FileText, label: 'Documents', color: 'text-yellow-500' },
-  
-  // AI Features
-  { 
-    path: '/ai-assistant', 
-    icon: MessageSquare, 
-    label: 'AI Assistant', 
-    color: 'text-orange-500',
-    isPremium: true 
-  },
-  { 
-    path: '/agents', 
-    icon: Brain, 
-    label: 'AI Agents', 
-    color: 'text-purple-500',
-    isPremium: true 
-  },
-  {
-    path: '/drive',
-    icon: HardDrive,
-    label: 'AI Drive',
-    color: 'text-cyan-500',
-    isPremium: true
-  },
-  {
-    path: '/ai-training',
-    icon: BookOpen,
-    label: 'AI Training',
-    color: 'text-pink-500',
-    isPremium: true
-  },
-
-  // Analytics & Data
-  { 
-    path: '/analytics', 
-    icon: Activity, 
-    label: 'Analytics', 
-    color: 'text-emerald-500',
-    isEnterprise: true 
-  },
-  { 
-    path: '/knowledge', 
-    icon: Database, 
-    label: 'Knowledge Base', 
-    color: 'text-violet-500',
-    isEnterprise: true 
-  },
-  {
-    path: '/insights',
-    icon: BarChart2,
-    label: 'Insights',
-    color: 'text-amber-500',
-    isEnterprise: true
-  },
-  
-  // Collaboration
-  { path: '/contacts', icon: Users, label: 'Contacts', color: 'text-teal-500' },
-  { path: '/workflows', icon: Zap, label: 'Workflows', color: 'text-rose-500' },
-  
-  // Settings
-  { path: '/settings', icon: Settings, label: 'Settings', color: 'text-gray-500' }
-];
-
-interface SidebarItemProps {
-  item: typeof sidebarItems[0];
-  index: number;
-  moveItem: (dragIndex: number, hoverIndex: number) => void;
-  isCollapsed: boolean;
-  isActive: boolean;
+interface SidebarItem {
+  title: string;
+  icon: React.ElementType;
+  href: string;
+  notification?: number;
+  color?: string;
 }
 
 interface SidebarSection {
   title: string;
-  items: typeof sidebarItems;
+  items: SidebarItem[];
 }
 
 const sidebarSections: SidebarSection[] = [
   {
-    title: 'Core Features',
+    title: 'Core',
     items: [
-      { path: '/', icon: Home, label: 'Dashboard', color: 'text-blue-500' },
-      { path: '/email', icon: Mail, label: 'Email', color: 'text-indigo-500' },
-      { path: '/calendar', icon: Calendar, label: 'Calendar', color: 'text-green-500' },
-      { path: '/documents', icon: FileText, label: 'Documents', color: 'text-yellow-500' },
-    ]
-  },
-  {
-    title: 'Collaboration',
-    items: [
-      { 
-        path: '/workflows', 
-        icon: Zap, 
-        label: 'Workflows', 
-        color: 'text-rose-500',
-        isPremium: true 
+      {
+        title: 'Dashboard',
+        icon: Home,
+        href: '/',
+        color: 'text-blue-500',
       },
-      { 
-        path: '/teams', 
-        icon: Users2, 
-        label: 'Teams', 
-        color: 'text-amber-500' 
+      {
+        title: 'Email',
+        icon: Mail,
+        href: '/email',
+        color: 'text-indigo-500',
       },
-      { 
-        path: '/chat', 
-        icon: MessagesSquare, 
-        label: 'Chat', 
-        color: 'text-cyan-500' 
-      },
-      { 
-        path: '/contacts', 
-        icon: Users, 
-        label: 'Contacts', 
-        color: 'text-teal-500' 
-      },
-    ]
-  },
-  {
-    title: 'Communication & Contacts',
-    items: [
-      { 
-        path: '/phone', 
-        icon: Phone, 
-        label: 'Phone System', 
-        color: 'text-rose-500',
-        isPremium: true 
-      },
-      { 
-        path: '/messaging', 
-        icon: MessageCircle, 
-        label: 'Text Messages', 
-        color: 'text-pink-500',
-        isPremium: true 
-      },
-      { 
-        path: '/integrations', 
-        icon: Share2, 
-        label: 'Integrations', 
+      {
+        title: 'Tasks',
+        icon: ListTodo,
+        href: '/tasks',
         color: 'text-orange-500',
-        isPremium: true 
       },
-    ]
+      {
+        title: 'Calendar',
+        icon: CalendarDays,
+        href: '/calendar',
+        color: 'text-green-500',
+      },
+      {
+        title: 'Teams',
+        icon: Users,
+        href: '/teams',
+        color: 'text-blue-400',
+      },
+    ],
+  },
+  {
+    title: 'Documents & Knowledge',
+    items: [
+      {
+        title: 'Notebooks',
+        icon: BookOpen,
+        href: '/notebooks',
+        color: 'text-teal-500',
+      },
+      {
+        title: 'Projects',
+        icon: Layers,
+        href: '/projects',
+        color: 'text-cyan-500',
+      },
+      {
+        title: 'Knowledge Base',
+        icon: Database,
+        href: '/knowledge',
+        color: 'text-amber-600', 
+      },
+    ],
   },
   {
     title: 'AI Features',
     items: [
-      { 
-        path: '/ai-assistant', 
-        icon: MessageSquare, 
-        label: 'AI Assistant', 
-        color: 'text-orange-500',
-        isPremium: true 
-      },
-      { 
-        path: '/agents', 
-        icon: Brain, 
-        label: 'AI Agents', 
-        color: 'text-purple-500',
-        isPremium: true 
-      },
       {
-        path: '/drive',
-        icon: HardDrive,
-        label: 'AI Drive',
-        color: 'text-cyan-500',
-        isPremium: true
-      },
-      {
-        path: '/ai-training',
-        icon: BookOpen,
-        label: 'AI Training',
+        title: 'AI Assistant',
+        icon: MessageSquare,
+        href: '/assistant',
         color: 'text-pink-500',
-        isPremium: true
       },
-    ]
+      {
+        title: 'Genie Drive',
+        icon: FolderOpen,
+        href: '/drive',
+        color: 'text-indigo-500',
+      },
+      {
+        title: 'Assistants',
+        icon: Wand2,
+        href: '/assistants',
+        color: 'text-violet-500',
+      },
+      {
+        title: 'AI Agents',
+        icon: Brain,
+        href: '/agents',
+        color: 'text-purple-500',
+      },
+      {
+        title: 'Automation Hub',
+        icon: Zap,
+        href: '/automation',
+        color: 'text-amber-500',
+      },
+    ],
   },
   {
     title: 'Analytics & Data',
     items: [
-      { 
-        path: '/analytics', 
-        icon: Activity, 
-        label: 'Analytics', 
+      {
+        title: 'Analytics',
+        icon: BarChart2,
+        href: '/analytics',
         color: 'text-emerald-500',
-        isEnterprise: true 
-      },
-      { 
-        path: '/knowledge', 
-        icon: Database, 
-        label: 'Knowledge Base', 
-        color: 'text-violet-500',
-        isEnterprise: true 
       },
       {
-        path: '/insights',
-        icon: BarChart2,
-        label: 'Insights',
-        color: 'text-amber-500',
-        isEnterprise: true
+        title: 'Audit Dashboard',
+        icon: LineChart,
+        href: '/dashboard/audit',
+        color: 'text-yellow-500',
       },
-    ]
+    ],
   },
   {
-    title: 'Settings & System',
+    title: 'Settings',
     items: [
-      { path: '/settings', icon: Settings, label: 'Settings', color: 'text-gray-500' },
-      { 
-        path: '/integrations/phone', 
-        icon: Smartphone, 
-        label: 'Phone Setup', 
-        color: 'text-slate-500',
-        isPremium: true 
+      {
+        title: 'Notifications',
+        icon: Bell,
+        href: '/notifications',
+        color: 'text-red-500',
+        notification: 3,
       },
-      { 
-        path: '/network', 
-        icon: Network, 
-        label: 'Network', 
-        color: 'text-zinc-500',
-        isEnterprise: true 
-      }
-    ]
-  }
+      {
+        title: 'Settings',
+        icon: Cog,
+        href: '/settings',
+        color: 'text-gray-500',
+      },
+      {
+        title: 'Profile',
+        icon: UserCircle,
+        href: '/profile',
+        color: 'text-sky-500',
+      },
+    ],
+  },
 ];
 
-const SectionHeader = ({ title, isCollapsed }: { title: string; isCollapsed: boolean }) => {
-  if (isCollapsed) return null;
-  
-  return (
-    <motion.h3 
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="px-4 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider"
-    >
-      {title}
-    </motion.h3>
-  );
-};
-
-const DraggableSidebarItem = ({ item, index, moveItem, isCollapsed, isActive }: SidebarItemProps) => {
-  const [{ isDragging }, drag] = useDrag({
-    type: 'SIDEBAR_ITEM',
-    item: { index },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  });
-
-  const [, drop] = useDrop({
-    accept: 'SIDEBAR_ITEM',
-    hover: (draggedItem: { index: number }) => {
-      if (draggedItem.index !== index) {
-        moveItem(draggedItem.index, index);
-        draggedItem.index = index;
-      }
-    },
-  });
-
-  const itemContent = (
-    <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className={cn(
-        "flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200",
-        "hover:bg-gray-100 dark:hover:bg-gray-700",
-        isActive && "bg-gray-100 dark:bg-gray-700",
-        item.isPremium && "hover:ring-2 hover:ring-amber-500/20",
-        item.isEnterprise && "hover:ring-2 hover:ring-purple-500/20"
-      )}
-    >
-      <div className="flex items-center">
-        <item.icon className={`h-5 w-5 ${isCollapsed ? '' : 'mr-3'} ${item.color} transition-colors`} />
-        {!isCollapsed && <span className="font-medium">{item.label}</span>}
-      </div>
-      {!isCollapsed && (item.isPremium || item.isEnterprise) && (
-        <span className={cn(
-          "text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity",
-          item.isPremium && "text-amber-500",
-          item.isEnterprise && "text-purple-500"
-        )}>
-          {item.isPremium ? 'Premium' : 'Enterprise'}
-        </span>
-      )}
-    </motion.div>
-  );
-
-  return (
-    <motion.div 
-      ref={(node) => drag(drop(node))} 
-      style={{ opacity: isDragging ? 0.5 : 1 }}
-      layout
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-    >
-      {isCollapsed ? (
-        <Tooltip content={item.label} side="right">
-          <Link to={item.path}>{itemContent}</Link>
-        </Tooltip>
-      ) : (
-        <Link to={item.path}>{itemContent}</Link>
-      )}
-    </motion.div>
-  );
-};
-
-interface SidebarProps {
+interface SidebarLinkProps {
+  item: SidebarItem;
+  isActive: boolean;
   isCollapsed: boolean;
-  onToggle: () => void;
 }
 
-export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
-  const [items, setItems] = useState(sidebarItems);
+function SidebarLink({ item, isActive, isCollapsed }: SidebarLinkProps) {
+  const navigate = useNavigate();
   const location = useLocation();
-
-  useEffect(() => {
-    const savedOrder = localStorage.getItem('sidebarOrder');
-    if (savedOrder) {
-      setItems(JSON.parse(savedOrder));
-    }
-  }, []);
-
-  const moveItem = (dragIndex: number, hoverIndex: number) => {
-    const newItems = [...items];
-    const draggedItem = newItems[dragIndex];
-    newItems.splice(dragIndex, 1);
-    newItems.splice(hoverIndex, 0, draggedItem);
-    setItems(newItems);
-    localStorage.setItem('sidebarOrder', JSON.stringify(newItems));
+  const isActiveLink = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+  
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    navigate(item.href);
   };
 
+  if (isCollapsed) {
+    return (
+      <div className="relative group">
+        <Link
+          to={item.href}
+          className={cn(
+            "flex justify-center items-center h-10 w-10 rounded-md mx-auto",
+            isActiveLink ? "bg-muted" : "hover:bg-muted/50"
+          )}
+          aria-label={item.title}
+          onClick={handleClick}
+        >
+          <item.icon className={cn("h-5 w-5", item.color)} />
+          {item.notification && (
+            <span className="absolute top-0 right-1 h-4 w-4 rounded-full bg-primary text-[10px] flex items-center justify-center text-primary-foreground">
+              {item.notification}
+            </span>
+          )}
+        </Link>
+        {/* Tooltip */}
+        <div className="absolute left-full ml-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 px-2 py-1 rounded bg-gray-800 text-white text-xs whitespace-nowrap pointer-events-none">
+          {item.title}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <DndProvider backend={HTML5Backend}>
-      <motion.div 
-        className={cn(
-          "fixed top-0 left-0 h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700",
-          "transition-all duration-300 ease-in-out z-30",
-          isCollapsed ? "w-16" : "w-64"
-        )}
-      >
-        <motion.nav className="h-full flex flex-col">
-          <div className="h-16 flex items-center px-4 border-b border-gray-200 dark:border-gray-700">
-            {!isCollapsed && (
-              <div className="flex items-center gap-2">
-                <Brain className="h-8 w-8 text-primary-500" />
-                <span className="font-bold text-lg">GenieFlow</span>
-              </div>
-            )}
-            {isCollapsed && <Brain className="h-8 w-8 text-primary-500" />}
-          </div>
+    <Link
+      to={item.href}
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:bg-muted",
+        isActiveLink ? "bg-muted font-medium" : "text-muted-foreground"
+      )}
+      onClick={handleClick}
+    >
+      <item.icon className={cn("h-5 w-5", item.color)} />
+      <span>{item.title}</span>
+      {item.notification && (
+        <span className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
+          {item.notification}
+        </span>
+      )}
+    </Link>
+  );
+}
 
-          <div className="flex-1 overflow-y-auto">
-            {sidebarSections.map((section, sectionIndex) => (
-              <div key={section.title} className="py-2">
-                {!isCollapsed && (
-                  <h3 className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                    {section.title}
-                  </h3>
-                )}
-                {section.items.map((item, index) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={cn(
-                      "flex items-center px-4 py-2 text-sm text-gray-600 dark:text-gray-300",
-                      "hover:bg-gray-100 dark:hover:bg-gray-700",
-                      "transition-colors duration-150",
-                      location.pathname === item.path && "bg-gray-100 dark:bg-gray-700 text-primary-500",
-                      item.isPremium && "hover:ring-2 hover:ring-amber-500/20",
-                      item.isEnterprise && "hover:ring-2 hover:ring-purple-500/20"
-                    )}
-                  >
-                    <item.icon className={cn("h-5 w-5", item.color)} />
-                    {!isCollapsed && (
-                      <>
-                        <span className="ml-3">{item.label}</span>
-                        {(item.isPremium || item.isEnterprise) && (
-                          <span className={cn(
-                            "ml-auto text-xs font-medium",
-                            item.isPremium ? "text-amber-500" : "text-purple-500"
-                          )}>
-                            {item.isPremium ? 'Premium' : 'Enterprise'}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            ))}
-          </div>
+interface SidebarProps {
+  isCollapsed?: boolean;
+  onToggle?: () => void;
+}
 
+export function Sidebar({ isCollapsed: propIsCollapsed, onToggle }: SidebarProps) {
+  const { isOpen, autoCollapse, toggleAutoCollapse } = useSidebarStore();
+  const [isCollapsed, setIsCollapsed] = useState(propIsCollapsed ?? false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Use prop isCollapsed if provided, otherwise use internal state
+  const collapsed = propIsCollapsed !== undefined ? propIsCollapsed : isCollapsed;
+
+  // Sync with props when they change
+  useEffect(() => {
+    if (propIsCollapsed !== undefined) {
+      setIsCollapsed(propIsCollapsed);
+    }
+  }, [propIsCollapsed]);
+
+  // Auto-collapse functionality
+  useEffect(() => {
+    if (!autoCollapse) return;
+
+    // Function to handle mouse enter/leave
+    const handleMouseEnter = () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+      
+      if (collapsed && onToggle) {
+        onToggle(); // Use the parent's toggle function to ensure state stays in sync
+      } else if (collapsed) {
+        setIsCollapsed(false);
+      }
+    };
+
+    const handleMouseLeave = () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+      
+      hoverTimeoutRef.current = setTimeout(() => {
+        if (!collapsed && onToggle) {
+          onToggle(); // Use the parent's toggle function to ensure state stays in sync
+        } else if (!collapsed) {
+          setIsCollapsed(true);
+        }
+        hoverTimeoutRef.current = null;
+      }, 500); // Small delay to prevent accidental collapses
+    };
+
+    // Add event listeners
+    const sidebarElement = sidebarRef.current;
+    if (sidebarElement) {
+      sidebarElement.addEventListener('mouseenter', handleMouseEnter);
+      sidebarElement.addEventListener('mouseleave', handleMouseLeave);
+    }
+
+    return () => {
+      // Clean up event listeners and timeout
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+      if (sidebarElement) {
+        sidebarElement.removeEventListener('mouseenter', handleMouseEnter);
+        sidebarElement.removeEventListener('mouseleave', handleMouseLeave);
+      }
+    };
+  }, [autoCollapse, collapsed, onToggle]);
+
+  const handleToggleSidebar = () => {
+    if (onToggle) {
+      onToggle();
+    } else {
+      setIsCollapsed(!isCollapsed);
+    }
+  };
+
+  // Get responsive classes
+  const sidebarClasses = cn(
+    "flex flex-col h-screen border-r bg-background transition-all duration-300",
+    collapsed ? "w-[70px]" : "w-64",
+  );
+
+  return (
+    <div ref={sidebarRef} className={sidebarClasses}>
+      <div className="h-16 flex items-center px-4 border-b shadow-sm">
+        <div className="flex items-center justify-between w-full">
+          {!collapsed && (
+            <h1 className="text-lg font-semibold flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              GenieFlow AI
+            </h1>
+          )}
+          {collapsed && (
+            <Zap className="h-5 w-5 mx-auto text-primary" />
+          )}
           <button
-            onClick={onToggle}
+            onClick={handleToggleSidebar}
             className={cn(
-              "absolute top-4 -right-3 bg-white dark:bg-gray-800 rounded-full p-1",
-              "border border-gray-200 dark:border-gray-700",
-              "hover:bg-gray-100 dark:hover:bg-gray-700",
-              "transition-colors duration-150"
+              "p-2 rounded-md hover:bg-muted transition-colors",
+              collapsed && "mx-auto"
             )}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {isCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
+            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
-        </motion.nav>
-      </motion.div>
-    </DndProvider>
+        </div>
+      </div>
+
+      {/* Sidebar Sections Content */}
+      <div className="flex-1 overflow-y-auto py-2">
+        {sidebarSections.map((section) => (
+          <div key={section.title} className="py-2">
+            {!collapsed && (
+              <h3 className="px-3 text-xs font-medium text-muted-foreground mb-1">
+                {section.title}
+              </h3>
+            )}
+            <div className="space-y-1">
+              {section.items.map((item) => (
+                <SidebarLink 
+                  key={item.href}
+                  item={item}
+                  isActive={location.pathname === item.href || location.pathname.startsWith(item.href + '/')}
+                  isCollapsed={collapsed}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Auto-collapse toggle at the bottom */}
+      <div className="mt-auto pt-2 border-t border-border/60">
+        <div className={collapsed ? "px-2 py-3" : ""}>
+          <AutoCollapseToggle compact={collapsed} />
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,27 +1,66 @@
-import React from 'react';
-import { cn } from '../../lib/utils';
+import * as React from "react";
+import * as SelectPrimitive from "@radix-ui/react-select";
+import { Check, ChevronDown } from "lucide-react";
 
-interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  children: React.ReactNode;
-  onValueChange?: (value: string) => void;
-}
+import { cn } from "../../lib/utils";
 
-export function Select({ children, className, onValueChange, onChange, ...props }: SelectProps) {
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange?.(e);
-    onValueChange?.(e.target.value);
-  };
+const Select = ({ children }: { children: React.ReactNode }) => {
+  return <div className="select-container">{children}</div>;
+};
 
+const SelectGroup = SelectPrimitive.Group;
+
+const SelectValue = ({ placeholder }: { placeholder?: string }) => {
+  return <span className="select-value">{placeholder}</span>;
+};
+
+const SelectTrigger = ({ children }: { children: React.ReactNode }) => {
+  return <button className="select-trigger">{children}</button>;
+};
+
+const SelectContent = ({ children }: { children: React.ReactNode }) => {
+  return <div className="select-content">{children}</div>;
+};
+
+const SelectLabel = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Label>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>
+>(({ className, ...props }, ref) => (
+  <SelectPrimitive.Label
+    ref={ref}
+    className={cn("py-1.5 pl-8 pr-2 text-sm font-semibold", className)}
+    {...props}
+  />
+));
+SelectLabel.displayName = SelectPrimitive.Label.displayName;
+
+const SelectItem = ({ value, children }: { value: string; children: React.ReactNode }) => {
   return (
-    <select
-      className={cn(
-        'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-        className
-      )}
-      onChange={handleChange}
-      {...props}
-    >
+    <div className="select-item" data-value={value}>
       {children}
-    </select>
+    </div>
   );
-} 
+};
+
+const SelectSeparator = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Separator>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
+>(({ className, ...props }, ref) => (
+  <SelectPrimitive.Separator
+    ref={ref}
+    className={cn("-mx-1 my-1 h-px bg-muted", className)}
+    {...props}
+  />
+));
+SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
+
+export {
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+  SelectSeparator,
+}; 

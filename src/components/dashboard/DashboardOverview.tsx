@@ -11,14 +11,16 @@ import {
   AlertCircle,
   Calendar as CalendarIcon,
   AlertTriangle,
-  Activity
+  Activity,
+  Plus
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { format, isToday, isThisWeek } from 'date-fns';
 import { testTasks, testEvents, testEmails } from '../../data/testData';
 import { useThemeStore } from '../../store/themeStore';
-import { cn } from '@/utils/cn';
+import { cn } from '@/lib/utils';
+import { NotificationWidget } from './NotificationWidget';
 
 export function DashboardOverview() {
   const { style } = useThemeStore();
@@ -98,10 +100,10 @@ export function DashboardOverview() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Tasks Overview */}
         <Card className={cn(
-          "p-6",
+          "p-6 lg:col-span-2",
           isCyberpunk && "border border-cyberpunk-neon/50"
         )}>
           <div className="flex items-center justify-between mb-6">
@@ -118,227 +120,162 @@ export function DashboardOverview() {
                   : "dark:border-gray-600 dark:text-gray-300"
               )}
             >
-              View All
+              <Plus className="mr-1 h-4 w-4" />
+              Add Task
             </Button>
           </div>
-          <div className="space-y-4">
-            {testTasks
-              .filter(task => !task.completed)
-              .slice(0, 4)
-              .map(task => (
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={cn(
-                    "flex items-center justify-between p-4 rounded-lg",
-                    isCyberpunk
-                      ? "bg-cyberpunk-darker/50 border border-cyberpunk-neon/30"
-                      : "bg-gray-50/50 dark:bg-gray-700/50"
-                  )}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className={cn(
-                      "p-2 rounded-full",
-                      isCyberpunk
-                        ? task.priority === 'high'
-                          ? "bg-red-500/20 text-red-400"
-                          : task.priority === 'medium'
-                          ? "bg-amber-500/20 text-amber-400"
-                          : "bg-green-500/20 text-green-400"
-                        : task.priority === 'high'
-                        ? "bg-red-500/20 dark:bg-red-500/30"
-                        : task.priority === 'medium'
-                        ? "bg-amber-500/20 dark:bg-amber-500/30"
-                        : "bg-green-500/20 dark:bg-green-500/30"
-                    )}>
-                      <Star className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        "font-medium",
-                        isCyberpunk ? "text-cyberpunk-neon" : "text-gray-900 dark:text-white"
-                      )}>{task.title}</p>
-                      <p className={cn(
-                        "text-sm",
-                        isCyberpunk ? "text-cyberpunk-neon/70" : "text-gray-600 dark:text-gray-400"
-                      )}>
-                        Due {format(task.dueDate, 'MMM dd, yyyy')}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={cn(
-                      "text-sm",
-                      isCyberpunk ? "text-cyberpunk-neon/70" : "text-gray-600 dark:text-gray-400"
-                    )}>{task.duration}m</span>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      className={cn(
-                        isCyberpunk 
-                          ? "hover:bg-cyberpunk-neon/10 text-cyberpunk-neon"
-                          : "hover:bg-gray-200/50 dark:hover:bg-gray-600/50"
-                      )}
-                    >
-                      <Activity className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
-          </div>
-        </Card>
-
-        {/* Calendar Overview */}
-        <Card className={cn(
-          "p-6",
-          isCyberpunk && "border border-cyberpunk-neon/50"
-        )}>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className={cn(
-              "text-lg font-semibold",
-              isCyberpunk ? "text-cyberpunk-neon" : "text-gray-900 dark:text-white"
-            )}>Upcoming Events</h2>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className={cn(
-                isCyberpunk 
-                  ? "border-cyberpunk-neon/50 text-cyberpunk-neon hover:bg-cyberpunk-neon/10"
-                  : "dark:border-gray-600 dark:text-gray-300"
-              )}
-            >
-              View Calendar
-            </Button>
-          </div>
-          <div className="space-y-4">
-            {weekEvents.slice(0, 4).map(event => (
-              <motion.div
-                key={event.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+          
+          {/* Tasks List */}
+          <div className="space-y-2">
+            {testTasks.map(task => (
+              <div 
+                key={task.id} 
                 className={cn(
-                  "flex items-center justify-between p-4 rounded-lg",
-                  isCyberpunk
-                    ? "bg-cyberpunk-darker/50 border border-cyberpunk-neon/30"
-                    : "bg-gray-50/50 dark:bg-gray-700/50"
+                  "p-3 rounded-lg flex items-center justify-between",
+                  task.completed 
+                    ? "bg-gray-50 dark:bg-gray-800/50" 
+                    : isCyberpunk 
+                      ? "bg-cyberpunk-card-bg border border-cyberpunk-neon/30" 
+                      : "bg-white dark:bg-gray-800 shadow-sm"
                 )}
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center">
                   <div className={cn(
-                    "p-2 rounded-full",
-                    isCyberpunk
-                      ? "bg-blue-500/20 text-blue-400"
-                      : "bg-blue-500/20 dark:bg-blue-500/30"
-                  )}>
-                    <Clock className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "font-medium",
-                      isCyberpunk ? "text-cyberpunk-neon" : "text-gray-900 dark:text-white"
-                    )}>{event.title}</p>
-                    <p className={cn(
-                      "text-sm",
-                      isCyberpunk ? "text-cyberpunk-neon/70" : "text-gray-600 dark:text-gray-400"
-                    )}>
-                      {format(event.start, 'MMM dd, h:mm a')}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
+                    "w-4 h-4 rounded-full mr-3",
+                    task.priority === 'high' 
+                      ? "bg-red-500" 
+                      : task.priority === 'medium' 
+                        ? "bg-yellow-500" 
+                        : "bg-green-500"
+                  )} />
                   <span className={cn(
-                    "px-2 py-1 text-xs rounded-full",
-                    isCyberpunk
-                      ? event.type === 'meeting'
-                        ? "bg-purple-500/20 text-purple-700 dark:text-purple-300"
-                        : event.type === 'task'
-                        ? "bg-blue-500/20 text-blue-700 dark:text-blue-300"
-                        : "bg-green-500/20 text-green-700 dark:text-green-300"
-                      : event.type === 'meeting'
-                      ? "bg-purple-500/20 dark:bg-purple-500/30 text-purple-700 dark:text-purple-300"
-                      : event.type === 'task'
-                      ? "bg-blue-500/20 dark:bg-blue-500/30 text-blue-700 dark:text-blue-300"
-                      : "bg-green-500/20 dark:bg-green-500/30 text-green-700 dark:text-green-300"
+                    "font-medium",
+                    task.completed 
+                      ? "text-gray-400 dark:text-gray-500 line-through" 
+                      : "text-gray-700 dark:text-gray-200"
                   )}>
-                    {event.type}
+                    {task.title}
                   </span>
                 </div>
-              </motion.div>
+                <div className="flex items-center">
+                  {task.dueDate && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400 mr-3">
+                      {format(task.dueDate, 'MMM d')}
+                    </span>
+                  )}
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-7 w-7 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             ))}
           </div>
+          
+          <Button 
+            variant="link" 
+            size="sm" 
+            className={cn(
+              "mt-4",
+              isCyberpunk ? "text-cyberpunk-accent" : "text-blue-600 dark:text-blue-400"
+            )}
+          >
+            View All Tasks
+          </Button>
         </Card>
+        
+        {/* Notifications and Improvements Widget */}
+        <div className="lg:col-span-1">
+          <NotificationWidget />
+        </div>
       </div>
 
-      {/* Recent Activity */}
-      <div>
-        <Card className={cn(
-          "p-6",
-          isCyberpunk && "border border-cyberpunk-neon/50"
-        )}>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className={cn(
-              "text-lg font-semibold",
-              isCyberpunk ? "text-cyberpunk-neon" : "text-gray-900 dark:text-white"
-            )}>Recent Activity</h2>
-            <Button 
-              variant="outline" 
-              size="sm" 
+      {/* Calendar Section */}
+      <Card className={cn(
+        "p-6",
+        isCyberpunk && "border border-cyberpunk-neon/50"
+      )}>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className={cn(
+            "text-lg font-semibold",
+            isCyberpunk ? "text-cyberpunk-neon" : "text-gray-900 dark:text-white"
+          )}>Upcoming Events</h2>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className={cn(
+              isCyberpunk 
+                ? "border-cyberpunk-neon/50 text-cyberpunk-neon hover:bg-cyberpunk-neon/10"
+                : "dark:border-gray-600 dark:text-gray-300"
+            )}
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            Add Event
+          </Button>
+        </div>
+        
+        {/* Events List */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {weekEvents.slice(0, 4).map(event => (
+            <div 
+              key={event.id} 
               className={cn(
+                "p-4 rounded-lg",
                 isCyberpunk 
-                  ? "border-cyberpunk-neon/50 text-cyberpunk-neon hover:bg-cyberpunk-neon/10"
-                  : "dark:border-gray-600 dark:text-gray-300"
+                  ? "bg-cyberpunk-card-bg border border-cyberpunk-neon/30" 
+                  : "bg-white dark:bg-gray-800 shadow-sm"
               )}
             >
-              View All
-            </Button>
-          </div>
-          <div className="space-y-4">
-            {testEmails.slice(0, 3).map(email => (
-              <motion.div
-                key={email.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  "flex items-center justify-between p-4 rounded-lg",
-                  isCyberpunk
-                    ? "bg-cyberpunk-darker/50 border border-cyberpunk-neon/30"
-                    : "bg-gray-50/50 dark:bg-gray-700/50"
-                )}
-              >
-                <div className="flex items-center space-x-3">
-                  <div className={cn(
-                    "p-2 rounded-full",
-                    isCyberpunk
-                      ? "bg-indigo-500/20 text-indigo-400"
-                      : "bg-indigo-500/20 dark:bg-indigo-500/30"
-                  )}>
-                    <TrendingUp className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className={cn(
-                      "font-medium",
-                      isCyberpunk ? "text-cyberpunk-neon" : "text-gray-900 dark:text-white"
-                    )}>{email.subject}</p>
-                    <p className={cn(
-                      "text-sm",
-                      isCyberpunk ? "text-cyberpunk-neon/70" : "text-gray-600 dark:text-gray-400"
-                    )}>
-                      From: {email.from}
-                    </p>
-                  </div>
-                </div>
+              <div className="flex items-start">
                 <div className={cn(
-                  "text-sm",
-                  isCyberpunk ? "text-cyberpunk-neon/70" : "text-gray-600 dark:text-gray-400"
+                  "w-12 h-12 rounded-md flex flex-col items-center justify-center mr-4",
+                  isCyberpunk 
+                    ? "bg-cyberpunk-neon/20 text-cyberpunk-neon" 
+                    : "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
                 )}>
-                  {format(email.date, 'MMM dd, h:mm a')}
+                  <span className="text-xs font-medium">
+                    {format(event.start, 'MMM')}
+                  </span>
+                  <span className="text-lg font-bold leading-none">
+                    {format(event.start, 'd')}
+                  </span>
                 </div>
-              </motion.div>
-            ))}
-          </div>
-        </Card>
-      </div>
+                <div>
+                  <h3 className={cn(
+                    "font-medium",
+                    isCyberpunk ? "text-cyberpunk-accent" : "text-gray-900 dark:text-white"
+                  )}>
+                    {event.title}
+                  </h3>
+                  <div className="flex items-center mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    <Clock className="h-3 w-3 mr-1" />
+                    {format(event.start, 'h:mm a')} - {format(event.end, 'h:mm a')}
+                  </div>
+                  {event.location && (
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {event.location}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        <Button 
+          variant="link" 
+          size="sm" 
+          className={cn(
+            "mt-4",
+            isCyberpunk ? "text-cyberpunk-accent" : "text-blue-600 dark:text-blue-400"
+          )}
+        >
+          View Full Calendar
+        </Button>
+      </Card>
     </div>
   );
 } 

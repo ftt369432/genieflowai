@@ -1,41 +1,40 @@
-import { BaseAIService, AIService } from './baseAIService';
-import { Task } from '../../types/task';
-import { Event } from '../../types/calendar';
+import Anthropic from '@anthropic-ai/sdk';
+import { BaseAIService } from './baseAIService';
+import type { Message } from '../../types/ai';
 
-export class ClaudeService extends BaseAIService implements AIService {
+export class ClaudeService extends BaseAIService {
+  private client: Anthropic;
+
   constructor() {
     super('claude');
+    const apiKey = this.getApiKey('claude');
+    this.client = new Anthropic({
+      apiKey
+    });
   }
 
-  async getCompletion(prompt: string, options?: {
-    maxTokens?: number;
-    temperature?: number;
-    model?: string;
-  }): Promise<string> {
-    throw new Error('Claude API integration not implemented');
+  async sendMessage(messages: Message[]): Promise<string> {
+    try {
+      const message = await this.client.messages.create({
+        model: 'claude-2',
+        max_tokens: 1000,
+        messages: messages.map(m => ({ role: m.role, content: m.content }))
+      });
+
+      return message.content[0].text;
+    } catch (error) {
+      this.handleError(error, 'Claude');
+    }
   }
 
-  async getEmbedding(text: string): Promise<number[]> {
-    throw new Error('Claude embeddings not implemented');
+  async testConnection(): Promise<boolean> {
+    try {
+      await this.sendMessage([{ role: 'user', content: 'test', id: '1', timestamp: new Date() }]);
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
+}
 
-  async enhanceTask(task: Task): Promise<Task> {
-    throw new Error('Task enhancement not implemented for Claude');
-  }
-
-  async estimateTaskDuration(description: string): Promise<number> {
-    throw new Error('Task duration estimation not implemented for Claude');
-  }
-
-  async optimizeTaskSchedule(tasks: Task[]): Promise<Task[]> {
-    throw new Error('Task schedule optimization not implemented for Claude');
-  }
-
-  async suggestEventTimes(event: Partial<Event>): Promise<Date[]> {
-    throw new Error('Event time suggestion not implemented for Claude');
-  }
-
-  async analyzeScheduleConflicts(events: Event[]): Promise<string[]> {
-    throw new Error('Schedule conflict analysis not implemented for Claude');
-  }
-} 
+export const claudeService = new ClaudeService(); 

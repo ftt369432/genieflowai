@@ -13,7 +13,20 @@ module.exports = {
         // Theme colors using CSS variables
         background: 'var(--color-background)',
         paper: 'var(--color-paper)',
-        primary: 'var(--color-primary)',
+        primary: {
+          DEFAULT: '#3b82f6', // blue-500
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a',
+          950: '#172554',
+        },
         secondary: 'var(--color-secondary)',
         accent: 'var(--color-accent)',
         success: 'var(--color-success)',
@@ -125,6 +138,11 @@ module.exports = {
         theme: '0 0 5px var(--color-primary), 0 0 10px var(--color-primary), 0 0 15px var(--color-primary)',
         'theme-strong': '0 0 10px var(--color-primary), 0 0 20px var(--color-primary), 0 0 30px var(--color-primary)',
         'theme-box': '0 0 5px var(--color-primary), 0 0 10px var(--color-primary), inset 0 0 5px var(--color-primary)',
+      },
+      borderRadius: {
+        'lg': '0.5rem',
+        'xl': '0.75rem',
+        '2xl': '1rem',
       },
     },
   },

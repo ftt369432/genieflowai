@@ -4,6 +4,7 @@ import { AgentCreationService } from './AgentCreationService';
 import type { UserAction, WorkflowPattern, AgentConfig, AgentSuggestion, AgentExecutionResult } from '../types/workflow';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { EmailAgent, CalendarAgent, DocumentAgent, TaskAgent } from './agents';
+import { AgentAction } from './agents/BaseAgent';
 
 export class WorkflowOrchestrator {
   private workflowLearner: WorkflowLearner;
@@ -25,7 +26,7 @@ export class WorkflowOrchestrator {
     this.voiceControl = new VoiceControl();
     this.agentCreationService = new AgentCreationService();
     
-    // Initialize specialized agents
+    // Initialize specialized agents with proper configs
     this.emailAgent = new EmailAgent();
     this.calendarAgent = new CalendarAgent();
     this.documentAgent = new DocumentAgent();
@@ -140,7 +141,7 @@ export class WorkflowOrchestrator {
       const agent = this.activeAgents$.value.find(a => a.id === agentId);
       if (!agent) throw new Error('Agent not found');
 
-      const result = await this.executeAction(agent, action, params);
+      const result = await this.executeAction(agent.type, action, params);
       
       // Store result
       const currentResults = this.agentResults$.value[agentId] || [];
@@ -182,18 +183,69 @@ export class WorkflowOrchestrator {
     }
   }
 
-  private async executeAction(agent: AgentConfig, action: string, params: any): Promise<any> {
-    switch (agent.type) {
-      case 'email':
-        return this.emailAgent.executeAction(action, params);
-      case 'calendar':
-        return this.calendarAgent.executeAction(action, params);
-      case 'document':
-        return this.documentAgent.executeAction(action, params);
-      case 'task':
-        return this.taskAgent.executeAction(action, params);
+  public executeAction(agentType: string, action: string, params: any): any {
+    console.log(`Executing action ${action} with ${agentType} agent`, params);
+    
+    // Create an AgentAction object
+    const agentAction: AgentAction = {
+      type: action,
+      params: params
+    };
+
+    try {
+      switch (agentType) {
+        case 'email':
+          return this.emailAgent.executeAction(agentAction);
+        case 'document':
+          // Call the agent's executeAction method with the AgentAction object
+          return this.executeDocumentAction(agentAction);
+        case 'task':
+          // Call the agent's executeAction method with the AgentAction object
+          return this.executeTaskAction(agentAction);
+        case 'calendar':
+          return this.calendarAgent.executeAction(agentAction);
+        case 'workflow':
+          return this.executeWorkflowAction(agentAction);
+        default:
+          throw new Error(`Unknown agent type: ${agentType}`);
+      }
+    } catch (error) {
+      console.error(`Error executing action ${action} with ${agentType} agent:`, error);
+      throw error;
+    }
+  }
+
+  private executeDocumentAction(action: AgentAction): any {
+    // The document agent has a protected executeAction method, so we need
+    // to call specific public methods based on the action type
+    return this.documentAgent.handleAction(action);
+  }
+
+  private executeTaskAction(action: AgentAction): any {
+    // The task agent has a protected executeAction method, so we need
+    // to call specific public methods based on the action type
+    return this.taskAgent.handleAction(action);
+  }
+
+  private executeWorkflowAction(action: AgentAction): any {
+    switch (action.type) {
+      case 'record_action':
+        // Convert params to a proper UserAction
+        const userAction: UserAction = {
+          type: action.params.type || 'unknown',
+          payload: action.params.payload || {},
+          timestamp: new Date(),
+          userId: action.params.userId || 'current-user'
+        };
+        return this.workflowLearner.recordAction(userAction);
+      case 'suggest_automations':
+        return this.workflowLearner.suggestAutomations();
+      case 'get_patterns':
+        return this.workflowLearner.getPatterns();
+      case 'analyze_patterns':
+        return this.workflowLearner.analyzePatterns();
       default:
-        throw new Error(`Unknown agent type: ${agent.type}`);
+        throw new Error(`Unknown workflow action: ${action.type}`);
     }
   }
 

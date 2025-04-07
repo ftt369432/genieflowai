@@ -1,116 +1,114 @@
 import React from 'react';
-import { cn } from '../../lib/utils';
 import { X } from 'lucide-react';
 import { Button } from './Button';
 
-interface ToastProps {
+export interface ToastProps {
   title?: string;
-  description?: string;
+  description: string;
   variant?: 'default' | 'destructive';
   onClose?: () => void;
 }
 
-const Toast = React.forwardRef<HTMLDivElement, ToastProps>(
-  ({ title, description, variant = 'default', onClose, ...props }, ref) => {
-    return (
-      <div
-        ref={ref}
-        className={cn(
-          'pointer-events-auto relative w-full max-w-sm overflow-hidden rounded-lg border p-4 shadow-lg transition-all',
-          'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-right-full',
-          variant === 'destructive' && 'border-destructive bg-destructive text-destructive-foreground'
-        )}
-        {...props}
-      >
-        <div className="flex items-start gap-4">
-          <div className="flex-1">
-            {title && (
-              <div className="text-sm font-semibold">
-                {title}
-              </div>
-            )}
-            {description && (
-              <div className="mt-1 text-sm opacity-90">
-                {description}
-              </div>
-            )}
-          </div>
-          {onClose && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={onClose}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
-);
-
-Toast.displayName = 'Toast';
-
-let toastId = 0;
-const toasts: Map<number, { element: JSX.Element; timer: NodeJS.Timeout }> = new Map();
-const listeners = new Set<() => void>();
-
-const notifyListeners = () => {
-  listeners.forEach(listener => listener());
-};
-
-export const toast = ({
+export const Toast: React.FC<ToastProps> = ({
   title,
   description,
   variant = 'default',
-  duration = 5000
-}: ToastProps & { duration?: number }) => {
-  const id = toastId++;
-  
-  const handleClose = () => {
-    toasts.delete(id);
-    notifyListeners();
-  };
-
-  const element = (
-    <Toast
-      key={id}
-      title={title}
-      description={description}
-      variant={variant}
-      onClose={handleClose}
-    />
+  onClose,
+}) => {
+  return (
+    <div
+      className={`p-4 rounded-md mb-2 shadow-md ${
+        variant === 'destructive'
+          ? 'bg-red-50 border border-red-200 text-red-800'
+          : 'bg-white border border-gray-200 text-gray-900'
+      }`}
+    >
+      <div className="flex justify-between items-start">
+        <div>
+          {title && <h4 className="font-medium mb-1">{title}</h4>}
+          <p className="text-sm">{description}</p>
+        </div>
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="h-6 w-6 p-0 rounded-md"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    </div>
   );
-
-  const timer = setTimeout(handleClose, duration);
-  toasts.set(id, { element, timer });
-  notifyListeners();
 };
 
-export const useToasts = () => {
-  const [, setUpdate] = React.useState({});
+const toasts: ToastProps[] = [];
+let listeners: (() => void)[] = [];
+
+export const toast = ({ title, description, variant }: ToastProps) => {
+  toasts.push({ title, description, variant });
+  
+  // In a real implementation, this would trigger a UI update
+  // For this demo, we'll just log to console
+  console.log(`Toast: ${title || ''} - ${description}`);
+  
+  // Notify listeners
+  listeners.forEach(listener => listener());
+  
+  // Auto remove after 3 seconds
+  setTimeout(() => {
+    const index = toasts.findIndex(t => t.description === description && t.title === title);
+    if (index !== -1) {
+      toasts.splice(index, 1);
+      listeners.forEach(listener => listener());
+    }
+  }, 3000);
+
+  return {
+    id: Date.now().toString(),
+    dismiss: () => {
+      const index = toasts.findIndex(t => t.description === description && t.title === title);
+      if (index !== -1) {
+        toasts.splice(index, 1);
+        listeners.forEach(listener => listener());
+      }
+    }
+  };
+};
+
+export const ToastContainer: React.FC = () => {
+  const [mounted, setMounted] = React.useState(false);
+  const [, setUpdate] = React.useState(0);
 
   React.useEffect(() => {
-    const listener = () => setUpdate({});
-    listeners.add(listener);
+    setMounted(true);
+    
+    const handleUpdate = () => {
+      setUpdate(n => n + 1);
+    };
+    
+    listeners.push(handleUpdate);
+    
     return () => {
-      listeners.delete(listener);
+      listeners = listeners.filter(l => l !== handleUpdate);
     };
   }, []);
 
-  return Array.from(toasts.values()).map(({ element }) => element);
-};
-
-export const ToastContainer = () => {
-  const toastElements = useToasts();
-
-  if (toastElements.length === 0) return null;
+  if (!mounted) return null;
 
   return (
-    <div className="fixed bottom-0 right-0 z-50 flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:max-w-[420px]">
-      {toastElements}
+    <div className="fixed bottom-0 right-0 p-4 max-w-md z-50 space-y-2">
+      {toasts.map((toast, i) => (
+        <Toast
+          key={i}
+          {...toast}
+          onClose={() => {
+            toasts.splice(i, 1);
+            setUpdate(n => n + 1);
+          }}
+        />
+      ))}
     </div>
   );
 }; 

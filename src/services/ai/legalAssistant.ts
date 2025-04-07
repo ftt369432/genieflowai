@@ -1,90 +1,109 @@
-import { openai } from '../../config/openai';
-import type { AIMessage } from '../../types/legal';
+import { geminiSimplifiedService } from '../gemini-simplified';
 
-const SYSTEM_PROMPT = `You are ApexLawHub, a specialized legal AI assistant. Your capabilities include:
-- Legal research and case law analysis
-- Document review and contract analysis
-- Legal writing assistance
-- Regulatory compliance guidance
-- Case strategy recommendations
+const SYSTEM_PROMPT = `You are an AI Legal Assistant with expertise in legal analysis, contract review, and legal research. Your capabilities include:
+1. Answering legal questions with appropriate disclaimers
+2. Analyzing legal documents and contracts
+3. Providing summaries of legal texts
+4. Identifying potential issues in legal documents
+5. Offering general legal information (not specific legal advice)
 
-Please provide clear, accurate legal information while noting that you cannot provide direct legal advice or create attorney-client relationships.`;
+Always include a disclaimer that you are not a lawyer and your responses do not constitute legal advice. Users should consult with a qualified attorney for specific legal advice.`;
 
-export async function generateLegalResponse(messages: AIMessage[]): Promise<string> {
+/**
+ * Generates a response to a legal question based on the provided messages
+ */
+export async function generateLegalResponse(messages: Array<{ role: string; content: string }>): Promise<string> {
   try {
-    const formattedMessages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...messages.map(msg => ({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content
-      }))
-    ];
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: formattedMessages,
-      temperature: 0.7,
-      max_tokens: 2000
+    // Format the messages for Gemini
+    const formattedMessages = messages.map(msg => `${msg.role}: ${msg.content}`).join('\n\n');
+    
+    // Create a prompt that includes the system message and conversation history
+    const prompt = `${SYSTEM_PROMPT}\n\nConversation History:\n${formattedMessages}\n\nPlease provide a response to the latest message.`;
+    
+    // Use geminiSimplifiedService to get a completion
+    const response = await geminiSimplifiedService.getCompletion(prompt, {
+      temperature: 0.3,
+      maxTokens: 2048
     });
-
-    return completion.choices[0].message.content || '';
+    
+    return response;
   } catch (error) {
     console.error('Error generating legal response:', error);
-    throw error;
+    return 'I apologize, but I encountered an error while processing your request. Please try again later.';
   }
 }
 
-export async function analyzeLegalDocument(content: string): Promise<{
+/**
+ * Analyzes a legal document's content and returns a structured analysis
+ */
+export async function analyzeLegalDocument(documentContent: string): Promise<{
   summary: string;
   keyPoints: string[];
-  risks: string[];
+  potentialRisks: string[];
   recommendations: string[];
 }> {
   try {
-    const prompt = `Please analyze the following legal document and provide a structured analysis:
+    const prompt = `${SYSTEM_PROMPT}\n\nAnalyze the following legal document and provide a structured analysis in JSON format with the following fields:
+1. summary - a concise summary of the document
+2. keyPoints - an array of key points from the document
+3. potentialRisks - an array of potential legal risks or concerns identified
+4. recommendations - an array of recommendations based on the document
 
-Content:
-${content}
+Document to analyze:
+${documentContent}
 
-Please provide:
-1. A brief summary
-2. Key points and implications
-3. Potential risks or issues
-4. Recommendations
+Respond only with a valid JSON object following this structure:
+{
+  "summary": "string",
+  "keyPoints": ["string"],
+  "potentialRisks": ["string"],
+  "recommendations": ["string"]
+}`;
 
-Respond in JSON format.`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.5,
-      response_format: { type: "json_object" }
+    const response = await geminiSimplifiedService.getCompletion(prompt, {
+      temperature: 0.2,
+      maxTokens: 3000
     });
 
-    return JSON.parse(completion.choices[0].message.content || '{}');
+    try {
+      // Parse the JSON response
+      return JSON.parse(response);
+    } catch (jsonError) {
+      console.error('Error parsing JSON response:', jsonError);
+      // Fallback with default structure if JSON parsing fails
+      return {
+        summary: "Failed to properly analyze the document",
+        keyPoints: ["Error parsing the analysis results"],
+        potentialRisks: ["Unable to identify risks due to processing error"],
+        recommendations: ["Please try again with a clearer document"]
+      };
+    }
   } catch (error) {
     console.error('Error analyzing legal document:', error);
-    throw error;
+    return {
+      summary: "Failed to analyze the document",
+      keyPoints: ["An error occurred during analysis"],
+      potentialRisks: ["Unable to identify risks due to processing error"],
+      recommendations: ["Please try again later"]
+    };
   }
 }
 
+/**
+ * Generates a concise legal summary of the provided text
+ */
 export async function generateLegalSummary(text: string): Promise<string> {
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "user",
-          content: `Please provide a concise legal summary of the following text:\n\n${text}`
-        }
-      ],
-      temperature: 0.3,
-      max_tokens: 500
+    const prompt = `${SYSTEM_PROMPT}\n\nPlease provide a concise legal summary of the following text. Focus on the key legal points, relevant statutes or case law, and any significant legal implications:\n\n${text}`;
+    
+    const response = await geminiSimplifiedService.getCompletion(prompt, {
+      temperature: 0.2,
+      maxTokens: 1500
     });
-
-    return completion.choices[0].message.content || '';
+    
+    return response;
   } catch (error) {
     console.error('Error generating legal summary:', error);
-    throw error;
+    return 'I apologize, but I encountered an error while generating the summary. Please try again later.';
   }
 }

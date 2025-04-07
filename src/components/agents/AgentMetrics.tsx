@@ -1,283 +1,177 @@
 import React from 'react';
-import { Card } from '../ui/Card';
+import { Line, Bar } from 'react-chartjs-2';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
+import { Activity, Clock, CheckCircle, AlertCircle, Zap } from 'lucide-react';
+import { Agent } from '../../types/agent';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area
-} from 'recharts';
-import { useAgentStore } from '../../store/agentStore';
-import { startOfDay, eachDayOfInterval, subDays, format } from 'date-fns';
-import type { Agent } from '../../types/agents';
-import type { DailyActivity, PerformanceMetric, AgentFeedback } from '../../types/metrics';
-import { Clock, Target, Zap, TrendingUp } from 'lucide-react';
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ChartOptions
+} from 'chart.js';
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 interface AgentMetricsProps {
   agent: Agent;
 }
 
 export function AgentMetrics({ agent }: AgentMetricsProps) {
-  const { actions, feedback } = useAgentStore();
-  
-  // Filter actions and feedback for this agent
-  const agentActions = actions.filter(action => action.agentId === agent.id);
-  const agentFeedback = feedback.filter(f => f.agentId === agent.id);
-
-  // Calculate metrics
-  const metrics = {
-    dailyActivity: calculateDailyActivity(agentActions),
-    performanceByType: calculatePerformanceByType(agentActions),
-    recentFeedback: agentFeedback.slice(0, 5)
+  // Generate random data for charts (in a real app, this would be actual metrics data)
+  const performanceData = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+    datasets: [
+      {
+        label: 'Performance',
+        data: [65, 70, 68, 72, 80, 78, agent.performance],
+        borderColor: 'rgb(59, 130, 246)',
+        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+        tension: 0.2,
+      },
+    ],
   };
 
-  // Mock historical data - replace with real data
-  const historicalData = Array.from({ length: 14 }).map((_, i) => ({
-    date: new Date(Date.now() - (13 - i) * 24 * 60 * 60 * 1000).toLocaleDateString(),
-    tasks: Math.floor(Math.random() * 50) + 10,
-    accuracy: 75 + Math.random() * 20,
-    responseTime: 100 + Math.random() * 200,
-  }));
+  const tasksData = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+    datasets: [
+      {
+        label: 'Completed Tasks',
+        data: [12, 19, 14, 15, 25, 18, agent.tasks.completed],
+        backgroundColor: 'rgba(34, 197, 94, 0.5)',
+        borderColor: 'rgb(34, 197, 94)',
+        borderWidth: 1,
+      },
+    ],
+  };
 
-  const tasksByType = {
-    'email-processing': 45,
-    'document-analysis': 32,
-    'scheduling': 28,
-    'task-management': 15,
+  const chartOptions: ChartOptions<'line'> = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: false,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+    },
   };
 
   return (
-    <div className="space-y-8">
-      {/* Performance Overview */}
-      <div>
-        <h3 className="text-lg font-medium mb-4">Performance Overview</h3>
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-white/5 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Target className="w-5 h-5 text-purple-400" />
-              <span className="text-sm text-white/60">Accuracy Trend</span>
-            </div>
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={historicalData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="date" stroke="rgba(255,255,255,0.5)" />
-                  <YAxis stroke="rgba(255,255,255,0.5)" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(0,0,0,0.8)',
-                      border: 'none',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="accuracy"
-                    stroke="#8b5cf6"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="bg-white/5 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-5 h-5 text-blue-400" />
-              <span className="text-sm text-white/60">Response Time</span>
-            </div>
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={historicalData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="date" stroke="rgba(255,255,255,0.5)" />
-                  <YAxis stroke="rgba(255,255,255,0.5)" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(0,0,0,0.8)',
-                      border: 'none',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="responseTime"
-                    stroke="#3b82f6"
-                    fill="#3b82f6"
-                    fillOpacity={0.1}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title="Performance"
+          value={`${agent.performance}%`}
+          icon={<Activity className="w-5 h-5 text-blue-500" />}
+          description="Overall agent effectiveness"
+        />
+        <MetricCard
+          title="Response Time"
+          value={`${agent.metrics.responseTime.toFixed(2)}ms`}
+          icon={<Clock className="w-5 h-5 text-yellow-500" />}
+          description="Average execution time"
+        />
+        <MetricCard
+          title="Success Rate"
+          value={`${(agent.metrics.successRate * 100).toFixed(0)}%`}
+          icon={<CheckCircle className="w-5 h-5 text-green-500" />}
+          description="Task completion success rate"
+        />
+        <MetricCard
+          title="Accuracy"
+          value={`${(agent.metrics.accuracy * 100).toFixed(0)}%`}
+          icon={<Zap className="w-5 h-5 text-purple-500" />}
+          description="Overall task accuracy"
+        />
       </div>
 
-      {/* Task Distribution */}
-      <div>
-        <h3 className="text-lg font-medium mb-4">Task Distribution</h3>
-        <div className="bg-white/5 rounded-lg p-4">
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={Object.entries(tasksByType).map(([type, count]) => ({ type, count }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                <XAxis dataKey="type" stroke="rgba(255,255,255,0.5)" />
-                <YAxis stroke="rgba(255,255,255,0.5)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(0,0,0,0.8)',
-                    border: 'none',
-                    borderRadius: '8px',
-                  }}
-                />
-                <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Performance History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Line options={chartOptions} data={performanceData} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Task Completion</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Bar options={chartOptions} data={tasksData} />
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Recent Activity */}
-      <div>
-        <h3 className="text-lg font-medium mb-4">Recent Activity</h3>
-        <div className="space-y-4">
-          {agent.feedback.slice(0, 5).map((item, i) => (
-            <div key={i} className="bg-white/5 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className={`p-2 rounded-lg ${
-                  item.type === 'success' 
-                    ? 'bg-green-500/20 text-green-400'
-                    : item.type === 'failure'
-                    ? 'bg-red-500/20 text-red-400'
-                    : 'bg-blue-500/20 text-blue-400'
-                }`}>
-                  <TrendingUp className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-sm">{item.feedback}</p>
-                  <p className="text-xs text-white/40 mt-1">
-                    {new Date(item.timestamp).toLocaleString()}
-                  </p>
-                </div>
-              </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Detailed Metrics</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MetricItem label="Total Tasks" value={agent.tasks.total.toString()} />
+              <MetricItem label="Completed Tasks" value={agent.tasks.completed.toString()} />
+              <MetricItem label="Uptime" value={`${agent.metrics.uptime.toFixed(1)}h`} />
+              <MetricItem label="Last Active" value={agent.lastActive.toLocaleDateString()} />
             </div>
-          ))}
-        </div>
-      </div>
+            <hr className="my-4" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MetricItem label="Type" value={agent.type} />
+              <MetricItem label="Status" value={agent.status} />
+              <MetricItem label="Autonomy" value={agent.autonomyLevel} />
+              <MetricItem label="Model" value={agent.config.model} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function ActivityChart({ data }: ActivityChartProps) {
+function MetricCard({ title, value, icon, description }: { title: string; value: string; icon: React.ReactNode; description: string }) {
   return (
-    <Card className="p-6">
-      <h3 className="text-lg font-semibold mb-4">Daily Activity</h3>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Line type="monotone" dataKey="completed" stroke="#22c55e" name="Completed" />
-            <Line type="monotone" dataKey="failed" stroke="#ef4444" name="Failed" />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-muted-foreground">{title}</span>
+          {icon}
+        </div>
+        <div className="text-3xl font-bold">{value}</div>
+        <p className="text-xs text-muted-foreground mt-1">{description}</p>
+      </CardContent>
     </Card>
   );
 }
 
-function PerformanceChart({ data }: PerformanceChartProps) {
+function MetricItem({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="p-6">
-      <h3 className="text-lg font-semibold mb-4">Performance by Type</h3>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="type" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="successRate" fill="#3b82f6" name="Success Rate (%)" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </Card>
+    <div className="space-y-1">
+      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      <p className="font-medium">{value}</p>
+    </div>
   );
-}
-
-function FeedbackList({ feedback }: FeedbackListProps) {
-  return (
-    <Card className="p-6">
-      <h3 className="text-lg font-semibold mb-4">Recent Feedback</h3>
-      <div className="space-y-4">
-        {feedback.map((f) => (
-          <div key={f.id} className="p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium">Rating: {f.rating}/5</span>
-                <span className="text-gray-500">•</span>
-                <span className="text-sm text-gray-600">
-                  {format(f.timestamp, 'MMM dd, yyyy')}
-                </span>
-              </div>
-            </div>
-            <p className="mt-2 text-sm text-gray-600">{f.feedback}</p>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-// Helper functions
-function calculateDailyActivity(actions: any[]) {
-  const last7Days = eachDayOfInterval({
-    start: subDays(new Date(), 6),
-    end: new Date(),
-  });
-
-  return last7Days.map(date => {
-    const dayStart = startOfDay(date);
-    const dayActions = actions.filter(
-      action => startOfDay(action.startTime).getTime() === dayStart.getTime()
-    );
-
-    return {
-      date: format(date, 'MMM dd'),
-      total: dayActions.length,
-      completed: dayActions.filter(a => a.status === 'completed').length,
-      failed: dayActions.filter(a => a.status === 'failed').length,
-    };
-  });
-}
-
-function calculatePerformanceByType(actions: any[]) {
-  return Object.entries(
-    actions.reduce((acc, action) => {
-      if (!acc[action.type]) {
-        acc[action.type] = { total: 0, completed: 0 };
-      }
-      acc[action.type].total++;
-      if (action.status === 'completed') {
-        acc[action.type].completed++;
-      }
-      return acc;
-    }, {} as Record<string, { total: number; completed: number }>)
-  ).map(([type, stats]) => ({
-    type,
-    successRate: (stats.completed / stats.total) * 100,
-    total: stats.total,
-  }));
-}
-
-interface ActivityChartProps {
-  data: DailyActivity[];
-}
-
-interface PerformanceChartProps {
-  data: PerformanceMetric[];
-}
-
-interface FeedbackListProps {
-  feedback: AgentFeedback[];
 } 

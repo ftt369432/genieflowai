@@ -1,76 +1,46 @@
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  priority: 'low' | 'medium' | 'high';
-  dueDate?: Date;
-  completed: boolean;
-  tags: string[];
-  duration?: number; // Duration in minutes
-  recurrence?: {
-    frequency: 'daily' | 'weekly' | 'monthly';
-    interval: number;
-    endDate?: Date;
-  };
-}
+// Core types
+export * from './actions';
+export * from './ai';
+export * from './agent';
+export * from './agents';
+export * from './assistant';
+export * from './execution';
+export * from './genie';
+export * from './metrics';
 
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  type: 'meeting' | 'task' | 'break';
-  description?: string;
-  participants?: string[];
-  recurrence?: {
-    frequency: 'daily' | 'weekly' | 'monthly';
-    interval: number;
-    endDate?: Date;
-  };
-  relatedTaskId?: string;
-}
+// Email types
+export * from './email';
 
-export interface Template {
-  id: string;
-  name: string;
-  category: 'email' | 'document';
-  content: string;
-  variables: string[];
-  version?: number;
-  createdAt: Date;
-  updatedAt: Date;
-  usage?: number;
-}
+// Documents and drive types
+export * from './documents';
+export * from './drive';
 
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  preferences?: {
-    theme: 'light' | 'dark' | 'system';
-    defaultView: 'month' | 'week' | 'day';
-    workingHours: {
-      start: number;
-      end: number;
-    };
-    workDays: number[];
-  };
-}
+// Calendar and tasks types
+export * from './calendar';
+export * from './task';
+export * from './tasks';
 
-export interface Email {
-  id: string;
-  subject: string;
-  from: string;
-  to: string[];
-  content: string;
-  date: Date;
-  read: boolean;
-  category?: string;
-}
+// Workflow types
+export * from './workflow';
+export * from './capabilities';
 
-export interface EmailFolder {
-  id: string;
-  name: string;
-  type: 'system' | 'custom';
-  count: number;
-}
+// Legal types
+export * from './legal';
+
+// Training and learning types
+export * from './learning';
+export * from './trainingData';
+
+// Personality types
+export * from './geniePersonalities';
+export * from './personality';
+
+// Voice types
+export * from './voice';
+
+// Utility types
+export * from './utils';
+export * from './global';
+
+// Service types
+export * from './google';

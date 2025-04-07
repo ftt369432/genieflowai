@@ -1,159 +1,147 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Check } from 'lucide-react';
-import { PlanCard } from '../components/subscription/PlanCard';
-import { createSubscription } from '../services/payment/stripeService';
-import { useUserStore } from '../services/auth/userStore';
-import {
-  individualPlans,
-  businessPlans,
-  enterprisePlan
-} from '../services/payment/plans';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Building, User, Mail, Zap, ShieldCheck, Users, LifeBuoy, LineChart } from 'lucide-react';
+import { createSubscription, getCurrentSubscription } from '../services/payment/stripeService';
+import { useUserStore } from '../stores/userStore';
+import { SubscriptionPlans } from '../components/subscription/SubscriptionPlans';
+import { Button } from '../components/ui/Button';
+import { individualPlans, businessPlans, Plan } from '../services/payment/plans';
 
 export function SubscriptionPage() {
-  const navigate = useNavigate();
-  const { subscription } = useUserStore();
-  const [isYearly, setIsYearly] = React.useState(false);
-  const [selectedType, setSelectedType] = React.useState<'individual' | 'business'>('individual');
-  const [isLoading, setIsLoading] = React.useState(false);
+  const { user } = useUserStore();
+  const [currentSubscription, setCurrentSubscription] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSubscribe = async (planId: string) => {
-    try {
-      setIsLoading(true);
-      await createSubscription(planId);
-    } catch (error) {
-      console.error('Subscription failed:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => {
+    // Fetch current subscription details when the component mounts
+    const fetchSubscription = async () => {
+      try {
+        setIsLoading(true);
+        const subscriptionData = await getCurrentSubscription();
+        setCurrentSubscription(subscriptionData);
+      } catch (error) {
+        console.error('Error fetching subscription:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSubscription();
+  }, []);
 
   return (
-    <div className="py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-            Choose your plan
-          </h2>
-          <p className="mt-4 text-xl text-gray-600">
-            Select the perfect plan for your needs
+    <div className="container mx-auto py-10 px-4">
+      <div className="max-w-5xl mx-auto">
+        <header className="text-center mb-12">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+            Choose Your Plan
+          </h1>
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            Select the perfect plan to unlock the full potential of GenieFlow AI and streamline your workflow
           </p>
-        </div>
+        </header>
 
-        <div className="mt-12 flex justify-center space-x-4">
-          <button
-            onClick={() => setSelectedType('individual')}
-            className={`px-4 py-2 rounded-lg ${
-              selectedType === 'individual'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            Individual Plans
-          </button>
-          <button
-            onClick={() => setSelectedType('business')}
-            className={`px-4 py-2 rounded-lg ${
-              selectedType === 'business'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            Business Plans
-          </button>
-        </div>
+        {/* Subscription Plans Component */}
+        <SubscriptionPlans />
 
-        <div className="mt-8 flex justify-center items-center space-x-3">
-          <button
-            onClick={() => setIsYearly(false)}
-            className={`text-sm ${!isYearly ? 'font-medium text-blue-600' : 'text-gray-500'}`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setIsYearly(!isYearly)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              isYearly ? 'bg-blue-600' : 'bg-gray-200'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                isYearly ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-          <button
-            onClick={() => setIsYearly(true)}
-            className={`text-sm ${isYearly ? 'font-medium text-blue-600' : 'text-gray-500'}`}
-          >
-            Yearly (Save 20%)
-          </button>
-        </div>
-
-        <div className="mt-12 space-y-4 sm:mt-16 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-6 lg:max-w-4xl lg:mx-auto xl:max-w-none xl:mx-0 xl:grid-cols-3">
-          {selectedType === 'individual' ? (
-            individualPlans.map((plan) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                isYearly={isYearly}
-                isCurrentPlan={subscription?.plan === plan.id}
-                onSubscribe={handleSubscribe}
-                loading={isLoading}
-              />
-            ))
-          ) : (
-            businessPlans.map((plan) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                isYearly={isYearly}
-                isCurrentPlan={subscription?.plan === plan.id}
-                onSubscribe={handleSubscribe}
-                loading={isLoading}
-              />
-            ))
-          )}
-        </div>
-
-        <div className="mt-12">
-          <div className="border border-gray-200 rounded-lg shadow-sm p-8 bg-gray-50">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">
-              Need a custom solution?
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Our Enterprise plan offers fully customizable solutions for large organizations.
-              Get in touch with our sales team to discuss your specific needs.
-            </p>
-            <div className="space-y-4">
-              <div className="flex items-start">
-                <Check className="h-5 w-5 text-green-500 mt-1" />
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-900">Custom Platform</p>
-                  <p className="text-sm text-gray-500">Fully customizable platform and branding</p>
+        {/* Enterprise Section */}
+        <div className="mt-20 border border-gray-200 dark:border-gray-800 rounded-xl p-6 md:p-8 bg-gray-50 dark:bg-gray-900/50">
+          <div className="flex flex-col md:flex-row items-start gap-8">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold mb-4">Need a Custom Enterprise Solution?</h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                We offer tailored solutions for organizations with specific requirements. Get in touch with our sales team to discuss your needs.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-8">
+                <div className="flex items-start">
+                  <div className="mt-1 mr-3 flex-shrink-0">
+                    <ShieldCheck className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Advanced Security</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Enhanced data protection and compliance</p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start">
-                <Check className="h-5 w-5 text-green-500 mt-1" />
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-900">Dedicated Support</p>
-                  <p className="text-sm text-gray-500">Priority support and personalized onboarding</p>
+                
+                <div className="flex items-start">
+                  <div className="mt-1 mr-3 flex-shrink-0">
+                    <Users className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Team Management</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Complete control over user access and roles</p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start">
-                <Check className="h-5 w-5 text-green-500 mt-1" />
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-900">Advanced Analytics</p>
-                  <p className="text-sm text-gray-500">Company-wide productivity tracking</p>
+                
+                <div className="flex items-start">
+                  <div className="mt-1 mr-3 flex-shrink-0">
+                    <LifeBuoy className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Dedicated Support</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Priority access to technical expertise</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="mt-1 mr-3 flex-shrink-0">
+                    <LineChart className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Advanced Analytics</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Detailed insights into usage patterns</p>
+                  </div>
                 </div>
               </div>
             </div>
-            <button
-              onClick={() => navigate('/contact-sales')}
-              className="mt-8 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 w-full sm:w-auto"
-            >
-              Contact Sales
-            </button>
+            
+            <div className="w-full md:w-auto flex flex-col items-center">
+              <Button size="lg" className="mb-3 w-full md:w-auto">
+                Contact Sales
+              </Button>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                Or email us at{' '}
+                <a href="mailto:enterprise@genieflowai.com" className="text-blue-500 hover:underline">
+                  enterprise@genieflowai.com
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* FAQ Section */}
+        <div className="mt-16">
+          <h2 className="text-2xl font-bold text-center mb-8">Frequently Asked Questions</h2>
+          
+          <div className="grid gap-6 max-w-3xl mx-auto">
+            <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+              <h3 className="font-semibold text-lg mb-2">Can I switch plans later?</h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Yes, you can upgrade or downgrade your plan at any time. Changes to your subscription will be applied immediately, with prorated charges for the remainder of your billing cycle.
+              </p>
+            </div>
+            
+            <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+              <h3 className="font-semibold text-lg mb-2">Is there a free trial?</h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                All paid plans include a 7-day free trial. You won't be charged until the trial period ends, and you can cancel anytime before then.
+              </p>
+            </div>
+            
+            <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+              <h3 className="font-semibold text-lg mb-2">What payment methods do you accept?</h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                We accept all major credit cards, including Visa, Mastercard, and American Express. For Enterprise plans, we also offer invoicing options.
+              </p>
+            </div>
+            
+            <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+              <h3 className="font-semibold text-lg mb-2">How does the billing work?</h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                For monthly plans, you'll be billed every month on the date you signed up. For annual plans, you'll be billed once per year. You can view your billing history and upcoming payments in your account settings.
+              </p>
+            </div>
           </div>
         </div>
       </div>

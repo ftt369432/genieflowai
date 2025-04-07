@@ -1,4 +1,4 @@
-import { AgentConfig } from './agents';
+import { AgentAction, AgentActionResult } from '../services/agents/BaseAgent';
 
 export type AutonomyLevel = 'supervised' | 'semi-autonomous' | 'autonomous';
 
@@ -74,12 +74,16 @@ export interface AgentExecutionResult {
   error: string | null;
 }
 
+/**
+ * Metrics for agent actions
+ */
 export interface ActionMetrics {
   action: string;
+  duration: number;
   success: boolean;
-  duration?: number;
+  timestamp: Date;
+  agentId: string;
   error?: string;
-  output?: any;
 }
 
 export interface AgentMetrics {
@@ -89,15 +93,55 @@ export interface AgentMetrics {
   lastExecution: Date | null;
 }
 
+/**
+ * Step in a workflow
+ */
+export interface WorkflowStep {
+  id: string;
+  type: string;
+  action: AgentAction;
+  dependencies?: string[];
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result?: AgentActionResult;
+}
+
+/**
+ * Configuration for a workflow
+ */
+export interface WorkflowConfig {
+  id: string;
+  name: string;
+  description: string;
+  steps: WorkflowStep[];
+  created: Date;
+  lastRun?: Date;
+  status: 'active' | 'inactive' | 'running';
+}
+
+/**
+ * Result of executing a workflow
+ */
+export interface WorkflowResult {
+  workflowId: string;
+  success: boolean;
+  startTime: Date;
+  endTime: Date;
+  stepResults: Record<string, AgentActionResult>;
+  error?: string;
+}
+
+/**
+ * Agent configuration
+ */
 export interface AgentConfig {
   id: string;
   name: string;
-  type: 'email' | 'calendar' | 'document' | 'task';
+  description: string;
   capabilities: string[];
-  pattern?: WorkflowPattern;
-  metadata?: {
-    created: Date;
-    lastModified: Date;
-    version: string;
-  };
+  type: string;
+  version: string;
+  created: Date;
+  lastModified: Date;
+  status: 'active' | 'inactive' | 'training';
+  preferences: Record<string, any>;
 } 

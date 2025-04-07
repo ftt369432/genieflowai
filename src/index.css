@@ -2,27 +2,4 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: #ffffff;
-    --background-secondary: #f3f4f6;
-    --foreground: #111827;
-    --foreground-secondary: #374151;
-  }
-
-  .dark {
-    --background: #111827;
-    --background-secondary: #1f2937;
-    --foreground: #ffffff;
-    --foreground-secondary: #e5e7eb;
-  }
-}
-
-/* Custom styles can go here */
-@layer components {
-  /* Add any custom component styles */
-}
-
-@layer utilities {
-  /* Add any custom utility styles */
-}
+/* Base styles will be handled by Tailwind */ 

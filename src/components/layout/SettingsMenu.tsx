@@ -5,7 +5,8 @@ import { useTheme } from '../../hooks/useTheme';
 import { useEmail } from '../../contexts/EmailContext';
 import { IMAPConfigForm } from '../email/IMAPConfigForm';
 import { EmailService } from '../../services/email';
-import { googleAuthService } from '../../services/auth/googleAuth';
+import googleAuthService from '../../services/auth/googleAuth';
+import { CalendarSettings } from '../settings/CalendarSettings';
 
 interface SettingsMenuProps {
   isOpen: boolean;
@@ -139,6 +140,16 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
                       Email Accounts
                     </button>
                     <button
+                      onClick={() => setActiveTab('calendar')}
+                      className={`w-full text-left px-3 py-2 rounded-md ${
+                        activeTab === 'calendar'
+                          ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-200'
+                          : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      Calendar
+                    </button>
+                    <button
                       onClick={() => setActiveTab('preferences')}
                       className={`w-full text-left px-3 py-2 rounded-md ${
                         activeTab === 'preferences'
@@ -263,6 +274,15 @@ export function SettingsMenu({ isOpen, onClose }: SettingsMenuProps) {
                           )}
                         </>
                       )}
+                    </div>
+                  )}
+
+                  {activeTab === 'calendar' && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                        Calendar Settings
+                      </h3>
+                      <CalendarSettings />
                     </div>
                   )}
 
