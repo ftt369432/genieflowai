@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
-import { ThemeProvider, EmailProvider, NotificationProvider, AIProvider } from './contexts';
+import { ThemeProvider, EmailProvider, NotificationProvider, AIProvider, TeamProvider } from './contexts';
+import { AuthProvider } from './contexts/AuthContext';
 import { useSupabase } from './providers/SupabaseProvider';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
@@ -106,200 +107,204 @@ function App() {
   return (
     <Router>
       <AIProvider>
-        <Routes>
-          {/* Public routes with conditional redirect */}
-          <Route path="/" element={<HomeRoute />} />
-          <Route path="/login" element={<LoginRoute />} />
-          <Route path="/examples/loading" element={<LoadingExample />} />
-          
-          {/* Auth callback route */}
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          
-          {/* Protected routes */}
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Agents routes - add these */}
-          <Route 
-            path="/agents" 
-            element={
-              <ProtectedRoute>
-                <AgentsPageComponent />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/agents/:agentId" 
-            element={
-              <ProtectedRoute>
-                <AgentDetail />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/agent-wizard" 
-            element={
-              <ProtectedRoute>
-                <AgentWizardPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/automation" 
-            element={
-              <ProtectedRoute>
-                <AutomationPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/dashboard/audit" 
-            element={
-              <ProtectedRoute>
-                <AutomationAuditDashboard />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Redirect from authenticated root to dashboard */}
-          <Route
-            path="/app"
-            element={
-              <ProtectedRoute>
-                <Navigate to="/dashboard" replace />
-              </ProtectedRoute>
-            }
-          />
-          
-          <Route 
-            path="/profile" 
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/subscription" 
-            element={
-              <ProtectedRoute>
-                <SubscriptionPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/email/*" 
-            element={
-              <ProtectedRoute>
-                <EmailPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/notifications" 
-            element={
-              <ProtectedRoute>
-                <NotificationsPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/ai" 
-            element={
-              <ProtectedRoute>
-                <AIPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/assistant" 
-            element={
-              <ProtectedRoute>
-                <AIAssistantPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/drive/*"
-            element={
-              <ProtectedRoute>
-                <GenieDrivePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route 
-            path="/calendar" 
-            element={
-              <ProtectedRoute>
-                <CalendarPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/contacts" 
-            element={
-              <ProtectedRoute>
-                <ContactsPage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/tasks" 
-            element={
-              <ProtectedRoute>
-                <TasksPage />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Add the legal document route */}
-          <Route path="/documents" element={
-            <ProtectedRoute>
-              <AppLayout>
-                <LegalDocumentPage />
-              </AppLayout>
-            </ProtectedRoute>
-          } />
-          
-          {/* Add the notebooks route */}
-          <Route 
-            path="/notebooks" 
-            element={
-              <ProtectedRoute>
-                <NotebooksPage />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Add the teams route */}
-          <Route 
-            path="/teams" 
-            element={
-              <ProtectedRoute>
-                <TeamsPage />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Add the projects route */}
-          <Route 
-            path="/projects" 
-            element={
-              <ProtectedRoute>
-                <ProjectsPage />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Fallback route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <AuthProvider>
+          <TeamProvider>
+            <Routes>
+              {/* Public routes with conditional redirect */}
+              <Route path="/" element={<HomeRoute />} />
+              <Route path="/login" element={<LoginRoute />} />
+              <Route path="/examples/loading" element={<LoadingExample />} />
+              
+              {/* Auth callback route */}
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              
+              {/* Protected routes */}
+              <Route 
+                path="/dashboard" 
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Agents routes - add these */}
+              <Route 
+                path="/agents" 
+                element={
+                  <ProtectedRoute>
+                    <AgentsPageComponent />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/agents/:agentId" 
+                element={
+                  <ProtectedRoute>
+                    <AgentDetail />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/agent-wizard" 
+                element={
+                  <ProtectedRoute>
+                    <AgentWizardPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/automation" 
+                element={
+                  <ProtectedRoute>
+                    <AutomationPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/dashboard/audit" 
+                element={
+                  <ProtectedRoute>
+                    <AutomationAuditDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Redirect from authenticated root to dashboard */}
+              <Route
+                path="/app"
+                element={
+                  <ProtectedRoute>
+                    <Navigate to="/dashboard" replace />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route 
+                path="/profile" 
+                element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/subscription" 
+                element={
+                  <ProtectedRoute>
+                    <SubscriptionPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/email/*" 
+                element={
+                  <ProtectedRoute>
+                    <EmailPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/notifications" 
+                element={
+                  <ProtectedRoute>
+                    <NotificationsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/ai" 
+                element={
+                  <ProtectedRoute>
+                    <AIPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/assistant" 
+                element={
+                  <ProtectedRoute>
+                    <AIAssistantPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/drive/*"
+                element={
+                  <ProtectedRoute>
+                    <GenieDrivePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route 
+                path="/calendar" 
+                element={
+                  <ProtectedRoute>
+                    <CalendarPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/contacts" 
+                element={
+                  <ProtectedRoute>
+                    <ContactsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/tasks" 
+                element={
+                  <ProtectedRoute>
+                    <TasksPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Add the legal document route */}
+              <Route path="/documents" element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <LegalDocumentPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              } />
+              
+              {/* Add the notebooks route */}
+              <Route 
+                path="/notebooks" 
+                element={
+                  <ProtectedRoute>
+                    <NotebooksPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Add the teams route */}
+              <Route 
+                path="/teams" 
+                element={
+                  <ProtectedRoute>
+                    <TeamsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Add the projects route */}
+              <Route 
+                path="/projects" 
+                element={
+                  <ProtectedRoute>
+                    <ProjectsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Fallback route */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </TeamProvider>
+        </AuthProvider>
       </AIProvider>
     </Router>
   );
