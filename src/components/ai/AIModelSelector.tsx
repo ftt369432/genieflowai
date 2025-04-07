@@ -1,89 +1,78 @@
 import React from 'react';
-import { Card } from '../ui/Card';
-import { cn } from '../../lib/utils';
-import { Sparkles, Zap, Brain, Star } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import { Button } from '../ui/Button';
+import { Popover, PopoverTrigger, PopoverContent } from '../ui/Popover';
 
-export interface AIModelSelectorProps {
-  value: string;
-  onChange: (model: string) => void;
-}
-
-interface ModelOption {
-  id: string;
+interface ModelConfig {
   name: string;
   description: string;
-  icon: React.ReactNode;
+  temperature: number;
+  maxTokens: number;
+  features?: string[];
+  category?: 'general' | 'code' | 'analysis' | 'productivity';
+}
+
+interface ModelGroup {
+  name: string;
+  description: string;
+  models: Record<string, ModelConfig>;
   features?: string[];
 }
 
-const models: ModelOption[] = [
-  {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
-    description: 'Our newest multimodal model, with next generation features and improved capabilities',
-    icon: <Sparkles className="w-5 h-5" />,
-    features: ['Multimodal support', 'Next-gen features', 'Improved capabilities']
-  },
-  {
-    id: 'gemini-2.0-flash-lite',
-    name: 'Gemini 2.0 Flash-Lite',
-    description: 'Our fastest and most cost-efficient multimodal model with great performance for high-frequency tasks',
-    icon: <Zap className="w-5 h-5" />,
-    features: ['High performance', 'Cost-efficient', 'Fast response time']
-  },
-  {
-    id: 'gemini-2.0-pro',
-    name: 'Gemini 2.0 Pro',
-    description: 'Our best performing multimodal model with features for a wide variety of reasoning tasks',
-    icon: <Brain className="w-5 h-5" />,
-    features: ['Advanced reasoning', 'Wide task support', 'Best performance']
-  },
-  {
-    id: 'gemini-pro',
-    name: 'Gemini Pro',
-    description: 'Balanced model for general-purpose use',
-    icon: <Star className="w-5 h-5" />,
-    features: ['General purpose', 'Balanced performance', 'Cost-effective']
-  }
-];
+interface AIModelSelectorProps {
+  selectedModel: string;
+  onModelSelect: (model: string) => void;
+  modelGroups: Record<string, ModelGroup>;
+}
 
-export function AIModelSelector({ value, onChange }: AIModelSelectorProps) {
+export function AIModelSelector({ selectedModel, onModelSelect, modelGroups }: AIModelSelectorProps) {
+  const selectedModelConfig = Object.values(modelGroups)
+    .flatMap(group => Object.entries(group.models))
+    .find(([id]) => id === selectedModel)?.[1];
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
-      {models.map((model) => (
-        <Card
-          key={model.id}
-          className={cn(
-            'relative p-4 cursor-pointer transition-all hover:shadow-md',
-            'border-2',
-            value === model.id ? 'border-primary bg-primary/5' : 'border-transparent hover:border-primary/20'
-          )}
-          onClick={() => onChange(model.id)}
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className="w-full justify-between"
         >
-          <div className="absolute top-2 right-2 text-primary">
-            {model.icon}
-          </div>
-          <div className="space-y-2">
-            <h3 className="font-semibold text-sm">{model.name}</h3>
-            <p className="text-xs text-muted-foreground">{model.description}</p>
-            {model.features && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {model.features.map((feature, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-2 py-1 rounded-full bg-primary/10 text-primary text-xs"
+          <span className="flex items-center gap-2">
+            <span>{selectedModelConfig?.name || 'Select Model'}</span>
+          </span>
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[300px] p-0" align="start">
+        <div className="grid gap-2 p-4">
+          {Object.entries(modelGroups).map(([provider, group]) => (
+            <div key={provider} className="space-y-2">
+              <h4 className="font-medium text-sm">{group.name}</h4>
+              <div className="grid gap-1">
+                {Object.entries(group.models).map(([id, model]) => (
+                  <div
+                    key={id}
+                    onClick={() => onModelSelect(id)}
+                    className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm ${
+                      selectedModel === id
+                        ? 'bg-primary text-white'
+                        : 'hover:bg-primary/10'
+                    }`}
                   >
-                    {feature}
-                  </span>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{model.name}</span>
+                      <span className="text-xs opacity-75">{model.description}</span>
+                    </div>
+                    {selectedModel === id && (
+                      <span className="text-current">✓</span>
+                    )}
+                  </div>
                 ))}
               </div>
-            )}
-          </div>
-          {value === model.id && (
-            <div className="absolute inset-0 border-2 border-primary rounded-lg pointer-events-none" />
-          )}
-        </Card>
-      ))}
-    </div>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 } 

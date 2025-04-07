@@ -1,28 +1,28 @@
 import React from 'react';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
 
-interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'outline';
-  children: React.ReactNode;
+export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+  variant?: 'default' | 'secondary' | 'destructive' | 'outline';
 }
 
-export function Badge({ 
-  variant = 'default', 
-  className, 
-  children,
-  ...props 
+export function Badge({
+  className,
+  variant = 'default',
+  ...props
 }: BadgeProps) {
   return (
-    <div
+    <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-        variant === 'default' && 'bg-primary-100 text-primary-800',
-        variant === 'outline' && 'border border-primary-200 text-primary-700',
+        'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium transition-colors',
+        {
+          'bg-primary text-primary-foreground': variant === 'default',
+          'bg-secondary text-secondary-foreground': variant === 'secondary',
+          'bg-destructive text-destructive-foreground': variant === 'destructive',
+          'border border-border': variant === 'outline',
+        },
         className
       )}
       {...props}
-    >
-      {children}
-    </div>
+    />
   );
 } 

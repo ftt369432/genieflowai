@@ -55,8 +55,12 @@ export interface ResearchResult {
 
 export interface AIMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
   attachments?: string[];
+  metadata?: {
+    domain: 'legal';
+    [key: string]: unknown;
+  };
 }

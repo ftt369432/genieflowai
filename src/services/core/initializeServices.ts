@@ -91,22 +91,9 @@ class ServiceContainer {
   }
 
   private initializeAIService(): AIService {
-    const provider = import.meta.env.VITE_AI_PROVIDER || 'gemini';
-    
-    if (process.env.NODE_ENV === 'test' || import.meta.env.VITE_USE_MOCK === 'true') {
-      return mockAIService;
-    }
-
-    switch (provider) {
-      case 'gemini':
-      case 'google':
-        return geminiService;
-      case 'openai':
-        return new OpenAIService();
-      default:
-        console.warn(`Unknown AI provider ${provider}, falling back to Gemini AI`);
-        return geminiService;
-    }
+    // Always use geminiService regardless of environment configuration
+    console.log('Initializing AI Service: Using Google Gemini as provider');
+    return geminiService as any;
   }
 
   public static getInstance(): ServiceContainer {

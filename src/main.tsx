@@ -1,21 +1,51 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
-import { App } from './App';
-import './styles/vendor.css';
-import './styles/grid-layout.css';
+import App from './App';
 import './index.css';
+// Import CSS directly since @import isn't working
+import './styles/globals.css';
+import './styles/grid-layout.css';
+import './styles/grid-styles.css';
+import './styles/grid-fixed.css';
+import './styles/date-picker.css';
+import './styles/vendor.css';
+import './styles/test.css';
+import { Toaster } from 'sonner';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { SupabaseProvider } from './providers/SupabaseProvider';
+import { ThemeProvider, NotificationProvider, EmailProvider } from './contexts';
 import { services } from './services/core/initializeServices';
+import { AuthProvider } from './contexts/AuthContext';
 
 // Create a context for services
 export const ServicesContext = React.createContext(services);
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+// Create root element
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Root element not found');
+
+// Create root
+const root = ReactDOM.createRoot(rootElement);
+
+// Render app
+root.render(
   <React.StrictMode>
     <ServicesContext.Provider value={services}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <ThemeProvider>
+        <NotificationProvider>
+          <SupabaseProvider>
+            <AuthProvider>
+              <EmailProvider>
+                <DndProvider backend={HTML5Backend}>
+                  <App />
+                  <Toaster />
+                </DndProvider>
+              </EmailProvider>
+            </AuthProvider>
+          </SupabaseProvider>
+        </NotificationProvider>
+      </ThemeProvider>
     </ServicesContext.Provider>
   </React.StrictMode>
 );

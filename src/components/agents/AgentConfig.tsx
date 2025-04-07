@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { Agent } from '../../types/agents';
 import { useAgentStore } from '../../store/agentStore';
-import { Button } from '../ui/Button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../ui/Card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { Input } from '../ui/Input';
-import { Select } from '../ui/Select';
 import { Slider } from '../ui/Slider';
 import { Switch } from '../ui/Switch';
-import { Save, RefreshCw } from 'lucide-react';
+import { Textarea } from '../ui/Textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
+import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
+import { Label } from '../ui/Label';
+import { Settings, Save, Sliders, Code, Cpu } from 'lucide-react';
+import { AgentType, AgentCapability, AutonomyLevel, Agent } from '../../types/agent';
 
 interface AgentConfigProps {
   agent: Agent;
@@ -14,145 +19,331 @@ interface AgentConfigProps {
 
 export function AgentConfig({ agent }: AgentConfigProps) {
   const { updateAgent } = useAgentStore();
-  const [config, setConfig] = useState(agent.config);
-  const [isDirty, setIsDirty] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [config, setConfig] = useState({
+    ...agent.config,
+    description: agent.description,
+    capabilities: [...agent.capabilities]
+  });
 
-  const handleSave = async () => {
-    await updateAgent(agent.id, { config });
-    setIsDirty(false);
+  const availableCapabilities: AgentCapability[] = [
+    'email-processing',
+    'document-analysis',
+    'scheduling',
+    'task-management',
+    'natural-language',
+    'calendar-management',
+    'drafting',
+    'web-search',
+    'data-analysis',
+    'report-generation',
+    'code-generation',
+    'code-review',
+    'debugging'
+  ];
+
+  const autonomyLevels: AutonomyLevel[] = [
+    'supervised',
+    'semi-autonomous',
+    'autonomous'
+  ];
+
+  const agentTypes: AgentType[] = [
+    'assistant',
+    'research',
+    'development',
+    'analysis',
+    'email',
+    'document',
+    'calendar',
+    'task',
+    'custom'
+  ];
+
+  const handleInputChange = (field: string, value: string | number | boolean | string[]) => {
+    setConfig(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
-  const updateConfig = (updates: Partial<typeof config>) => {
-    setConfig(prev => ({ ...prev, ...updates }));
-    setIsDirty(true);
+  const handleCapabilityToggle = (capability: AgentCapability) => {
+    if (config.capabilities.includes(capability)) {
+      setConfig(prev => ({
+        ...prev,
+        capabilities: prev.capabilities.filter(cap => cap !== capability)
+      }));
+    } else {
+      setConfig(prev => ({
+        ...prev,
+        capabilities: [...prev.capabilities, capability]
+      }));
+    }
+  };
+
+  const handleSubmit = () => {
+    updateAgent(agent.id, {
+      description: config.description,
+      capabilities: config.capabilities,
+      config: {
+        ...agent.config,
+        model: config.model,
+        temperature: config.temperature,
+        maxTokens: config.maxTokens,
+        systemPrompt: config.systemPrompt,
+        autonomyLevel: config.autonomyLevel,
+        type: config.type,
+        name: config.name
+      }
+    });
+    setIsEditing(false);
   };
 
   return (
-    <div className="space-y-8">
-      {/* Model Configuration */}
-      <div>
-        <h3 className="text-lg font-medium mb-4">Model Configuration</h3>
-        <div className="grid grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm text-white/60">Model</label>
-            <Select
-              value={config.modelName}
-              onChange={(value) => updateConfig({ modelName: value })}
-              options={[
-                { label: 'GPT-4 Turbo', value: 'gpt-4-turbo-preview' },
-                { label: 'GPT-4', value: 'gpt-4' },
-                { label: 'GPT-3.5 Turbo', value: 'gpt-3.5-turbo' },
-              ]}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm text-white/60">Context Window</label>
-            <Select
-              value={config.contextWindow.toString()}
-              onChange={(value) => updateConfig({ contextWindow: parseInt(value) })}
-              options={[
-                { label: '4K tokens', value: '4096' },
-                { label: '8K tokens', value: '8192' },
-                { label: '16K tokens', value: '16384' },
-                { label: '32K tokens', value: '32768' },
-              ]}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm text-white/60">Temperature</label>
-            <Slider
-              value={[config.temperature]}
-              min={0}
-              max={2}
-              step={0.1}
-              onValueChange={([value]) => updateConfig({ temperature: value })}
-            />
-            <div className="flex justify-between text-xs text-white/40">
-              <span>Precise</span>
-              <span>Creative</span>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm text-white/60">Max Tokens</label>
-            <Input
-              type="number"
-              value={config.maxTokens}
-              onChange={(e) => updateConfig({ maxTokens: parseInt(e.target.value) })}
-              min={1}
-              max={32768}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Behavior Settings */}
-      <div>
-        <h3 className="text-lg font-medium mb-4">Behavior Settings</h3>
-        <div className="grid grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm text-white/60">Autonomy Level</label>
-            <Select
-              value={config.autonomyLevel}
-              onChange={(value) => updateConfig({ autonomyLevel: value })}
-              options={[
-                { label: 'Supervised', value: 'supervised' },
-                { label: 'Semi-Autonomous', value: 'semi-autonomous' },
-                { label: 'Autonomous', value: 'autonomous' },
-              ]}
-            />
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-sm text-white/60">Auto-Learning</label>
-              <Switch
-                checked={config.autoLearning}
-                onCheckedChange={(checked) => updateConfig({ autoLearning: checked })}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-sm text-white/60">Proactive Mode</label>
-              <Switch
-                checked={config.proactiveMode}
-                onCheckedChange={(checked) => updateConfig({ proactiveMode: checked })}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* System Prompt */}
-      <div>
-        <h3 className="text-lg font-medium mb-4">System Prompt</h3>
-        <textarea
-          value={config.basePrompt}
-          onChange={(e) => updateConfig({ basePrompt: e.target.value })}
-          className="w-full h-32 bg-white/5 border border-white/10 rounded-lg p-3 text-sm"
-          placeholder="Enter the base system prompt for this agent..."
-        />
-      </div>
-
-      {/* Save Button */}
-      <div className="flex justify-end gap-4">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-semibold">Agent Configuration</h2>
         <Button
-          variant="outline"
-          onClick={() => setConfig(agent.config)}
-          disabled={!isDirty}
+          variant={isEditing ? "default" : "outline"}
+          onClick={() => setIsEditing(!isEditing)}
         >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Reset
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={!isDirty}
-        >
-          <Save className="w-4 h-4 mr-2" />
-          Save Changes
+          {isEditing ? (
+            <>
+              <Save className="h-4 w-4 mr-2" />
+              Exit Edit Mode
+            </>
+          ) : (
+            <>
+              <Settings className="h-4 w-4 mr-2" />
+              Edit Configuration
+            </>
+          )}
         </Button>
       </div>
+
+      <Tabs defaultValue="general">
+        <TabsList>
+          <TabsTrigger value="general">
+            <Settings className="h-4 w-4 mr-2" />
+            General
+          </TabsTrigger>
+          <TabsTrigger value="model">
+            <Cpu className="h-4 w-4 mr-2" />
+            Model
+          </TabsTrigger>
+          <TabsTrigger value="capabilities">
+            <Sliders className="h-4 w-4 mr-2" />
+            Capabilities
+          </TabsTrigger>
+          <TabsTrigger value="prompts">
+            <Code className="h-4 w-4 mr-2" />
+            Prompts
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Basic Information</CardTitle>
+              <CardDescription>Configure the general settings for your agent</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="agent-name">Name</Label>
+                <Input
+                  id="agent-name"
+                  value={config.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  disabled={!isEditing}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="agent-description">Description</Label>
+                <Textarea
+                  id="agent-description"
+                  value={config.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  disabled={!isEditing}
+                  rows={3}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="agent-type">Type</Label>
+                <Select
+                  value={config.type}
+                  onValueChange={(value) => handleInputChange('type', value as AgentType)}
+                  disabled={!isEditing}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select agent type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agentTypes.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="agent-autonomy">Autonomy Level</Label>
+                <Select
+                  value={config.autonomyLevel}
+                  onValueChange={(value) => handleInputChange('autonomyLevel', value as AutonomyLevel)}
+                  disabled={!isEditing}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select autonomy level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {autonomyLevels.map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {level.charAt(0).toUpperCase() + level.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="model" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Model Configuration</CardTitle>
+              <CardDescription>Configure the AI model settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="agent-model">Model</Label>
+                <Select
+                  value={config.model}
+                  onValueChange={(value) => handleInputChange('model', value)}
+                  disabled={!isEditing}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gpt-4">GPT-4</SelectItem>
+                    <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
+                    <SelectItem value="claude-v1">Claude v1</SelectItem>
+                    <SelectItem value="claude-instant">Claude Instant</SelectItem>
+                    <SelectItem value="llama-3-70b">Llama 3 70B</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <Label htmlFor="agent-temperature">Temperature: {config.temperature}</Label>
+                </div>
+                <Slider
+                  id="agent-temperature"
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={[config.temperature]}
+                  onValueChange={(value) => handleInputChange('temperature', value[0])}
+                  disabled={!isEditing}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Lower values produce more deterministic outputs, higher values more creative.
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <Label htmlFor="agent-max-tokens">Max Tokens: {config.maxTokens}</Label>
+                </div>
+                <Slider
+                  id="agent-max-tokens"
+                  min={100}
+                  max={8000}
+                  step={100}
+                  value={[config.maxTokens]}
+                  onValueChange={(value) => handleInputChange('maxTokens', value[0])}
+                  disabled={!isEditing}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Maximum number of tokens the agent can generate per response.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="capabilities" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Agent Capabilities</CardTitle>
+              <CardDescription>Configure what your agent can do</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Enable or disable capabilities for this agent. Capabilities determine what actions the agent can perform.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {availableCapabilities.map((capability) => (
+                    <div key={capability} className="flex items-center justify-between space-x-2 p-2 border rounded-md">
+                      <span className="font-medium">{capability.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</span>
+                      <Switch
+                        checked={config.capabilities.includes(capability)}
+                        onCheckedChange={() => handleCapabilityToggle(capability)}
+                        disabled={!isEditing}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="prompts" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>System Prompt</CardTitle>
+              <CardDescription>Define how your agent behaves</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Label htmlFor="system-prompt">System Prompt</Label>
+                <Textarea
+                  id="system-prompt"
+                  value={config.systemPrompt}
+                  onChange={(e) => handleInputChange('systemPrompt', e.target.value)}
+                  disabled={!isEditing}
+                  rows={8}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The system prompt provides context and instructions for the AI model that powers this agent.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {isEditing && (
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={() => setIsEditing(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit}>
+            <Save className="h-4 w-4 mr-2" />
+            Save Changes
+          </Button>
+        </div>
+      )}
     </div>
   );
 } 

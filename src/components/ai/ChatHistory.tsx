@@ -1,42 +1,87 @@
-import React from 'react';
-import { Clock, Star, Trash2, MessageSquare, ThumbsUp, ThumbsDown, Copy, Share, Code, Bookmark, Pencil } from 'lucide-react';
+import React, { useState } from 'react';
+import { Star, Trash2, MessageSquare, Search, Plus, FolderPlus } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import type { Message } from '../../types/ai';
-import { Tooltip } from '../ui/Tooltip';
-import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 
-interface MessageActions {
-  like: () => void;
-  dislike: () => void;
-  copy: () => void;
-  share: () => void;
-  toggleCode: () => void;
-  bookmark: () => void;
+interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
+  isFavorite?: boolean;
 }
 
 interface ChatHistoryProps {
-  conversations?: Array<{
-    id: string;
-    title: string;
-    messages: Message[];
-    createdAt: Date;
-    updatedAt: Date;
-    isFavorite?: boolean;
-  }>;
+  conversations?: Conversation[];
   onSelectConversation?: (conversationId: string) => void;
   onDeleteConversation?: (conversationId: string) => void;
   onToggleFavorite?: (conversationId: string) => void;
-  selectedConversationId?: string;
-  mode?: 'flash' | 'flash-lite' | 'pro';
-  messages: Message[];
-  onDelete?: (messageId: string) => void;
-  onEdit?: (id: string, content: string) => void;
-  renderActions?: (message: Message) => MessageActions;
-  reactions?: Record<string, 'like' | 'dislike' | null>;
-  codeView?: Record<string, boolean>;
-  bookmarked?: Set<string>;
+  onNewChat?: () => void;
+  onNewCase?: () => void;
+  selectedConversationId?: string | null;
+}
+
+function ChatHistoryItem({
+  conversation,
+  isSelected,
+  onSelect,
+  onDelete,
+  onToggleFavorite
+}: {
+  conversation: Conversation;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        'group flex items-center justify-between py-2 px-3 cursor-pointer transition-colors',
+        isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50 text-foreground'
+      )}
+      onClick={() => onSelect(conversation.id)}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        {conversation.isFavorite ? (
+          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 flex-shrink-0" />
+        ) : (
+          <MessageSquare className="h-4 w-4 flex-shrink-0" />
+        )}
+        <span className="text-sm truncate">{conversation.title}</span>
+      </div>
+      
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          className="p-1 hover:bg-background/80 rounded"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(conversation.id);
+          }}
+        >
+          <Star
+            className={cn(
+              'h-4 w-4',
+              conversation.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'
+            )}
+          />
+        </button>
+        
+        <button
+          className="p-1 hover:bg-background/80 rounded text-destructive hover:text-destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(conversation.id);
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function ChatHistory({
@@ -44,261 +89,103 @@ export function ChatHistory({
   onSelectConversation = () => {},
   onDeleteConversation = () => {},
   onToggleFavorite = () => {},
-  selectedConversationId,
-  mode = 'pro',
-  messages,
-  onDelete,
-  onEdit,
-  renderActions,
-  reactions = {},
-  codeView = {},
-  bookmarked = new Set()
+  onNewChat = () => {},
+  onNewCase = () => {},
+  selectedConversationId
 }: ChatHistoryProps) {
-  const [editingMessage, setEditingMessage] = React.useState<string | null>(null);
-  const [editContent, setEditContent] = React.useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const getModeStyles = () => {
-    switch (mode) {
-      case 'flash':
-        return {
-          active: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-          hover: 'hover:bg-blue-50 dark:hover:bg-blue-800',
-          icon: 'text-blue-500'
-        };
-      case 'flash-lite':
-        return {
-          active: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-          hover: 'hover:bg-green-50 dark:hover:bg-green-800',
-          icon: 'text-green-500'
-        };
-      case 'pro':
-        return {
-          active: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-          hover: 'hover:bg-purple-50 dark:hover:bg-purple-800',
-          icon: 'text-purple-500'
-        };
-      default:
-        return {
-          active: 'bg-primary/10 text-primary',
-          hover: 'hover:bg-primary/5',
-          icon: 'text-primary'
-        };
-    }
-  };
+  const filteredConversations = conversations.filter(conv => 
+    conv.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const styles = getModeStyles();
-
-  const handleStartEdit = (message: Message) => {
-    setEditingMessage(message.id);
-    setEditContent(message.content);
-  };
-
-  const handleSaveEdit = (id: string) => {
-    if (onEdit && editContent.trim()) {
-      onEdit(id, editContent);
-    }
-    setEditingMessage(null);
-  };
+  const favoriteConversations = filteredConversations.filter(conv => conv.isFavorite);
+  const otherConversations = filteredConversations.filter(conv => !conv.isFavorite);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 px-2 py-1">
-        <Clock className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">Chat History</span>
+    <div className="w-64 flex flex-col h-full border-r bg-card">
+      {/* Action Buttons */}
+      <div className="p-3 space-y-2 border-b bg-background/50">
+        <Button
+          variant="secondary"
+          className="w-full justify-start gap-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600"
+          onClick={onNewCase}
+        >
+          <FolderPlus className="h-4 w-4" />
+          <span>New Case</span>
+        </Button>
+
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+          onClick={onNewChat}
+        >
+          <Plus className="h-4 w-4" />
+          <span>New Chat</span>
+        </Button>
       </div>
-      
-      <div className="space-y-1">
-        {conversations.map((conversation) => (
-          <div
-            key={conversation.id}
-            className={cn(
-              'group flex items-center justify-between px-2 py-2 rounded-lg cursor-pointer',
-              styles.hover,
-              selectedConversationId === conversation.id && styles.active
-            )}
-            onClick={() => onSelectConversation(conversation.id)}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <MessageSquare className="h-4 w-4 shrink-0" />
-              <span className="text-sm truncate">{conversation.title}</span>
+
+      {/* Search */}
+      <div className="p-3 border-b bg-background/50">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search messages..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+      </div>
+
+      {/* Conversations List */}
+      <div className="flex-1 overflow-y-auto">
+        {favoriteConversations.length > 0 && (
+          <div className="py-2">
+            <div className="px-3 py-1.5 text-sm font-medium text-muted-foreground">
+              Favorites
             </div>
-            
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleFavorite(conversation.id);
-                }}
-              >
-                <Star
-                  className={cn(
-                    'h-4 w-4',
-                    conversation.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'
-                  )}
+            <div>
+              {favoriteConversations.map((conversation) => (
+                <ChatHistoryItem
+                  key={conversation.id}
+                  conversation={conversation}
+                  isSelected={selectedConversationId === conversation.id}
+                  onSelect={onSelectConversation}
+                  onDelete={onDeleteConversation}
+                  onToggleFavorite={onToggleFavorite}
                 />
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-destructive hover:text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteConversation(conversation.id);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              ))}
             </div>
           </div>
-        ))}
+        )}
+
+        <div className="py-2">
+          {favoriteConversations.length > 0 && (
+            <div className="px-3 py-1.5 text-sm font-medium text-muted-foreground">
+              Recent
+            </div>
+          )}
+          <div>
+            {otherConversations.map((conversation) => (
+              <ChatHistoryItem
+                key={conversation.id}
+                conversation={conversation}
+                isSelected={selectedConversationId === conversation.id}
+                onSelect={onSelectConversation}
+                onDelete={onDeleteConversation}
+                onToggleFavorite={onToggleFavorite}
+              />
+            ))}
+          </div>
+        </div>
+
+        {filteredConversations.length === 0 && searchQuery && (
+          <div className="px-3 py-2 text-sm text-muted-foreground text-center">
+            No conversations found
+          </div>
+        )}
       </div>
-
-      {messages.map((message) => {
-        const actions = renderActions && renderActions(message);
-        const isUser = message.role === 'user';
-        const isEditing = editingMessage === message.id;
-
-        return (
-          <div
-            key={message.id}
-            className={cn(
-              'group relative rounded-lg p-4 transition-all',
-              isUser ? 'bg-primary/5' : 'bg-card/80 backdrop-blur-sm',
-              message.role === 'error' && 'bg-destructive/10'
-            )}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">
-                    {isUser ? 'You' : 'AI Assistant'}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(message.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
-
-                {isEditing ? (
-                  <div className="space-y-2">
-                    <Input
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      className="w-full"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleSaveEdit(message.id)}
-                      >
-                        Save
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setEditingMessage(null)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={cn(
-                    'prose prose-sm dark:prose-invert max-w-none',
-                    isUser ? 'text-sm' : 'text-base text-foreground'
-                  )}>
-                    {message.content}
-                  </div>
-                )}
-
-                {message.documents && message.documents.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {message.documents.map(doc => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center gap-1 text-xs bg-primary/10 px-2 py-1 rounded-full"
-                      >
-                        <span>{doc.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {isUser && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleStartEdit(message)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => onDelete && onDelete(message.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={actions?.copy}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={actions?.bookmark}
-                >
-                  <Bookmark className={cn(
-                    "h-4 w-4",
-                    bookmarked.has(message.id) && "fill-primary text-primary"
-                  )} />
-                </Button>
-                {!isUser && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={actions?.like}
-                    >
-                      <ThumbsUp className={cn(
-                        "h-4 w-4",
-                        reactions[message.id] === 'like' && "fill-primary text-primary"
-                      )} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={actions?.dislike}
-                    >
-                      <ThumbsDown className={cn(
-                        "h-4 w-4",
-                        reactions[message.id] === 'dislike' && "fill-destructive text-destructive"
-                      )} />
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 } 

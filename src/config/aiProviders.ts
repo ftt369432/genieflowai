@@ -1,3 +1,5 @@
+import type { AIModel } from '../types/ai';
+
 export interface AIProvider {
   id: string;
   name: string;
@@ -7,28 +9,44 @@ export interface AIProvider {
   defaultModel?: string;
   maxTokens?: number;
   temperature?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  stopSequences?: string[];
+  maxRetries?: number;
+  retryDelay?: number;
+  timeout?: number;
+  debug?: boolean;
 }
 
-export const defaultProvider = 'openai';
+export const defaultProvider = 'google';
 
 export const aiProviders = [
   {
     id: 'openai',
     name: 'OpenAI',
     apiKeyName: 'VITE_OPENAI_API_KEY',
-    enabled: true,
+    enabled: false,
     models: ['gpt-4', 'gpt-3.5-turbo'],
     defaultModel: 'gpt-3.5-turbo',
     maxTokens: 2048,
     temperature: 0.7
   },
   {
-    id: 'gemini',
+    id: 'google',
     name: 'Google Gemini',
     apiKeyName: 'VITE_GEMINI_API_KEY',
     enabled: true,
-    models: ['gemini-pro', 'gemini-pro-vision'],
-    defaultModel: 'gemini-pro',
+    models: [
+      'gemini-2.5-pro-exp-03-25',  // Gemini 2.5 Pro Experimental
+      'gemini-2.0-flash',          // Gemini 2.0 Flash
+      'gemini-2.0-flash-lite',     // Gemini 2.0 Flash-Lite
+      'gemini-1.5-flash',          // Gemini 1.5 Flash
+      'gemini-1.5-flash-8b',       // Gemini 1.5 Flash-8B
+      'gemini-1.5-pro',            // Gemini 1.5 Pro
+      'gemini-embedding-exp'       // Gemini Embedding
+    ],
+    defaultModel: 'gemini-2.0-flash',
     maxTokens: 2048,
     temperature: 0.7
   },

@@ -1,4 +1,4 @@
-import { encrypt, decrypt, secureCompare } from '../../utils/encryption';
+import { encrypt, decrypt, secureCompare } from '../../lib/utils';
 
 export type Provider = 'openai' | 'anthropic' | 'google';
 

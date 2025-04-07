@@ -2,7 +2,7 @@ import React from 'react';
 import { Dialog, DialogContent } from '../ui/Dialog';
 import { Button } from '../ui/Button';
 import type { Task } from '../../types/tasks';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
 interface TaskConversionModalProps {
   isOpen: boolean;
@@ -20,6 +20,19 @@ export function TaskConversionModal({
   const convertibleTasks = tasks.filter(task => 
     task.status !== 'completed' && task.dueDate
   );
+
+  // Helper function to safely format dates
+  const formatDate = (date: Date | string | undefined): string => {
+    if (!date) return 'No date';
+    try {
+      // If it's a string, parse it first
+      const dateObj = typeof date === 'string' ? parseISO(date) : date;
+      return format(dateObj, 'MMM d, yyyy');
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -52,7 +65,7 @@ export function TaskConversionModal({
                         </p>
                       )}
                       <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
-                        <span>Due: {format(task.dueDate!, 'MMM d, yyyy')}</span>
+                        <span>Due: {formatDate(task.dueDate)}</span>
                         {task.estimatedTime && (
                           <span>• {task.estimatedTime} min</span>
                         )}

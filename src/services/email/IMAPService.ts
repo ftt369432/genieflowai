@@ -1,5 +1,5 @@
 import type { IMAPConfig } from '../../components/email/IMAPConfigForm';
-import type { EmailMessage } from './EmailService';
+import type { EmailMessage } from './types';
 import type { EmailFolder } from '../../types';
 
 const API_BASE_URL = '/api/email'; // Update this to match your backend API URL

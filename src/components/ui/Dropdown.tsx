@@ -52,4 +52,44 @@ export function Dropdown({ trigger, items, side = 'bottom', align = 'end' }: Dro
       </DropdownMenuPrimitive.Portal>
     </DropdownMenuPrimitive.Root>
   );
-} 
+}
+
+// Define basic components to prevent errors when the real Radix UI components are not available
+const DropdownMenu = ({ children }: { children: React.ReactNode }) => {
+  return <div className="dropdown-menu">{children}</div>;
+};
+
+const DropdownMenuTrigger = ({ children }: { children: React.ReactNode }) => {
+  return <button className="dropdown-trigger">{children}</button>;
+};
+
+const DropdownMenuContent = ({ children }: { children: React.ReactNode }) => {
+  return <div className="dropdown-content">{children}</div>;
+};
+
+const DropdownMenuItem = ({ children }: { children: React.ReactNode }) => {
+  return <div className="dropdown-item">{children}</div>;
+};
+
+const DropdownMenuSeparator = () => {
+  return <hr className="dropdown-separator" />;
+};
+
+const DropdownMenuGroup = ({ children }: { children: React.ReactNode }) => {
+  return <div className="dropdown-group">{children}</div>;
+};
+
+const DropdownMenuLabel = ({ children }: { children: React.ReactNode }) => {
+  return <div className="dropdown-label">{children}</div>;
+};
+
+// Export the components
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+}; 

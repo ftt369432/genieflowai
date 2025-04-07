@@ -1,10 +1,19 @@
-// Central store exports
-export { useAIStore } from './aiStore';
-export { useLegalStore } from './legalStore';
-export { useThemeStore } from './themeStore';
-export { useUserStore } from './userStore';
-
 import { create } from 'zustand';
+
+// Core stores
+export * from './agentStore';
+export * from './userStore';
+export * from './themeStore';
+export * from './sidebarStore';
+export * from './aiStore';
+export * from './taskStore';
+export * from './calendarStore';
+export * from './knowledgeBaseStore';
+export * from './assistantStore';
+export * from './notebookStore';
+export * from './workflowStore';
+export * from './legalStore';
+export * from './auditStore';
 
 interface Notification {
   id: string;
@@ -28,27 +37,29 @@ interface GlobalStore {
   setSidebarOpen: (value: boolean) => void;
 }
 
-export const useGlobalStore = create<GlobalStore>((set) => ({
+type SetState = (partial: Partial<GlobalStore> | ((state: GlobalStore) => Partial<GlobalStore>), replace?: boolean) => void;
+
+export const useGlobalStore = create<GlobalStore>((set: SetState) => ({
   loading: false,
-  setLoading: (loading) => set({ loading }),
+  setLoading: (loading: boolean) => set({ loading }),
   error: null,
-  setError: (error) => set({ error }),
+  setError: (error: string | null) => set({ error }),
   notifications: [],
-  addNotification: (notification) =>
-    set((state) => ({
+  addNotification: (notification: Omit<Notification, 'id'>) =>
+    set((state: GlobalStore) => ({
       notifications: [
         ...state.notifications,
         { ...notification, id: Math.random().toString() },
       ],
     })),
-  removeNotification: (id) =>
-    set((state) => ({
-      notifications: state.notifications.filter((n) => n.id !== id),
+  removeNotification: (id: string) =>
+    set((state: GlobalStore) => ({
+      notifications: state.notifications.filter((n: Notification) => n.id !== id),
     })),
   theme: 'light',
-  setTheme: (theme) => set({ theme }),
+  setTheme: (theme: 'light' | 'dark') => set({ theme }),
   isAuthenticated: false,
-  setAuthenticated: (value) => set({ isAuthenticated: value }),
+  setAuthenticated: (value: boolean) => set({ isAuthenticated: value }),
   isSidebarOpen: true,
-  setSidebarOpen: (value) => set({ isSidebarOpen: value }),
+  setSidebarOpen: (value: boolean) => set({ isSidebarOpen: value }),
 }));

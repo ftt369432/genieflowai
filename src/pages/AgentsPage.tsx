@@ -1,72 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Brain, Plus, Settings, Activity, Zap, Search } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { AgentSuggestionPanel } from '../components/agents/AgentSuggestionPanel';
 import { ActiveAgentsPanel } from '../components/ai/ActiveAgentsPanel';
+import { useAgentStore } from '../store/agentStore';
+import { useNavigate } from 'react-router-dom';
+import type { Agent, AgentType, AgentCapability } from '../types/agent';
 
-interface Agent {
-  id: string;
-  name: string;
-  type: string;
-  status: 'active' | 'idle' | 'error';
-  lastActive: Date;
-  tasks: {
-    completed: number;
-    total: number;
-  };
-  performance: number;
-}
+export function AgentsPageComponent() {
+  const { 
+    agents, 
+    createAgent, 
+    activateAgent, 
+    deactivateAgent,
+    selectedAgentId,
+    selectAgent 
+  } = useAgentStore();
+  
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
 
-export function AIAgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>([
-    {
-      id: '1',
-      name: 'Data Analyzer',
-      type: 'Analysis',
-      status: 'active',
-      lastActive: new Date(),
-      tasks: { completed: 45, total: 50 },
-      performance: 95
-    },
-    {
-      id: '2',
-      name: 'Code Assistant',
-      type: 'Development',
-      status: 'idle',
-      lastActive: new Date(Date.now() - 3600000),
-      tasks: { completed: 120, total: 150 },
-      performance: 88
-    },
-    {
-      id: '3',
-      name: 'Research Bot',
-      type: 'Research',
-      status: 'active',
-      lastActive: new Date(),
-      tasks: { completed: 75, total: 80 },
-      performance: 92
-    }
-  ]);
-
+  // Calculate metrics from actual agent data
   const metrics = {
     totalAgents: agents.length,
     activeAgents: agents.filter(a => a.status === 'active').length,
-    averagePerformance: Math.round(
-      agents.reduce((acc, curr) => acc + curr.performance, 0) / agents.length
-    ),
-    totalTasks: agents.reduce((acc, curr) => acc + curr.tasks.total, 0)
+    averagePerformance: agents.length > 0 
+      ? Math.round(agents.reduce((acc, curr) => acc + curr.metrics.performance, 0) / agents.length)
+      : 0,
+    totalTasks: agents.reduce((acc, curr) => acc + curr.metrics.tasks.total, 0)
   };
+
+  // Handle selecting an agent to view details
+  const handleSelectAgent = (id: string) => {
+    selectAgent(id);
+    navigate(`/agents/${id}`);
+  };
+
+  // Handle creating a new agent from template
+  const handleCreateAgent = (template: any) => {
+    // Convert template capabilities to proper format for our agent store
+    const capabilities = template.capabilities.map((cap: string) => {
+      return cap.toLowerCase().replace(/\s+/g, '-') as AgentCapability;
+    });
+    
+    createAgent(template.name, template.type as AgentType, capabilities);
+  };
+
+  // Filter agents based on search query
+  const filteredAgents = agents.filter(agent =>
+    agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    agent.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    agent.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">AI Agents</h1>
-          <p className="text-text-secondary">Manage and monitor your AI workforce</p>
+          <h1 className="text-2xl font-bold">AI Agents</h1>
+          <p className="text-muted-foreground">Manage and monitor your AI workforce</p>
         </div>
-        <Button className="flex items-center gap-2">
+        <Button className="flex items-center gap-2" onClick={() => navigate('/agent-wizard')}>
           <Plus className="w-4 h-4" />
           New Agent
         </Button>
@@ -75,17 +72,15 @@ export function AIAgentsPage() {
       {/* Search and Filters */}
       <div className="flex gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
-          <input
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
             type="text"
             placeholder="Search agents..."
-            className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-paper text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full pl-10"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <Button variant="outline">
-          <Settings className="w-4 h-4 mr-2" />
-          Filters
-        </Button>
       </div>
 
       {/* Metrics */}
@@ -96,41 +91,41 @@ export function AIAgentsPage() {
               <Brain className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-text-primary">{metrics.totalAgents}</div>
-              <div className="text-sm text-text-secondary">Total Agents</div>
+              <div className="text-2xl font-bold">{metrics.totalAgents}</div>
+              <div className="text-sm text-muted-foreground">Total Agents</div>
             </div>
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-success/10">
-              <Activity className="w-5 h-5 text-success" />
+            <div className="p-2 rounded-lg bg-green-500/10">
+              <Activity className="w-5 h-5 text-green-500" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-text-primary">{metrics.activeAgents}</div>
-              <div className="text-sm text-text-secondary">Active Agents</div>
+              <div className="text-2xl font-bold">{metrics.activeAgents}</div>
+              <div className="text-sm text-muted-foreground">Active Agents</div>
             </div>
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-warning/10">
-              <Zap className="w-5 h-5 text-warning" />
+            <div className="p-2 rounded-lg bg-yellow-500/10">
+              <Zap className="w-5 h-5 text-yellow-500" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-text-primary">{metrics.averagePerformance}%</div>
-              <div className="text-sm text-text-secondary">Avg. Performance</div>
+              <div className="text-2xl font-bold">{metrics.averagePerformance}%</div>
+              <div className="text-sm text-muted-foreground">Avg. Performance</div>
             </div>
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-info/10">
-              <Activity className="w-5 h-5 text-info" />
+            <div className="p-2 rounded-lg bg-blue-500/10">
+              <Activity className="w-5 h-5 text-blue-500" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-text-primary">{metrics.totalTasks}</div>
-              <div className="text-sm text-text-secondary">Total Tasks</div>
+              <div className="text-2xl font-bold">{metrics.totalTasks}</div>
+              <div className="text-sm text-muted-foreground">Total Tasks</div>
             </div>
           </div>
         </Card>
@@ -140,7 +135,9 @@ export function AIAgentsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Active Agents */}
         <div className="lg:col-span-2">
-          <ActiveAgentsPanel onSelectAgent={(id) => console.log('Selected agent:', id)} />
+          <ActiveAgentsPanel 
+            onSelectAgent={handleSelectAgent}
+          />
         </div>
 
         {/* Agent Suggestions */}
@@ -166,9 +163,30 @@ export function AIAgentsPage() {
                     description: 'Helps with coding and development',
                     type: 'development',
                     capabilities: ['Code Generation', 'Code Review', 'Debugging']
+                  },
+                  {
+                    id: 'analyst',
+                    name: 'Data Analyst',
+                    description: 'Analyzes data and generates insights',
+                    type: 'analysis',
+                    capabilities: ['Data Processing', 'Visualization', 'Statistical Analysis']
+                  },
+                  {
+                    id: 'email',
+                    name: 'Email Assistant',
+                    description: 'Manages and processes emails',
+                    type: 'email',
+                    capabilities: ['Email Processing', 'Drafting', 'Task Management']
+                  },
+                  {
+                    id: 'document',
+                    name: 'Document Processor',
+                    description: 'Analyzes and extracts information from documents',
+                    type: 'document', 
+                    capabilities: ['Document Analysis', 'Data Extraction', 'Summarization']
                   }
                 ]}
-                onCreateAgent={(pattern) => console.log('Create agent:', pattern)}
+                onCreateAgent={handleCreateAgent}
               />
             </CardContent>
           </Card>
@@ -176,4 +194,7 @@ export function AIAgentsPage() {
       </div>
     </div>
   );
-} 
+}
+
+// For backward compatibility
+export const AIAgentsPage = AgentsPageComponent; 

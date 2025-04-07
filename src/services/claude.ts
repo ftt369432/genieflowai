@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({
   apiKey: import.meta.env.VITE_CLAUDE_API_KEY,
+  dangerouslyAllowBrowser: true,
 });
 
 export const ClaudeService = {
@@ -12,6 +13,10 @@ export const ClaudeService = {
       messages: [{ role: 'user', content }]
     });
 
-    return message.content[0].text;
+    if (message.content[0].type === 'text') {
+      return message.content[0].text;
+    }
+    
+    return "Unable to process response from Claude";
   }
 } as const; 

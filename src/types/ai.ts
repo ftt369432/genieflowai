@@ -1,100 +1,180 @@
-export interface AIModel {
-  id: string;
-  name: string;
-  provider: 'openai' | 'google' | 'anthropic';
-}
+/**
+ * AI Types
+ * 
+ * This file defines the types related to AI functionality in the application.
+ */
 
-export interface AIConfig {
-  model: string;
-  temperature?: number;
-  maxTokens?: number;
-  systemPrompt?: string;
-  context?: DocumentReference[];
-}
-
-export interface MessageMetadata {
-  mode?: 'flash' | 'flash-lite' | 'pro';
-  model?: 'gemini-2.0-flash' | 'gemini-2.0-flash-lite' | 'gemini-2.0-pro' | 'gemini-pro';
-  processingTime?: number;
-  error?: boolean;
-  tokens?: {
-    prompt: number;
-    completion: number;
-    total: number;
-  };
-}
-
-export interface Message {
+export interface AIDocument {
   id: string;
   content: string;
-  role: 'user' | 'assistant' | 'error';
-  timestamp: Date;
-  documents?: DocumentReference[];
-  metadata?: MessageMetadata;
-}
-
-export interface DocumentReference {
-  id: string;
-  title: string;
-  excerpt: string;
-  type: 'pdf' | 'doc' | 'txt' | 'md';
-  relevance: number; // 0-1 score for how relevant the document is
+  metadata: {
+    source: string;
+    title?: string;
+    author?: string;
+    date?: Date;
+    category?: string;
+    tags?: string[];
+  };
+  embedding?: number[];
+  relevanceScore?: number;
 }
 
 export interface AIFolder {
   id: string;
   name: string;
-  parentId: string | null;
+  documents: AIDocument[];
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface AIDocument {
+export interface AIPrompt {
+  id: string;
+  name: string;
+  content: string;
+  category: string;
+  tags?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AIModel {
+  id: string;
+  name: string;
+  provider: string;
+  capabilities: string[];
+  contextSize: number;
+}
+
+export type AICapability = 
+  | 'text-generation' 
+  | 'chat' 
+  | 'embeddings' 
+  | 'image-generation' 
+  | 'text-to-speech'
+  | 'speech-to-text'
+  | 'code-generation'
+  | 'summarization'
+  | 'translation';
+
+export interface AIAssistant {
+  id: string;
+  name: string;
+  description?: string;
+  model: AIModel;
+  systemPrompt?: string;
+  knowledgeBase?: AIFolder[];
+  avatarUrl?: string;
+  settings: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+    presencePenalty?: number;
+    frequencyPenalty?: number;
+  };
+}
+
+export interface AIMessage {
+  id: string;
+  role: 'system' | 'user' | 'assistant' | 'function';
+  content: string;
+  createdAt: Date;
+  metadata?: {
+    tokens?: number;
+    processingTime?: number;
+    sources?: string[];
+    functionCall?: {
+      name: string;
+      arguments: Record<string, any>;
+    };
+  };
+}
+
+export interface AIConversation {
   id: string;
   title: string;
-  content: string;
-  type: 'pdf' | 'doc' | 'docx' | 'txt' | 'md' | 'drive' | 'image';
-  tags: string[];
-  category?: string;
-  clientId?: string;
-  caseType?: string;
-  caseStatus?: 'active' | 'pending' | 'closed';
+  messages: AIMessage[];
+  assistant: AIAssistant;
+  createdAt: Date;
+  updatedAt: Date;
   metadata?: {
-    author?: string;
-    court?: string;
-    caseNumber?: string;
-    filingDate?: string;
-    jurisdiction?: string;
-    docType?: 'pleading' | 'motion' | 'order' | 'evidence' | 'correspondence';
-  };
-  insights?: {
-    topics: string[];
-    relevance: number;
+    totalTokens?: number;
+    tags?: string[];
     summary?: string;
-    citations?: string[];
-    keyPoints?: string[];
   };
-  createdAt: string;
-  updatedAt: string;
-  folderId: string | null;
-  // Drive-specific fields
-  size?: number;
+}
+
+export interface AIAnalysis {
+  summary: string;
+  entities?: string[];
+  keyPhrases?: string[];
+  sentiment?: 'positive' | 'negative' | 'neutral';
+  topics?: string[];
+  language?: string;
+  classification?: Record<string, number>;
+  complexity?: 'simple' | 'moderate' | 'complex';
+}
+
+export interface AIConfig {
+  provider: string;
+  defaultModel: AIModel;
+  apiKey?: string;
+  apiEndpoint?: string;
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  stopSequences?: string[];
+  maxRetries?: number;
+  retryDelay?: number;
+  timeout?: number;
+  debug?: boolean;
+}
+
+export interface MessageMetadata {
+  mode?: 'flash' | 'flash-lite' | 'pro';
+  model?: string;
+  provider?: string;
+  tokens?: number;
+  processingTime?: number;
+  context?: DocumentReference[];
+  error?: string;
+  edited?: boolean;
+  threadId?: string;
+  parentId?: string;
+  reactions?: { [key: string]: string[] };
+  formatting?: {
+    isBold?: boolean;
+    isItalic?: boolean;
+    isCode?: boolean;
+    language?: string;
+  };
+}
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  attachments?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface DocumentReference {
+  id: string;
+  title: string;
+  type: string;
   url?: string;
-  thumbnailUrl?: string;
-  mimeType?: string;
-  shared?: boolean;
-  ownerId?: string;
-  lastModifiedBy?: string;
-  references?: {
-    documentId: string;
-    title: string;
-    relevance: number;
-  }[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface SearchResult {
-  document: AIDocument;
-  similarity: number;
+  id: string;
+  title: string;
+  content: string;
+  url?: string;
+  score: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface EmbeddingResponse {
@@ -103,4 +183,46 @@ export interface EmbeddingResponse {
     prompt_tokens: number;
     total_tokens: number;
   };
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
+  model: string;
+  provider: string;
+  systemPrompt?: string;
+  category?: 'work' | 'learning' | 'productivity' | 'personal';
+  tags?: string[];
+  pinned?: boolean;
+  documents?: AIDocument[];
+  clientId?: string;
+  caseType?: string;
+  caseStatus?: 'active' | 'pending' | 'closed';
+  lastAccessed?: Date;
+}
+
+export interface AIState extends AIConfig {
+  isLoading: boolean;
+  error: string | null;
+}
+
+export interface SearchFilters {
+  timeRange?: string;
+  sourceType?: string;
+  sortBy?: string;
+  language?: string;
+  region?: string;
+}
+
+export interface DocumentProcessingOptions {
+  extractText: boolean;
+  generateSummary: boolean;
+  detectLanguage: boolean;
+  extractMetadata: boolean;
+  performOCR: boolean;
+  splitIntoChunks: boolean;
+  chunkSize: number;
 } 

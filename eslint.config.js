@@ -1,41 +1,48 @@
-import { ESLint } from 'eslint';
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import reactPlugin from 'eslint-plugin-react';
+import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
-const eslint = new ESLint({
-  overrideConfig: {
-    extends: [
-      'eslint:recommended',
-      'plugin:@typescript-eslint/recommended',
-      'plugin:react/recommended',
-      'plugin:react-hooks/recommended',
-      'plugin:prettier/recommended',
-      'prettier',
-    ],
-    parser: '@typescript-eslint/parser',
-    parserOptions: {
-      ecmaVersion: 2020,
+export default [
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    files: ['**/*.{ts,tsx}'],
+    plugins: {
+      'react': reactPlugin,
+      'react-hooks': reactHooksPlugin
+    },
+    languageOptions: {
+      ecmaVersion: 2022,
       sourceType: 'module',
-      ecmaFeatures: {
-        jsx: true,
-      },
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true
+        }
+      }
     },
-    plugins: ['@typescript-eslint', 'react'],
-    rules: {
-      // Add your custom rules here
-    },
-    overrides: [
-      {
-        files: ['*.js', '*.jsx', '*.ts', '*.tsx'],
-        rules: {
-          // Add any specific rules for JS/JSX/TS/TSX files here
-        },
-      },
-    ],
     settings: {
       react: {
-        version: 'detect', // Automatically detect the react version
-      },
+        version: 'detect'
+      }
     },
-  },
-});
-
-export default eslint;
+    rules: {
+      // Default rules
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-debugger': 'warn',
+      
+      // TypeScript rules
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': ['warn', { 
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_' 
+      }],
+      
+      // React rules
+      'react/prop-types': 'off',
+      'react/react-in-jsx-scope': 'off',
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn'
+    }
+  }
+]; 

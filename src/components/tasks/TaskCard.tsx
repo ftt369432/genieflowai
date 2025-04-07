@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { Task, TaskStatus } from '../../types/tasks';
 import { Button } from '../ui/Button';
 import { Dropdown } from '../ui/Dropdown';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
 
 interface TaskCardProps {
   task: Task;

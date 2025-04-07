@@ -2,7 +2,7 @@ import React from 'react';
 import { Sun, Moon, Laptop, Check } from 'lucide-react';
 import { useThemeStore } from '../../store/themeStore';
 import type { ThemeMode, ThemeColor, ThemeStyle } from '../../store/themeStore';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
 
 const THEME_MODES: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
