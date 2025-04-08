@@ -150,7 +150,7 @@ importers:
         specifier: ^5.1.91
         version: 5.1.91
       react:
-        specifier: 18.2.0
+        specifier: ^18.2.0
         version: 18.2.0
       react-beautiful-dnd:
         specifier: ^13.1.1
@@ -171,7 +171,7 @@ importers:
         specifier: ^16.0.1
         version: 16.0.1
       react-dom:
-        specifier: 18.2.0
+        specifier: ^18.2.0
         version: 18.2.0(react@18.2.0)
       react-dropzone:
         specifier: ^14.3.8
@@ -198,7 +198,7 @@ importers:
         specifier: ^2.1.7
         version: 2.1.7(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^6.16.0
+        specifier: ^6.22.3
         version: 6.30.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-syntax-highlighter:
         specifier: ^15.6.1
