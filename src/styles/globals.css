@@ -148,6 +148,42 @@
   .dark select {
     @apply bg-gray-800 border-gray-600 text-white placeholder-gray-400;
   }
+
+  /* Enhanced sidebar navigation for dark mode */
+  .dark [role="navigation"] {
+    @apply bg-gray-900 border-gray-700;
+  }
+
+  .dark [role="navigation"] a {
+    @apply text-white hover:bg-gray-800;
+  }
+
+  .dark [role="navigation"] a span {
+    @apply text-white font-medium;
+  }
+
+  .dark [role="navigation"] a:hover span {
+    @apply text-white;
+  }
+
+  .dark [role="navigation"] h3 {
+    @apply text-blue-300 font-semibold;
+  }
+
+  .dark [role="navigation"] h1 {
+    @apply text-white;
+  }
+
+  /* Keep the sidebar icons colorful in dark mode */
+  .dark [role="navigation"] a svg {
+    @apply opacity-100;
+  }
+
+  /* Make active item stand out more in dark mode */
+  .dark [role="navigation"] a.active,
+  .dark [role="navigation"] a[aria-current="page"] {
+    @apply bg-blue-900/30 text-blue-100 border-l-2 border-blue-400;
+  }
 }
 
 @layer utilities {

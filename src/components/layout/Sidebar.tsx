@@ -233,12 +233,13 @@ function SidebarLink({ item, isActive, isCollapsed }: SidebarLinkProps) {
       to={item.href}
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:bg-muted",
-        isActiveLink ? "bg-muted font-medium" : "text-muted-foreground"
+        isActiveLink ? "bg-muted font-medium active" : "text-muted-foreground"
       )}
       onClick={handleClick}
+      aria-current={isActiveLink ? "page" : undefined}
     >
       <item.icon className={cn("h-5 w-5", item.color)} />
-      <span>{item.title}</span>
+      <span className="sidebar-item-text">{item.title}</span>
       {item.notification && (
         <span className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
           {item.notification}
@@ -335,11 +336,15 @@ export function Sidebar({ isCollapsed: propIsCollapsed, onToggle }: SidebarProps
   // Get responsive classes
   const sidebarClasses = cn(
     "flex flex-col h-screen border-r bg-background transition-all duration-300",
-    collapsed ? "w-[70px]" : "w-64",
+    collapsed ? "w-[70px]" : "w-64"
   );
 
   return (
-    <div ref={sidebarRef} className={sidebarClasses}>
+    <div
+      ref={sidebarRef}
+      className={sidebarClasses}
+      role="navigation"
+    >
       <div className="h-16 flex items-center px-4 border-b shadow-sm">
         <div className="flex items-center justify-between w-full">
           {!collapsed && (
