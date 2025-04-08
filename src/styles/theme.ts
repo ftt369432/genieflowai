@@ -17,11 +17,11 @@ export const themes: Record<Theme, ThemeColors> = {
     accent: '#3b82f6'
   },
   dark: {
-    primary: '#38bdf8',
-    secondary: '#94a3b8',
-    background: '#1a1b26',
-    text: '#e2e8f0',
-    accent: '#60a5fa'
+    primary: '#60a5fa',
+    secondary: '#c0d4f5',
+    background: '#0c1222',
+    text: '#ffffff',
+    accent: '#4287ff'
   },
   cyberpunk: {
     primary: '#00fff0',
