@@ -188,6 +188,17 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+
+              {/* Email Settings Route */}
+              <Route 
+                path="/email-settings" 
+                element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                } 
+              />
+
               <Route 
                 path="/subscription" 
                 element={

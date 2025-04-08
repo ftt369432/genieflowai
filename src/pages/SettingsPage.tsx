@@ -1,31 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { ThemeSelector } from '../components/ui/ThemeSelector';
-import { ThemePreview } from '../components/ui/ThemePreview';
+import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAI } from '../contexts/AIContext';
+import { useVoiceCommands } from '../hooks/useVoiceCommands';
+import { Brain, Zap, Bot, Monitor, Sun, Moon, Mail } from 'lucide-react';
 import { Switch } from '../components/ui/Switch';
 import { Slider } from '../components/ui/Slider';
+import { Button } from '../components/ui/Button';
 import { themes } from '../config/themes';
-import { Sun, Moon, Monitor, Brain, Mic, Zap, Bot } from 'lucide-react';
-import { useAI } from '../hooks/useAI';
-import { useVoiceCommands } from '../hooks/useVoiceCommands';
-import { AIModelSelector } from '../components/ai/AIModelSelector';
-import { SystemPrompt } from '../components/ai/SystemPrompt';
-import type { MessageMetadata } from '../types/ai';
+import { ThemePreview } from '../components/settings/ThemePreview';
+import { useNavigate } from 'react-router-dom';
 
-type AIMode = MessageMetadata['mode'];
+type ExtendedEffects = Record<string, boolean>;
 
 export function SettingsPage() {
-  const { currentTheme, setTheme, mode, setMode } = useTheme();
+  const { currentTheme, setTheme } = useTheme();
   const { config, updateConfig } = useAI();
   const { isListening, startListening, stopListening } = useVoiceCommands({
     onCommand: (command) => console.log('Voice command:', command)
   });
+  const navigate = useNavigate();
   
+  // Use string for the mode state since we don't have access to the actual Theme type
+  const [mode, setMode] = useState<'light' | 'dark' | 'system'>('light');
   const [customEffects, setCustomEffects] = useState(currentTheme.effects || {});
   const [fontSize, setFontSize] = useState([16]);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState(config.systemPrompt || '');
+  const [systemPrompt, setSystemPrompt] = useState('');
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceFeedback, setVoiceFeedback] = useState(false);
   const [voiceSensitivity, setVoiceSensitivity] = useState([50]);
@@ -36,9 +37,9 @@ export function SettingsPage() {
 
   // AI Assistant modes
   const aiModes = [
-    { value: 'normal' as AIMode, label: 'Normal', icon: Brain, description: 'Balanced responses with clear explanations' },
-    { value: 'turbo' as AIMode, label: 'Turbo', icon: Zap, description: 'Quick, concise answers optimized for speed' },
-    { value: 'cyborg' as AIMode, label: 'Cyborg', icon: Bot, description: 'Detailed technical analysis and solutions' }
+    { value: 'normal', label: 'Normal', icon: Brain, description: 'Balanced responses with clear explanations' },
+    { value: 'turbo', label: 'Turbo', icon: Zap, description: 'Quick, concise answers optimized for speed' },
+    { value: 'cyborg', label: 'Cyborg', icon: Bot, description: 'Detailed technical analysis and solutions' }
   ];
 
   const handleEffectToggle = (effect: string) => {
@@ -64,24 +65,20 @@ export function SettingsPage() {
     setVoiceEnabled(!voiceEnabled);
   };
 
-  // Save settings to localStorage
-  useEffect(() => {
-    localStorage.setItem('fontSize', fontSize[0].toString());
-    localStorage.setItem('reducedMotion', reducedMotion.toString());
-    localStorage.setItem('highContrast', highContrast.toString());
-    localStorage.setItem('voiceEnabled', voiceEnabled.toString());
-    localStorage.setItem('voiceFeedback', voiceFeedback.toString());
-    localStorage.setItem('voiceSensitivity', voiceSensitivity[0].toString());
-    localStorage.setItem('workflowSettings', JSON.stringify(workflowSettings));
-  }, [fontSize, reducedMotion, highContrast, voiceEnabled, voiceFeedback, voiceSensitivity, workflowSettings]);
+  // Navigate to profile for email settings
+  const navigateToEmailSettings = () => {
+    navigate('/email-settings');
+  };
 
-  // Load settings from localStorage
-  useEffect(() => {
-    const savedWorkflowSettings = localStorage.getItem('workflowSettings');
-    if (savedWorkflowSettings) {
-      setWorkflowSettings(JSON.parse(savedWorkflowSettings));
-    }
-  }, []);
+  // Helper to safely access the model value
+  const getCurrentAIMode = () => {
+    return config?.model || 'normal';
+  };
+
+  // Handle AI mode updates safely
+  const handleAIModeUpdate = (modelValue: string) => {
+    updateConfig({ model: modelValue });
+  };
 
   return (
     <div className="container mx-auto p-6">
@@ -101,11 +98,11 @@ export function SettingsPage() {
                 {aiModes.map((aiMode) => (
                   <button
                     key={aiMode.value}
-                    onClick={() => updateConfig({ model: aiMode.value })}
+                    onClick={() => handleAIModeUpdate(aiMode.value)}
                     className={`
                       flex flex-col items-center justify-center p-4 rounded-lg
                       border-2 transition-all duration-200
-                      ${config.model === aiMode.value 
+                      ${getCurrentAIMode() === aiMode.value 
                         ? 'border-primary bg-primary/5 text-primary'
                         : 'border-transparent hover:border-primary/20 hover:bg-primary/5'
                       }
@@ -123,32 +120,37 @@ export function SettingsPage() {
 
             {/* Model Selection */}
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-4">
-                AI Model
-              </label>
-              <AIModelSelector
-                selectedModel={config.model}
-                onModelChange={(model) => updateConfig({ model })}
-                mode={config.model as AIMode}
-              />
-            </div>
-
-            {/* System Prompt */}
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-4">
+              <label className="block text-sm font-medium text-text-secondary">
                 System Prompt
               </label>
-              <SystemPrompt
-                prompt={systemPrompt}
-                onPromptChange={(prompt) => {
-                  setSystemPrompt(prompt);
-                  updateConfig({ systemPrompt: prompt });
-                }}
-                isOpen={true}
-                onToggle={() => {}}
-                mode={config.model as AIMode}
+              <p className="text-sm text-text-muted mb-2">
+                Customize how the AI assistant behaves by default
+              </p>
+              <textarea
+                className="w-full p-2 border rounded-md dark:bg-gray-800"
+                rows={4}
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="You are a helpful AI assistant..."
               />
             </div>
+          </div>
+        </section>
+        
+        {/* Email Accounts Section */}
+        <section className="bg-paper border border-primary/10 p-6 rounded-lg shadow-sm">
+          <h2 className="text-xl font-semibold mb-4 text-text-primary">Email Accounts</h2>
+          <div className="space-y-4">
+            <p className="text-text-secondary">
+              Connect and manage your email accounts to access emails directly within the application.
+            </p>
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-primary" />
+              <p className="text-text-secondary">Configure email accounts in your profile settings</p>
+            </div>
+            <Button onClick={navigateToEmailSettings} className="mt-2">
+              Go to Email Settings
+            </Button>
           </div>
         </section>
 
