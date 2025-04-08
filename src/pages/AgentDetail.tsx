@@ -71,7 +71,7 @@ export function AgentDetail() {
       });
     }
   }, [agent]);
-  
+
   if (!agent) {
     return (
       <div className="flex flex-col items-center justify-center h-[80vh]">
@@ -137,7 +137,7 @@ export function AgentDetail() {
       throw error;
     }
   };
-  
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -146,11 +146,11 @@ export function AgentDetail() {
           <Button 
             variant="outline" 
             size="icon"
-            onClick={() => navigate('/agents')}
-          >
+          onClick={() => navigate('/agents')}
+        >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
+        <div>
             <h1 className="text-2xl font-bold">{agent.name}</h1>
             <p className="text-muted-foreground">{agent.description}</p>
           </div>
@@ -180,7 +180,7 @@ export function AgentDetail() {
           </Button>
         </div>
       </div>
-      
+
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4">
@@ -206,11 +206,11 @@ export function AgentDetail() {
           </div>
         </Card>
         <Card className="p-4">
-          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-amber-500/10">
               <Zap className="w-5 h-5 text-amber-500" />
-            </div>
-            <div>
+              </div>
+              <div>
               <div className="text-sm text-muted-foreground">Performance</div>
               <div className="text-lg font-semibold">{agent.metrics.performance}%</div>
             </div>
@@ -220,7 +220,7 @@ export function AgentDetail() {
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-purple-500/10">
               <Clock className="w-5 h-5 text-purple-500" />
-            </div>
+              </div>
             <div>
               <div className="text-sm text-muted-foreground">Last Active</div>
               <div className="text-lg font-semibold">{formatDistanceToNow(lastActionDate, { addSuffix: true })}</div>
@@ -228,7 +228,7 @@ export function AgentDetail() {
           </div>
         </Card>
       </div>
-      
+
       {/* Main Content */}
       {isEditing ? (
         <Card>
@@ -316,21 +316,21 @@ export function AgentDetail() {
             <TabsTrigger value="overview">
               <Brain className="w-4 h-4 mr-2" />
               Overview
-            </TabsTrigger>
+          </TabsTrigger>
             <TabsTrigger value="interact">
               <Code className="w-4 h-4 mr-2" />
               Interact
-            </TabsTrigger>
+          </TabsTrigger>
             <TabsTrigger value="logs">
               <Activity className="w-4 h-4 mr-2" />
               Activity Logs
-            </TabsTrigger>
+          </TabsTrigger>
             <TabsTrigger value="performance">
               <BarChart2 className="w-4 h-4 mr-2" />
               Performance
-            </TabsTrigger>
-          </TabsList>
-          
+          </TabsTrigger>
+        </TabsList>
+        
           <TabsContent value="overview">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
@@ -493,11 +493,11 @@ export function AgentDetail() {
               <CardContent>
                 <div className="h-96 flex items-center justify-center text-muted-foreground">
                   Performance metrics visualization would go here
-                </div>
+        </div>
               </CardContent>
             </Card>
           </TabsContent>
-        </Tabs>
+      </Tabs>
       )}
     </div>
   );

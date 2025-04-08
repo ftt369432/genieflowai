@@ -3,7 +3,7 @@ import { TeamsSidebar } from '../components/teams/TeamsSidebar';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Textarea } from '../components/ui/Textarea';
-import { Plus, Search, Send, Paperclip, Smile, Users, Bookmark, Pin, Bell, Share2, Brain, Zap, FileText, MessageSquare, Bot, Sparkles, AtSign, ChevronDown, Mail, Settings, UserPlus } from 'lucide-react';
+import { Plus, Search, Send, Paperclip, Smile, Users, Bookmark, Pin, Bell, Share2, Brain, Zap, FileText, MessageSquare, Bot, Sparkles, AtSign, ChevronDown, Settings, UserPlus } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/Avatar';
 import { Separator } from '../components/ui/Separator';
 import { Badge } from '../components/ui/Badge';
@@ -210,6 +210,8 @@ export const TeamsPage: React.FC = () => {
     name: '',
     description: ''
   });
+  const [threadTitle, setThreadTitle] = useState('');
+  const [threadBody, setThreadBody] = useState('');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -408,10 +410,6 @@ export const TeamsPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowEmailDialog(true)}>
-                    <Mail className="h-4 w-4 mr-1" />
-                    Connect Email
-                  </Button>
                   <Button variant="outline" size="sm">
                     <Settings className="h-4 w-4 mr-1" />
                     Settings
@@ -518,27 +516,6 @@ export const TeamsPage: React.FC = () => {
               Create Team
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Email Connect Dialog */}
-      <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
-        <DialogContent className="sm:max-w-[700px] p-0 overflow-hidden">
-          <DialogHeader className="p-4 pb-0">
-            <DialogTitle>Connect Email Account</DialogTitle>
-          </DialogHeader>
-          <div className="overflow-y-auto max-h-[80vh] p-4 pt-2">
-            <EmailAccountConnect 
-              isDialog={true}
-              onConnectionSuccess={() => {
-                setShowEmailDialog(false);
-                toast.success('Email account connected successfully!');
-              }}
-              onConnectionError={(error) => {
-                toast.error(error);
-              }}
-            />
-          </div>
         </DialogContent>
       </Dialog>
     </div>

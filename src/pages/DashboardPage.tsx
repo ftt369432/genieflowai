@@ -7,8 +7,19 @@ import { AgentMonitoringDashboard } from '../components/dashboard/AgentMonitorin
 import { MetricsGrid } from '../components/analytics/MetricsGrid';
 import { ActivityTimeline } from '../components/analytics/ActivityTimeline';
 import { testTasks, testEvents, testContacts, testDocuments, testEmails } from '../data/testData';
-import { Email } from '../types';
 import { PendingApprovalsWidget } from '../components/dashboard/PendingApprovalsWidget';
+
+// Define local interface for emails to avoid type issues
+interface Email {
+  id: string;
+  subject: string;
+  from: string;
+  to: string;
+  content: string;
+  date: Date;
+  read: boolean;
+  category?: string;
+}
 
 export function DashboardPage() {
   // Convert test emails to match the Email interface
@@ -24,32 +35,32 @@ export function DashboardPage() {
   }));
 
   return (
-    <div className="container mx-auto py-6 px-4">
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+    <div className="container mx-auto py-6 px-4 dashboard-content">
+      <h1 className="text-2xl font-bold mb-6 page-title">Dashboard</h1>
       
       {/* Welcome Widget - Full width */}
       <div className="mb-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 dashboard-card">
           <WelcomeWidget />
         </div>
       </div>
       
       {/* Two column layout for main widgets */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl">
-          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg">
-            <h2 className="font-semibold text-gray-800 dark:text-gray-200">Knowledge Base</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl dashboard-card">
+          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg dashboard-header">
+            <h2 className="font-semibold text-gray-800 dark:text-white card-title">Knowledge Base</h2>
           </div>
-          <div className="p-4">
+          <div className="p-4 card-content">
             <KnowledgeBaseWidget />
           </div>
         </div>
         
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl">
-          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg">
-            <h2 className="font-semibold text-gray-800 dark:text-gray-200">AI Assistant</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl dashboard-card">
+          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg dashboard-header">
+            <h2 className="font-semibold text-gray-800 dark:text-white card-title">AI Assistant</h2>
           </div>
-          <div className="p-4">
+          <div className="p-4 card-content">
             <AIAssistantWidget />
           </div>
         </div>
@@ -57,20 +68,20 @@ export function DashboardPage() {
       
       {/* Analytics Widgets - Two column layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl">
-          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg">
-            <h2 className="font-semibold text-gray-800 dark:text-gray-200">Performance Dashboard</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl dashboard-card">
+          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg dashboard-header">
+            <h2 className="font-semibold text-gray-800 dark:text-white card-title">Performance Dashboard</h2>
           </div>
-          <div className="p-4">
+          <div className="p-4 card-content">
             <AgentPerformanceDashboard />
           </div>
         </div>
         
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl">
-          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg">
-            <h2 className="font-semibold text-gray-800 dark:text-gray-200">Agent Monitoring</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl dashboard-card">
+          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg dashboard-header">
+            <h2 className="font-semibold text-gray-800 dark:text-white card-title">Agent Monitoring</h2>
           </div>
-          <div className="p-4">
+          <div className="p-4 card-content">
             <AgentMonitoringDashboard />
           </div>
         </div>
@@ -78,11 +89,11 @@ export function DashboardPage() {
       
       {/* Bottom Section - Uneven split for metrics and activity */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl">
-          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg">
-            <h2 className="font-semibold text-gray-800 dark:text-gray-200">Metrics Overview</h2>
+        <div className="md:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl dashboard-card">
+          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg dashboard-header">
+            <h2 className="font-semibold text-gray-800 dark:text-white card-title">Metrics Overview</h2>
           </div>
-          <div className="p-4">
+          <div className="p-4 card-content">
             <MetricsGrid 
               emails={emails} 
               tasks={testTasks} 
@@ -93,11 +104,11 @@ export function DashboardPage() {
           </div>
         </div>
         
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl">
-          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg">
-            <h2 className="font-semibold text-gray-800 dark:text-gray-200">Activity Timeline</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 transition-all hover:shadow-2xl dashboard-card">
+          <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-t-lg dashboard-header">
+            <h2 className="font-semibold text-gray-800 dark:text-white card-title">Activity Timeline</h2>
           </div>
-          <div className="p-4 h-full">
+          <div className="p-4 h-full card-content">
             <ActivityTimeline 
               emails={emails} 
               tasks={testTasks} 

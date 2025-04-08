@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, CreditCard, LogOut, Shield, Calendar, Mail, Settings, RefreshCw } from 'lucide-react';
+import { User, CreditCard, LogOut, Shield, Calendar, Mail, Settings, RefreshCw, Chrome } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useUserStore } from '../stores/userStore';
 import { logoutUser, isAuthenticated } from '../services/auth/authService';
@@ -10,6 +10,22 @@ import { Spinner } from '../components/ui/Spinner';
 import { getAvatar } from '../lib/utils';
 import { googleUserProfileService } from '../services/google/userProfileService';
 import { toast } from 'sonner';
+import { EmailAccountConnect } from '../components/email/EmailAccountConnect';
+import { useEmail } from '../contexts/EmailContext';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Avatar } from '@/components/ui/avatar';
+import { Icons } from '@/components/icons';
+
+interface EmailConfig {
+  type: 'gmail' | 'imap';
+  email: string;
+  password?: string;
+  server?: string;
+  port?: number;
+}
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -22,7 +38,12 @@ export function ProfilePage() {
     hasGoogleIntegration,
     getGoogleIntegration
   } = useUserStore();
+  const { accounts, removeAccount } = useEmail();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [emailConnectionStatus, setEmailConnectionStatus] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('profile');
+  const [emailConfigs, setEmailConfigs] = useState<EmailConfig[]>([]);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -105,8 +126,53 @@ export function ProfilePage() {
     }
   };
 
+  // Email connection handlers
+  const handleEmailConnectionStart = () => {
+    setEmailConnectionStatus('connecting');
+    setEmailError(null);
+  };
+  
+  const handleEmailConnectionSuccess = () => {
+    setEmailConnectionStatus('success');
+    toast.success('Email account connected successfully');
+  };
+  
+  const handleEmailConnectionError = (error: string) => {
+    setEmailConnectionStatus('error');
+    setEmailError(error);
+    toast.error(`Failed to connect email account: ${error}`);
+  };
+
+  const handleRemoveEmailAccount = async (accountId: string) => {
+    try {
+      await removeAccount(accountId);
+      toast.success('Email account removed successfully');
+    } catch (error) {
+      console.error('Error removing email account:', error);
+      toast.error('Failed to remove email account');
+    }
+  };
+
   // Get Google integration
   const googleIntegration = user?.integrations ? getGoogleIntegration() : undefined;
+
+  const handleAddGmail = async () => {
+    // Implement Google OAuth flow
+    console.log('Adding Gmail account');
+  };
+
+  const handleAddIMAP = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const newConfig: EmailConfig = {
+      type: 'imap',
+      email: formData.get('email') as string,
+      password: formData.get('password') as string,
+      server: formData.get('server') as string,
+      port: Number(formData.get('port')),
+    };
+    setEmailConfigs([...emailConfigs, newConfig]);
+  };
 
   if (!user) {
     return (
@@ -121,264 +187,194 @@ export function ProfilePage() {
     <PageContainer>
       <h1 className="text-2xl font-bold mb-8">My Profile</h1>
 
-      <ResponsiveGrid
-        sm={1}
-        md={1}
-        lg={3}
-        gap="gap-6"
-      >
-        {/* Left column - Profile info */}
-        <ResponsiveGridItem span={1} lgSpan={1}>
-          <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-            <div className="flex flex-col items-center">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden mb-4">
-                <img
-                  className="h-24 w-24 rounded-full border-4 border-white shadow-lg"
-                  src={user.avatar || getAvatar(user.fullName)}
-                  alt={user.fullName}
-                />
-              </div>
-              <h2 className="text-xl font-semibold">{user.fullName}</h2>
-              <p className="text-gray-500">{user.email}</p>
-              {user.company && (
-                <p className="text-gray-500 mt-1">{user.role || 'Employee'}, {user.company}</p>
-              )}
-            </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="email">Email Accounts</TabsTrigger>
+          <TabsTrigger value="usage">Usage Statistics</TabsTrigger>
+        </TabsList>
 
-            <div className="mt-6 space-y-4">
-              <div className="flex items-center text-gray-600">
-                <Mail className="w-5 h-5 mr-2 flex-shrink-0" />
-                <span>Email Verified</span>
+        <TabsContent value="profile" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Information</CardTitle>
+              <CardDescription>Manage your account settings and preferences</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <Avatar className="h-20 w-20">
+                  <img src={user?.avatar || '/placeholder-avatar.png'} alt="Profile" />
+                </Avatar>
+                <Button variant="outline">Change Avatar</Button>
               </div>
-              <div className="flex items-center text-gray-600">
-                <Shield className="w-5 h-5 mr-2 flex-shrink-0" />
-                <span>2FA Disabled</span>
-              </div>
-              <div className="flex items-center text-gray-600">
-                <Calendar className="w-5 h-5 mr-2 flex-shrink-0" />
-                <span>Member since {formatDate(new Date().toISOString())}</span>
-              </div>
-            </div>
-
-            <div className="mt-8 space-y-2">
-              <Button 
-                variant="default" 
-                className="w-full justify-start"
-                onClick={() => navigate('/dashboard')}
-              >
-                <User className="w-4 h-4 mr-2" />
-                Go to Dashboard
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={handleNavigateToSettings}
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Account Settings
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full justify-start" 
-                onClick={handleLogout}
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign Out
-              </Button>
-            </div>
-          </div>
-          
-          {/* Connected Accounts Section */}
-          <div className="bg-white rounded-lg shadow p-4 sm:p-6 mt-6">
-            <h2 className="text-xl font-semibold mb-4">Connected Accounts</h2>
-            
-            <div className="space-y-4">
-              {/* Google Account */}
-              <div className="border border-gray-200 rounded-md p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <img 
-                      src="https://www.google.com/favicon.ico" 
-                      alt="Google" 
-                      className="w-5 h-5 mr-3" 
-                    />
-                    <div>
-                      <div className="font-medium">Google</div>
-                      {googleIntegration ? (
-                        <div className="text-sm text-gray-500">
-                          {googleIntegration.email}
-                        </div>
-                      ) : (
-                        <div className="text-sm text-gray-500">Not connected</div>
-                      )}
-                    </div>
-                  </div>
-                  <Button 
-                    variant={googleIntegration ? "outline" : "default"}
-                    size="sm"
-                    onClick={handleSyncWithGoogle}
-                    disabled={isSyncing || isLoading}
-                  >
-                    {isSyncing ? (
-                      <Spinner className="h-4 w-4 mr-2" />
-                    ) : googleIntegration ? (
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                    ) : null}
-                    {googleIntegration ? 'Refresh' : 'Connect'}
-                  </Button>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input id="name" defaultValue={user?.fullName} />
                 </div>
-                
-                {googleIntegration && (
-                  <div className="mt-3 flex items-center">
-                    <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
-                      <img 
-                        src={googleIntegration.profilePictureUrl || getAvatar(googleIntegration.email)}
-                        alt={googleIntegration.displayName || googleIntegration.email}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium">
-                        {googleIntegration.displayName || googleIntegration.email.split('@')[0]}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Connected {formatDate(googleIntegration.connectedAt)}
-                      </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" defaultValue={user?.email} />
+                </div>
+              </div>
+              <Button>Save Changes</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="email" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Email Accounts</CardTitle>
+              <CardDescription>Connect your email accounts to GenieFlow</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4">
+                <Button 
+                  onClick={handleAddGmail}
+                  className="flex items-center gap-2"
+                >
+                  <Chrome className="h-5 w-5" />
+                  Add Gmail Account
+                </Button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                      Or add IMAP account
+                    </span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleAddIMAP} className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input id="email" name="email" type="email" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input id="password" name="password" type="password" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="server">IMAP Server</Label>
+                    <Input id="server" name="server" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="port">Port</Label>
+                    <Input id="port" name="port" type="number" defaultValue={993} required />
+                  </div>
+                  <Button type="submit">Add IMAP Account</Button>
+                </form>
+
+                {emailConfigs.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-lg font-medium">Connected Accounts</h3>
+                    <div className="mt-2 space-y-2">
+                      {emailConfigs.map((config, index) => (
+                        <Card key={index} className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <Mail className="h-5 w-5" />
+                              <span>{config.email}</span>
+                            </div>
+                            <Button variant="destructive" size="sm">Remove</Button>
+                          </div>
+                        </Card>
+                      ))}
                     </div>
                   </div>
                 )}
               </div>
-              
-              {/* Can add more provider connections here */}
-            </div>
-            
-            <div className="mt-4 text-sm text-gray-500">
-              <p>
-                Connecting accounts allows for seamless integration with your favorite services.
-                Your profile picture and information may be synced from connected accounts.
-              </p>
-            </div>
-          </div>
-        </ResponsiveGridItem>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        {/* Right column - Subscription and usage info */}
-        <ResponsiveGridItem span={1} lgSpan={2}>
-          {/* Subscription info */}
-          <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4 flex items-center">
-              <CreditCard className="w-5 h-5 mr-2 flex-shrink-0" />
-              Subscription Details
-            </h2>
+        <TabsContent value="usage" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Usage Statistics</CardTitle>
+              <CardDescription>Monitor your resource usage and limits</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">API Requests</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">2,345</div>
+                    <p className="text-xs text-muted-foreground">of 10,000 monthly</p>
+                    <div className="mt-2 h-2 w-full rounded-full bg-secondary">
+                      <div className="h-2 w-[23.45%] rounded-full bg-primary" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-            {subscription ? (
-              <div className="space-y-4">
-                <ResponsiveGrid sm={1} md={2} gap="gap-4">
-                  <div className="border border-gray-200 rounded-md p-4">
-                    <div className="text-sm text-gray-500">Current Plan</div>
-                    <div className="text-lg font-medium">{getPlanName()}</div>
-                  </div>
-                  <div className="border border-gray-200 rounded-md p-4">
-                    <div className="text-sm text-gray-500">Billing Period</div>
-                    <div className="text-lg font-medium">{getBillingPeriod()}</div>
-                  </div>
-                </ResponsiveGrid>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">AI Credits</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">78%</div>
+                    <p className="text-xs text-muted-foreground">of monthly allowance</p>
+                    <div className="mt-2 h-2 w-full rounded-full bg-secondary">
+                      <div className="h-2 w-[78%] rounded-full bg-primary" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-                <div className="border border-gray-200 rounded-md p-4">
-                  <div className="text-sm text-gray-500">Subscription Status</div>
-                  <div className="flex items-center">
-                    <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
-                      subscription.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'
-                    }`}></span>
-                    <span className="text-lg font-medium capitalize">{subscription.status}</span>
-                  </div>
-                </div>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">1.2 GB</div>
+                    <p className="text-xs text-muted-foreground">of 5 GB</p>
+                    <div className="mt-2 h-2 w-full rounded-full bg-secondary">
+                      <div className="h-2 w-[24%] rounded-full bg-primary" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-                <div className="border border-gray-200 rounded-md p-4">
-                  <div className="text-sm text-gray-500">Current Period End</div>
-                  <div className="text-lg font-medium">
-                    {subscription.currentPeriodEnd ? formatDate(subscription.currentPeriodEnd) : 'N/A'}
-                  </div>
-                </div>
+              <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Email Sent</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">143</div>
+                    <p className="text-xs text-muted-foreground">this month</p>
+                  </CardContent>
+                </Card>
 
-                <div className="flex flex-col sm:flex-row gap-4 mt-6">
-                  {subscription.plan !== 'enterprise' && subscription.plan !== 'enterprise-business' && (
-                    <Button onClick={handleNavigateToSubscription}>
-                      Upgrade Plan
-                    </Button>
-                  )}
-                  {subscription.plan !== 'free' && (
-                    <Button variant="outline">Cancel Subscription</Button>
-                  )}
-                </div>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Tasks Created</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">67</div>
+                    <p className="text-xs text-muted-foreground">this month</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Documents Processed</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">24</div>
+                    <p className="text-xs text-muted-foreground">this month</p>
+                  </CardContent>
+                </Card>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="border border-gray-200 rounded-md p-4">
-                  <div className="text-sm text-gray-500">Current Plan</div>
-                  <div className="text-lg font-medium">Free Plan</div>
-                </div>
-                
-                <div className="mt-6">
-                  <Button onClick={handleNavigateToSubscription}>
-                    Upgrade to Pro
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Usage Statistics */}
-          <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-            <h2 className="text-xl font-semibold mb-4">Usage Statistics</h2>
-            
-            <ResponsiveGrid sm={1} md={2} lg={3} gap="gap-4">
-              <div className="border border-gray-200 rounded-md p-4">
-                <div className="text-sm text-gray-500">API Requests</div>
-                <div className="text-2xl font-medium">2,345</div>
-                <div className="text-xs text-gray-500">of 10,000 monthly</div>
-              </div>
-              
-              <div className="border border-gray-200 rounded-md p-4">
-                <div className="text-sm text-gray-500">AI Credits</div>
-                <div className="text-2xl font-medium">78%</div>
-                <div className="text-xs text-gray-500">of monthly allowance</div>
-              </div>
-              
-              <div className="border border-gray-200 rounded-md p-4">
-                <div className="text-sm text-gray-500">Storage Used</div>
-                <div className="text-2xl font-medium">1.2 GB</div>
-                <div className="text-xs text-gray-500">of 5 GB</div>
-              </div>
-              
-              <div className="border border-gray-200 rounded-md p-4">
-                <div className="text-sm text-gray-500">Email Sent</div>
-                <div className="text-2xl font-medium">143</div>
-                <div className="text-xs text-gray-500">this month</div>
-              </div>
-              
-              <div className="border border-gray-200 rounded-md p-4">
-                <div className="text-sm text-gray-500">Tasks Created</div>
-                <div className="text-2xl font-medium">67</div>
-                <div className="text-xs text-gray-500">this month</div>
-              </div>
-              
-              <div className="border border-gray-200 rounded-md p-4">
-                <div className="text-sm text-gray-500">Documents Processed</div>
-                <div className="text-2xl font-medium">24</div>
-                <div className="text-xs text-gray-500">this month</div>
-              </div>
-            </ResponsiveGrid>
-            
-            <div className="text-sm text-gray-500 mt-6">
-              <p>Last updated: {formatDate(new Date().toISOString())}</p>
-            </div>
-          </div>
-          
-          <div className="text-xs text-gray-400 mt-4">
-            <p className="mt-2">emails processed this month</p>
-          </div>
-        </ResponsiveGridItem>
-      </ResponsiveGrid>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   );
 } 

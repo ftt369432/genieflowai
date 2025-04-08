@@ -4,6 +4,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ThemeProvider, EmailProvider, NotificationProvider, AIProvider, TeamProvider } from './contexts';
 import { AuthProvider } from './contexts/AuthContext';
 import { useSupabase } from './providers/SupabaseProvider';
+import routerConfig from './router/config';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -105,7 +106,7 @@ const LoginRoute = () => {
 
 function App() {
   return (
-    <Router>
+    <Router future={routerConfig.future}>
       <AIProvider>
         <AuthProvider>
           <TeamProvider>
