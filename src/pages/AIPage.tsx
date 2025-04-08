@@ -11,6 +11,7 @@ import { AgentType, AutonomyLevel, AgentCapability } from '../types/agent';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
 import { Separator } from '../components/ui/Separator';
+import { cn } from '../lib/utils';
 
 export function AIPage() {
   const [activeTab, setActiveTab] = useState('assistant');
@@ -67,19 +68,19 @@ export function AIPage() {
   ];
 
   return (
-    <div className="container p-6 max-w-7xl mx-auto space-y-8">
-      <div className="flex justify-between items-center">
+    <div className="container p-6 max-w-7xl mx-auto space-y-8 ai-assistant-container">
+      <div className="flex justify-between items-center ai-header">
         <div>
           <h1 className="text-3xl font-bold">AI Hub</h1>
           <p className="text-muted-foreground">Your central platform for AI assistance and agents</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={navigateToWizard}>
-            <Wand2 className="h-4 w-4 mr-2" />
+            <Wand2 className="h-4 w-4 mr-2 interactive-icon" />
             Workflow Wizard
           </Button>
           <Button onClick={() => navigate('/agents')}>
-            <Bot className="h-4 w-4 mr-2" />
+            <Bot className="h-4 w-4 mr-2 interactive-icon" />
             View All Agents
           </Button>
         </div>
@@ -88,8 +89,8 @@ export function AIPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
-            <Brain className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium card-title">Total Agents</CardTitle>
+            <Brain className="h-4 w-4 text-muted-foreground interactive-icon" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.totalAgents}</div>
@@ -101,8 +102,8 @@ export function AIPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Agents</CardTitle>
-            <Bot className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium card-title">Active Agents</CardTitle>
+            <Bot className="h-4 w-4 text-muted-foreground interactive-icon" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.activeAgents}</div>
@@ -114,8 +115,8 @@ export function AIPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Performance</CardTitle>
-            <Zap className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium card-title">Performance</CardTitle>
+            <Zap className="h-4 w-4 text-muted-foreground interactive-icon" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.averagePerformance}%</div>
@@ -127,8 +128,8 @@ export function AIPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium card-title">Total Tasks</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground interactive-icon" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.totalTasks}</div>
@@ -150,8 +151,8 @@ export function AIPage() {
             <div className="lg:col-span-2">
               <Card className="border-2 border-primary/10">
                 <CardHeader>
-                  <CardTitle>AI Assistant</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="card-title">AI Assistant</CardTitle>
+                  <CardDescription className="card-description">
                     Your comprehensive AI assistant powered by multiple models
                   </CardDescription>
                 </CardHeader>
@@ -164,13 +165,13 @@ export function AIPage() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Recent Queries</CardTitle>
+                  <CardTitle className="text-base card-title">Recent Queries</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2">
                     {recentQueries.map((query, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm hover:bg-accent/50 p-2 rounded cursor-pointer">
-                        <MessageSquare className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <li key={i} className="flex items-start gap-2 text-sm hover:bg-accent/50 p-2 rounded cursor-pointer recent-query">
+                        <MessageSquare className="h-4 w-4 mt-0.5 flex-shrink-0 interactive-icon" />
                         <span className="line-clamp-2">{query}</span>
                       </li>
                     ))}
@@ -180,7 +181,7 @@ export function AIPage() {
               
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Suggested Capabilities</CardTitle>
+                  <CardTitle className="text-base card-title">Suggested Capabilities</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 gap-2">
@@ -190,7 +191,7 @@ export function AIPage() {
                         variant="outline" 
                         className="flex items-center justify-start gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-primary/5"
                       >
-                        <capability.icon className={`h-3.5 w-3.5 ${capability.color}`} />
+                        <capability.icon className={`h-3.5 w-3.5 ${capability.color} interactive-icon`} />
                         <span className="text-xs">{capability.name}</span>
                       </Badge>
                     ))}
@@ -200,19 +201,19 @@ export function AIPage() {
               
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Quick Actions</CardTitle>
+                  <CardTitle className="text-base card-title">Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start" size="sm">
-                    <Sparkles className="h-4 w-4 mr-2 text-purple-500" />
+                  <Button variant="outline" className="w-full justify-start secondary" size="sm">
+                    <Sparkles className="h-4 w-4 mr-2 text-purple-500 interactive-icon" />
                     Create content with AI
                   </Button>
-                  <Button variant="outline" className="w-full justify-start" size="sm">
-                    <Activity className="h-4 w-4 mr-2 text-green-500" />
+                  <Button variant="outline" className="w-full justify-start secondary" size="sm">
+                    <Activity className="h-4 w-4 mr-2 text-green-500 interactive-icon" />
                     Analyze data with AI
                   </Button>
-                  <Button variant="outline" className="w-full justify-start" size="sm">
-                    <Book className="h-4 w-4 mr-2 text-blue-500" />
+                  <Button variant="outline" className="w-full justify-start secondary" size="sm">
+                    <Book className="h-4 w-4 mr-2 text-blue-500 interactive-icon" />
                     Start learning session
                   </Button>
                 </CardContent>
