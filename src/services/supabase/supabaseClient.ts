@@ -1,12 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-import { getEnv } from '../../config/env';
+import { getSupabaseClient } from '../../lib/supabase';
 
-const { supabaseUrl, supabaseAnonKey } = getEnv();
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  }
-}); 
+// Export the singleton Supabase client
+export const supabase = getSupabaseClient(); 

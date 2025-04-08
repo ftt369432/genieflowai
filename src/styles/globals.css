@@ -19,7 +19,8 @@
   }
 
   body {
-    @apply bg-white text-gray-900;
+    background-color: white;
+    color: rgb(17, 24, 39);
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
@@ -36,7 +37,8 @@
   }
 
   [data-theme='dark'] body {
-    @apply bg-gray-900 text-white;
+    background-color: rgb(17, 24, 39);
+    color: white;
   }
 
   [data-theme='cyberpunk'] {
@@ -53,14 +55,16 @@
   input[type="email"],
   input[type="password"],
   textarea {
-    @apply bg-[var(--input-bg)] text-[var(--input-text)] border-[var(--input-border)];
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    border-color: var(--input-border);
   }
 
   input[type="text"]::placeholder,
   input[type="email"]::placeholder,
   input[type="password"]::placeholder,
   textarea::placeholder {
-    @apply text-[var(--text-muted)];
+    color: var(--text-muted);
   }
 
   /* Focus states */
@@ -68,7 +72,8 @@
   input[type="email"]:focus,
   input[type="password"]:focus,
   textarea:focus {
-    @apply border-primary-500 ring-1 ring-primary-500;
+    border-color: rgb(59, 130, 246);
+    box-shadow: 0 0 0 1px rgb(59, 130, 246);
   }
 }
 
@@ -96,15 +101,19 @@
 
 @layer components {
   .neon-border {
-    @apply border border-cyan-400 shadow-lg;
+    border: 1px solid rgb(34, 211, 238);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   }
   
   .neon-text {
-    @apply text-cyan-400;
+    color: rgb(34, 211, 238);
   }
 
   .grid-item {
-    @apply bg-paper rounded-lg shadow-md overflow-hidden;
+    background-color: var(--bg-paper);
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
     min-height: 200px;
     transition: transform 0.2s ease-in-out;
   }
@@ -114,85 +123,121 @@
   }
 
   .grid-item.dragging {
-    @apply shadow-lg opacity-50;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    opacity: 0.5;
   }
 
   .grid-item.resizing {
-    @apply cursor-se-resize;
+    cursor: se-resize;
   }
 
   .cyberpunk .grid-item {
-    @apply border border-cyan-400 shadow-lg bg-gray-900;
+    border: 1px solid rgb(34, 211, 238);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    background-color: rgb(17, 24, 39);
   }
 
   .dark .grid-item {
-    @apply bg-gray-800 border-gray-700 shadow-md;
+    background-color: rgb(31, 41, 55);
+    border-color: rgb(55, 65, 81);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   }
 
   /* Add additional dark mode enhancements */
   .dark .card,
   .dark .dashboard-card {
-    @apply bg-gray-800 border-gray-700 shadow-lg;
+    background-color: rgb(31, 41, 55);
+    border-color: rgb(55, 65, 81);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   }
 
   .dark button:not(.btn-primary) {
-    @apply bg-gray-700 hover:bg-gray-600 text-white;
+    background-color: rgb(55, 65, 81);
+    color: white;
+  }
+
+  .dark button:not(.btn-primary):hover {
+    background-color: rgb(75, 85, 99);
   }
 
   .dark .btn-primary {
-    @apply bg-blue-600 hover:bg-blue-500 text-white shadow-md;
+    background-color: rgb(37, 99, 235);
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  }
+
+  .dark .btn-primary:hover {
+    background-color: rgb(59, 130, 246);
   }
 
   .dark input, 
   .dark textarea, 
   .dark select {
-    @apply bg-gray-800 border-gray-600 text-white placeholder-gray-400;
+    background-color: rgb(31, 41, 55);
+    border-color: rgb(75, 85, 99);
+    color: white;
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder,
+  .dark select::placeholder {
+    color: rgb(156, 163, 175);
   }
 
   /* Enhanced sidebar navigation for dark mode */
   .dark [role="navigation"] {
-    @apply bg-gray-900 border-gray-700;
+    background-color: rgb(17, 24, 39);
+    border-color: rgb(55, 65, 81);
   }
 
   .dark [role="navigation"] a {
-    @apply text-white hover:bg-gray-800;
+    color: white;
+  }
+
+  .dark [role="navigation"] a:hover {
+    background-color: rgb(31, 41, 55);
   }
 
   .dark [role="navigation"] a span {
-    @apply text-white font-medium;
+    color: white;
+    font-weight: 500;
   }
 
   .dark [role="navigation"] a:hover span {
-    @apply text-white;
+    color: white;
   }
 
   .dark [role="navigation"] h3 {
-    @apply text-blue-300 font-semibold;
+    color: rgb(147, 197, 253);
+    font-weight: 600;
   }
 
   .dark [role="navigation"] h1 {
-    @apply text-white;
+    color: white;
   }
 
   /* Keep the sidebar icons colorful in dark mode */
   .dark [role="navigation"] a svg {
-    @apply opacity-100;
+    opacity: 1;
   }
 
   /* Make active item stand out more in dark mode */
   .dark [role="navigation"] a.active,
   .dark [role="navigation"] a[aria-current="page"] {
-    @apply bg-blue-900/30 text-blue-100 border-l-2 border-blue-400;
+    background-color: rgba(30, 64, 175, 0.3);
+    color: rgb(191, 219, 254);
+    border-left: 2px solid rgb(59, 130, 246);
   }
 }
 
 @layer utilities {
   .drag-over {
-    @apply ring-2 ring-blue-500 bg-blue-50;
+    box-shadow: 0 0 0 2px rgb(59, 130, 246);
+    background-color: rgb(239, 246, 255);
   }
 
   .document-dragging {
-    @apply opacity-50;
+    opacity: 0.5;
   }
 }
 
@@ -248,7 +293,10 @@
 .dark .stat-value,
 .dark .dashboard-card .value,
 .dark .counter {
-  @apply text-white text-2xl font-bold;
+  color: white;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: bold;
 }
 
 /* Make icons pop with subtle glow effects */
@@ -418,10 +466,17 @@
 
 .dark .ai-assistant-container .card-title,
 .dark .ai-assistant-container .card-header h3,
-.dark .ai-assistant-container .card-header .text-xl,
-.dark .ai-assistant-container .card-header .text-2xl {
+.dark .ai-assistant-container .card-header .text-xl {
   color: white;
   font-weight: 600;
+}
+
+/* Handle heading size styles separately */
+.dark .ai-assistant-container h2.text-2xl {
+  color: white;
+  font-weight: 600;
+  font-size: 1.5rem;
+  line-height: 2rem;
 }
 
 .dark .ai-assistant-container .card-description {

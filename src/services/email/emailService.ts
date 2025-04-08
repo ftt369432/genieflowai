@@ -7,6 +7,7 @@
 import { getEnv } from '../../config/env';
 import { GoogleAPIClient } from '../google/GoogleAPIClient';
 import googleAuthService from '../auth/googleAuth';
+import { EmailAccount, EmailMessage, EmailOptions } from './types';
 
 // Types for email data
 export interface EmailMessage {
@@ -40,10 +41,11 @@ export interface EmailResponse {
   resultSizeEstimate: number;
 }
 
-class EmailService {
+export class EmailService {
   private static instance: EmailService;
   private googleClient: GoogleAPIClient;
   private maxResults = 20;
+  private initialized = false;
   
   private constructor() {
     this.googleClient = GoogleAPIClient.getInstance();
@@ -60,11 +62,15 @@ class EmailService {
    * Initialize the email service
    */
   async initialize(): Promise<void> {
+    if (this.initialized) return;
+
     const { useMock } = getEnv();
     
     if (!useMock) {
       await this.googleClient.initialize();
     }
+    
+    this.initialized = true;
   }
   
   /**
@@ -82,10 +88,13 @@ class EmailService {
     
     console.log('EmailService: Fetching emails with options:', options);
     
-    // Mock data for development
     if (useMock) {
       console.log('EmailService: Using mock data');
       return this.getMockEmails(options);
+    }
+    
+    if (!this.initialized) {
+      await this.initialize();
     }
     
     // Check if signed in
@@ -328,6 +337,37 @@ class EmailService {
       isStarred: index % 5 === 0,
       isImportant: index % 4 === 0
     };
+  }
+
+  async getAccounts(): Promise<EmailAccount[]> {
+    const { useMock } = getEnv();
+    
+    if (useMock) {
+      return [{
+        id: 'mock-account-1',
+        email: 'mock@example.com',
+        provider: 'google',
+        name: 'Mock Account'
+      }];
+    }
+
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    // Real implementation for getting accounts
+    try {
+      const response = await this.googleClient.request<any>('/gmail/v1/users/me/profile');
+      return [{
+        id: response.emailAddress,
+        email: response.emailAddress,
+        provider: 'google',
+        name: response.emailAddress.split('@')[0]
+      }];
+    } catch (error) {
+      console.error('EmailService: Failed to get accounts:', error);
+      throw error;
+    }
   }
 }
 

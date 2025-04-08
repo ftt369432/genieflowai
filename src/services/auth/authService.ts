@@ -16,7 +16,7 @@ export const registerSupabaseUserSetter = (setterFn: (userData: { id: string, em
   console.log('Registered Supabase mock user setter');
   
   // Also register the same function with Google Auth service
-  googleAuthService.setMockUserSetter(setterFn);
+  googleAuthService.registerMockUserSetter(setterFn);
 };
 
 // Types

@@ -7,9 +7,25 @@
  * - Managing tokens
  */
 
-import { getEnv } from "../../config/env";
+import { getEnv } from '../../config/env';
 import { GoogleAPIClient } from "../google/GoogleAPIClient";
-import { supabase } from "../supabase/supabaseClient";
+import { supabase } from '@/lib/supabase';
+
+// Define types for the auth response
+interface GoogleAuthResponse {
+  user: {
+    id: string;
+    email: string;
+    name?: string;
+    picture?: string;
+  };
+  accessToken: string;
+  expiresAt: number;
+  refreshToken?: string;
+}
+
+// Define types for the user setter function
+type UserSetterFunction = (userData: { id: string; email: string; fullName?: string }) => void;
 
 export interface GoogleAuthConfig {
   clientId: string;
@@ -17,43 +33,29 @@ export interface GoogleAuthConfig {
   scope: string[];
 }
 
-// Type for the mock user setter function
-type MockUserSetter = (userData: { id: string; email: string; fullName?: string }) => void;
+export class GoogleAuthError extends Error {
+  constructor(message: string, public readonly code?: string) {
+    super(message);
+    this.name = 'GoogleAuthError';
+  }
+}
 
 export class GoogleAuthService {
   private static instance: GoogleAuthService;
-  private googleClient: GoogleAPIClient;
-  private ready: boolean = false;
-  private initialized: boolean = false;
-  private isStable: boolean = false;
-  private initializationPromise: Promise<void> | null = null;
+  private googleApiClient: GoogleAPIClient;
+  private mockUserSetter: UserSetterFunction | null = null;
+  private isInitialized = false;
   
-  // Redirect URI for OAuth flow
-  private redirectUri: string = '';
-  private clientId: string = '';
-  
-  // Default scopes for authentication
-  private defaultScopes: string[] = [
-    'https://www.googleapis.com/auth/userinfo.profile',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/cloud-platform',
-    'https://www.googleapis.com/auth/cloud-language',
-    'https://www.googleapis.com/auth/generative-language.tuning',
-    'https://www.googleapis.com/auth/generative-language.runtime'
-  ];
-
-  private mockUserSetter: MockUserSetter | null = null;
-
   private constructor() {
-    this.googleClient = GoogleAPIClient.getInstance();
-    
-    // Set a timeout to ensure UI stabilizes
-    setTimeout(() => {
-      this.isStable = true;
-    }, 500);
+    this.googleApiClient = GoogleAPIClient.getInstance();
+    console.log('GoogleAuthService: Initializing');
+    this.initialize();
   }
 
-  static getInstance(): GoogleAuthService {
+  /**
+   * Get the singleton instance of the service
+   */
+  public static getInstance(): GoogleAuthService {
     if (!GoogleAuthService.instance) {
       GoogleAuthService.instance = new GoogleAuthService();
     }
@@ -61,166 +63,125 @@ export class GoogleAuthService {
   }
 
   /**
-   * Initialize the Google auth service
+   * Initialize the service
    */
-  async initialize(): Promise<void> {
-    // If already initialized, return the existing promise
-    if (this.initializationPromise) {
-      return this.initializationPromise;
-    }
-
-    const { useMock, googleClientId } = getEnv();
+  private async initialize(): Promise<void> {
+    if (this.isInitialized) return;
     
-    if (this.initialized) {
-      console.log('GoogleAuthService: Already initialized');
-      return;
-    }
+    // Initialize the Google API client
+    await this.googleApiClient.initialize();
     
-    console.log('GoogleAuthService: Initializing');
-    
-    // Create a new promise for initialization
-    this.initializationPromise = (async () => {
-      try {
-        // Set up the client
-        await this.googleClient.initialize();
-        
-        // Set up service properties
-        this.clientId = googleClientId || '';
-        this.redirectUri = import.meta.env.VITE_AUTH_CALLBACK_URL || `${window.location.origin}/auth/callback`;
-        
-        // Mark as initialized
-        this.initialized = true;
-        this.ready = true;
-        
-        console.log('GoogleAuthService: Initialization complete');
-        console.log('Redirect URI:', this.redirectUri);
-      } catch (error) {
-        console.error('GoogleAuthService: Initialization error:', error);
-        // Mark as initialized anyway to avoid infinite retries
-        this.initialized = true;
-        this.ready = false;
-        throw error; // Re-throw to allow error handling
-      }
-    })();
-
-    return this.initializationPromise;
+    this.isInitialized = true;
+    console.log('GoogleAuthService: Initialization complete');
   }
 
   /**
-   * Check if the service is initialized
+   * Register a function to set mock users (used in development)
    */
-  isInitialized(): boolean {
-    return this.initialized;
+  public registerMockUserSetter(setter: UserSetterFunction): void {
+    this.mockUserSetter = setter;
+    console.log('GoogleAuthService: Mock user setter registered');
   }
 
   /**
    * Sign in with Google
+   * In production, this uses Supabase OAuth
+   * In development/mock mode, it creates a mock user
    */
-  async signIn(): Promise<void> {
+  public async signIn(email?: string): Promise<GoogleAuthResponse> {
     const { useMock } = getEnv();
     
-    if (useMock) {
-      console.log('GoogleAuthService: Mock mode, simulating successful sign in');
-      if (this.mockUserSetter) {
-        this.mockUserSetter({
-          id: 'mock-google-user',
-          email: 'mockuser@gmail.com',
-          fullName: 'Mock Google User'
-        });
-      }
-      return;
+    if (useMock && this.mockUserSetter) {
+      const mockEmail = email || 'mock.user@example.com';
+      const mockId = 'mock-' + Math.random().toString(36).substring(2, 9);
+      
+      // Set mock user
+      this.mockUserSetter({
+        id: mockId,
+        email: mockEmail,
+        fullName: 'Mock User'
+      });
+      
+      // Return mock auth response
+      return {
+        user: {
+          id: mockId,
+          email: mockEmail,
+          name: 'Mock User',
+          picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(mockEmail)}&background=random`
+        },
+        accessToken: 'mock-token-' + Math.random().toString(36).substring(2, 9),
+        expiresAt: Date.now() + 3600000 // 1 hour from now
+      };
     }
     
+    // In production, use Supabase OAuth
     try {
-      if (!this.initialized) {
-        await this.initialize();
-      }
-      
-      // Use Supabase's Google OAuth
+      const { serverUrl } = getEnv();
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: this.redirectUri,
-          scopes: this.defaultScopes.join(' ')
+          redirectTo: `${serverUrl}/auth/callback`,
+          scopes: [
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/gmail.readonly',
+            'https://www.googleapis.com/auth/calendar.readonly',
+            'https://www.googleapis.com/auth/drive.readonly'
+          ].join(' ')
         }
       });
       
       if (error) {
-        throw error;
+        console.error('Google Auth Error:', error);
+        throw new GoogleAuthError(error.message, error.status?.toString());
       }
       
-      // The signInWithOAuth method will handle the redirect automatically
+      if (!data.url) {
+        throw new GoogleAuthError('No OAuth URL returned from Supabase');
+      }
+      
+      // This won't actually be reached as the user will be redirected
+      // The actual user data will be handled in the auth callback
+      return {
+        user: { id: '', email: '' },
+        accessToken: '',
+        expiresAt: 0
+      };
     } catch (error) {
-      console.error('GoogleAuthService: Error during sign in:', error);
-      throw error;
+      console.error('Unexpected error during Google sign-in:', error);
+      if (error instanceof GoogleAuthError) {
+        throw error;
+      }
+      throw new GoogleAuthError('Failed to initiate Google sign-in');
     }
   }
 
   /**
-   * Handle the authorization code from the OAuth callback
+   * Check if the user is signed in
    */
-  async handleAuthCode(code: string): Promise<string> {
-    const { useMock } = getEnv();
-    
-    if (useMock) {
-      console.log('GoogleAuthService: Mock mode, skipping auth code handling');
-      return 'mock-token';
-    }
-    
-    // With Supabase OAuth, we don't need to handle the code manually
-    // Supabase will handle the token exchange automatically
-    // This method is kept for backward compatibility
-    return 'handled-by-supabase';
+  public async isSignedIn(): Promise<boolean> {
+    const { data } = await supabase.auth.getSession();
+    return !!data.session;
   }
 
   /**
-   * Sign out from Google
+   * Sign out the user
    */
-  async signOut(): Promise<void> {
-    console.log('GoogleAuthService: Signing out');
+  public async signOut(): Promise<void> {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        throw error;
+        console.error('Sign out error:', error);
+        throw new GoogleAuthError(error.message, error.status?.toString());
       }
     } catch (error) {
-      console.error('GoogleAuthService: Error during sign out:', error);
-      throw error;
+      console.error('Error during sign out:', error);
+      if (error instanceof GoogleAuthError) {
+        throw error;
+      }
+      throw new GoogleAuthError('Failed to sign out');
     }
-  }
-
-  /**
-   * Check if user is signed in
-   */
-  async isSignedIn(): Promise<boolean> {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      return !!session;
-    } catch (error) {
-      console.error('GoogleAuthService: Error checking sign in status:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Get access token
-   */
-  async getAccessToken(): Promise<string> {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      return session?.access_token || '';
-    } catch (error) {
-      console.error('GoogleAuthService: Error getting access token:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Set the mock user setter function
-   */
-  setMockUserSetter(setter: MockUserSetter): void {
-    this.mockUserSetter = setter;
-    console.log('GoogleAuthService: Mock user setter registered');
   }
 }
 

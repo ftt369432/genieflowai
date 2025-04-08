@@ -56,37 +56,36 @@ export type AICapability =
   | 'summarization'
   | 'translation';
 
+export type MessageRole = 'user' | 'assistant' | 'system';
+
+export interface Message {
+  id: string;
+  content: string;
+  role: MessageRole;
+  timestamp: Date;
+}
+
+export type AgentType = 'research' | 'work' | 'learning' | 'building' | 'general' | 'tasks' | 'email' | 'calendar' | 'drive';
+
 export interface AIAssistant {
   id: string;
   name: string;
+  type: AgentType;
+  capabilities: string[];
+  avatar?: string;
   description?: string;
-  model: AIModel;
-  systemPrompt?: string;
-  knowledgeBase?: AIFolder[];
-  avatarUrl?: string;
-  settings: {
-    temperature?: number;
-    maxTokens?: number;
-    topP?: number;
-    presencePenalty?: number;
-    frequencyPenalty?: number;
-  };
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-export interface AIMessage {
-  id: string;
-  role: 'system' | 'user' | 'assistant' | 'function';
-  content: string;
-  createdAt: Date;
-  metadata?: {
-    tokens?: number;
-    processingTime?: number;
-    sources?: string[];
-    functionCall?: {
-      name: string;
-      arguments: Record<string, any>;
-    };
-  };
+export interface AssistantResponse {
+  message: Message;
+  suggestions?: string[];
+  actions?: {
+    type: string;
+    payload: any;
+  }[];
 }
 
 export interface AIConversation {
@@ -149,15 +148,6 @@ export interface MessageMetadata {
     isCode?: boolean;
     language?: string;
   };
-}
-
-export interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  attachments?: string[];
-  metadata?: Record<string, unknown>;
 }
 
 export interface DocumentReference {

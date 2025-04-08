@@ -472,10 +472,6 @@ export const TeamsSidebar: React.FC = () => {
           <Settings className="h-3 w-3 mr-1" />
           Settings
         </Button>
-        <Button variant="ghost" size="sm" className="w-full justify-start text-xs">
-          <Mail className="h-3 w-3 mr-1" />
-          Connect Email
-        </Button>
       </div>
 
       {/* Create Page Dialog */}

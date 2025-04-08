@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
-import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
-import { getEnv } from '../config/env';
+import { SupabaseClient, User, Session } from '@supabase/supabase-js';
 import { registerSupabaseUserSetter } from '../services/auth/authService';
 import { GoogleAPIClient } from '../services/google/GoogleAPIClient';
+import { supabase } from '../lib/supabase';
 
 // Supabase context type definition
 interface SupabaseContextType {
@@ -22,57 +22,21 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Get environment configuration
-  const { supabaseUrl, supabaseAnonKey, useMock } = getEnv();
-  
-  // Create Supabase client using useMemo to prevent recreating on each render
-  const supabase = useMemo(() => {
-    console.log('Creating Supabase client with URL:', supabaseUrl);
-    return createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
-    });
-  }, [supabaseUrl, supabaseAnonKey]);
-  
-  // Method to set a mock user in the Supabase context
+  // Function to set mock user for development
   const setMockUser = (userData: { id: string; email: string; fullName?: string }) => {
-    console.log('Setting mock user in Supabase context:', userData);
-    
-    // Create a compliant User object
-    const mockUser: User = {
+    const mockUser = {
       id: userData.id,
-      app_metadata: {},
-      user_metadata: {
-        full_name: userData.fullName || 'Mock User',
-        avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.email)}&background=random`,
-      },
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
       email: userData.email,
-      email_confirmed_at: new Date().toISOString(),
-      phone: '',
-      confirmed_at: new Date().toISOString(),
-      last_sign_in_at: new Date().toISOString(),
-      role: 'authenticated',
-      updated_at: new Date().toISOString(),
-    };
+      user_metadata: {
+        full_name: userData.fullName || 'Test User'
+      },
+      app_metadata: {},
+      aud: 'authenticated',
+      created_at: new Date().toISOString()
+    } as User;
     
-    // Create a compliant Session object
-    const mockSession: Session = {
-      access_token: 'mock-token-' + Math.random().toString(36).substring(2, 9),
-      token_type: 'bearer',
-      expires_in: 3600,
-      refresh_token: 'mock-refresh-' + Math.random().toString(36).substring(2, 9),
-      user: mockUser,
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
-    };
-    
-    // Update state
     setUser(mockUser);
-    setSession(mockSession);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -111,7 +75,7 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, []);
 
   return (
     <SupabaseContext.Provider value={{ supabase, user, session, loading, setMockUser }}>
