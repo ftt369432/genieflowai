@@ -1,91 +1,86 @@
 /**
  * Environment configuration
- * 
- * Centralizes access to environment variables with proper defaults
+ * Loads environment variables and provides a typed interface
  */
 
-export type EnvironmentConfig = {
+interface EnvironmentConfig {
   useMock: boolean;
   isDevelopment: boolean;
   isProduction: boolean;
   serverUrl: string;
   apiUrl: string;
-  googleClientId: string;
-  environment: string;
-  debugMode: boolean;
-  analytics: boolean;
-  hasOpenaiApiKey: boolean;
-  hasGoogleApiKey: boolean;
-  hasGoogleClientId: boolean;
-  hasGeminiApiKey: boolean;
-  openaiApiKey: string;
-  googleApiKey: string;
   geminiApiKey: string;
+  googleApiKey: string;
+  authCallbackUrl: string;
+  aiProvider: 'google';
   supabaseUrl: string;
   supabaseAnonKey: string;
-  aiModel: string;
 }
 
-/**
- * Helper to parse boolean strings
- */
-function parseBoolean(value: string): boolean {
-  return value === 'true' || value === '1';
-}
+// Cache the environment config
+let environmentConfig: EnvironmentConfig | null = null;
 
 /**
- * Get environment configuration
+ * Get the environment configuration
  */
 export function getEnv(): EnvironmentConfig {
-  const isDevelopment = import.meta.env.DEV;
-  const isProduction = import.meta.env.PROD;
+  if (environmentConfig) {
+    return environmentConfig;
+  }
+
+  // Determine environment
+  const isDevelopment = import.meta.env.MODE === 'development';
+  const isProduction = import.meta.env.MODE === 'production';
   
-  // Force mock mode to false in production
-  const useMock = isProduction ? false : parseBoolean(import.meta.env?.VITE_USE_MOCK || 'false');
+  // Determine if we should use mock data
+  const useMock = import.meta.env.VITE_USE_MOCK === 'true';
   
-  // Debug and analytics flags
-  const debugMode = isProduction ? false : parseBoolean(import.meta.env?.VITE_DEBUG_MODE || 'true');
-  const analytics = parseBoolean(import.meta.env?.VITE_ANALYTICS || 'false');
-  
-  // API keys
-  const openaiApiKey = import.meta.env?.VITE_OPENAI_API_KEY || '';
-  const googleApiKey = import.meta.env?.VITE_GOOGLE_API_KEY || '';
-  const googleClientId = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';
-  const geminiApiKey = import.meta.env?.VITE_GEMINI_API_KEY || '';
-  
-  // URLs
-  const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+  // Get API URL with fallback
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-  const environment = import.meta.env.VITE_ENVIRONMENT || 'development';
-  const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || '';
-  const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || '';
   
-  // AI configuration
-  const aiModel = import.meta.env?.VITE_AI_MODEL || 'gemini-2.0-flash';
+  // Get server URL with fallback
+  const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
   
-  if (!googleClientId && !useMock) {
-    console.warn('Google Client ID not set in environment variables. Some features may not work properly.');
+  // Get Gemini API key with fallback
+  const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+  
+  // Get Google API key with fallback
+  const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY || '';
+  
+  // Determine auth callback URL - automatically detect local vs production
+  const isLocalEnvironment = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  
+  let authCallbackUrl = '';
+  if (isLocalEnvironment) {
+    // Use local URL when running locally
+    authCallbackUrl = `${window.location.origin}/auth/callback`;
+  } else {
+    // Use Netlify URL in production
+    authCallbackUrl = 'https://genieflowai.netlify.app/auth/callback';
   }
   
-  return {
+  // Get AI provider with fallback
+  const aiProvider = (import.meta.env.VITE_AI_PROVIDER || 'google') as 'google';
+  
+  // Get Supabase URL and anon key with fallbacks
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  
+  // Create and cache environment config
+  environmentConfig = {
     useMock,
     isDevelopment,
     isProduction,
     serverUrl,
     apiUrl,
-    googleClientId,
-    environment,
-    debugMode,
-    analytics,
-    hasOpenaiApiKey: !!openaiApiKey,
-    hasGoogleApiKey: !!googleApiKey,
-    hasGoogleClientId: !!googleClientId,
-    hasGeminiApiKey: !!geminiApiKey,
-    openaiApiKey,
-    googleApiKey,
     geminiApiKey,
+    googleApiKey,
+    authCallbackUrl,
+    aiProvider,
     supabaseUrl,
     supabaseAnonKey,
-    aiModel
   };
+  
+  return environmentConfig;
 } 

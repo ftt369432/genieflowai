@@ -84,6 +84,22 @@ export class GoogleAuthService {
   }
 
   /**
+   * Get the correct callback URL based on environment
+   */
+  private getCallbackUrl(): string {
+    const { serverUrl } = getEnv();
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    if (isLocalhost) {
+      // Use local URL when running locally
+      return `${window.location.origin}/auth/callback`;
+    } else {
+      // Use Netlify URL in production
+      return 'https://genieflowai.netlify.app/auth/callback';
+    }
+  }
+
+  /**
    * Sign in with Google
    * In production, this uses Supabase OAuth
    * In development/mock mode, it creates a mock user
@@ -117,11 +133,13 @@ export class GoogleAuthService {
     
     // In production, use Supabase OAuth
     try {
-      const { serverUrl } = getEnv();
+      const callbackUrl = this.getCallbackUrl();
+      console.log('Using callback URL:', callbackUrl);
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${serverUrl}/auth/callback`,
+          redirectTo: callbackUrl,
           scopes: [
             'https://www.googleapis.com/auth/userinfo.email',
             'https://www.googleapis.com/auth/userinfo.profile',
