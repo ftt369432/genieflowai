@@ -194,4 +194,122 @@
   .document-dragging {
     @apply opacity-50;
   }
+}
+
+/* Enhanced dark mode dashboard styling */
+.dark .dashboard-header,
+.dark header,
+.dark .app-header {
+  @apply bg-gray-900 border-gray-700 shadow-md;
+}
+
+.dark .dashboard-header h1,
+.dark .dashboard-header h2,
+.dark header h1,
+.dark header h2,
+.dark .page-title {
+  @apply text-white font-bold;
+}
+
+/* Dashboard cards and sections */
+.dark .dashboard-card,
+.dark .dashboard-widget,
+.dark .card,
+.dark .widget {
+  @apply bg-gray-800 border border-gray-700 shadow-lg;
+}
+
+.dark .dashboard-card h2,
+.dark .dashboard-card h3,
+.dark .dashboard-widget h2,
+.dark .dashboard-widget h3,
+.dark .card h2,
+.dark .card h3,
+.dark .widget h2,
+.dark .widget h3 {
+  @apply text-white font-semibold;
+}
+
+.dark .card-title,
+.dark .widget-title,
+.dark .section-title {
+  @apply text-blue-300 font-semibold;
+}
+
+/* Dashboard text content */
+.dark .dashboard-content p,
+.dark .card-content,
+.dark .widget-content {
+  @apply text-gray-100;
+}
+
+/* Make numbers and metrics pop */
+.dark .metric-value,
+.dark .stat-value,
+.dark .dashboard-card .value,
+.dark .counter {
+  @apply text-white text-2xl font-bold;
+}
+
+/* Make icons pop with subtle glow effects */
+.dark .dashboard svg,
+.dark .card svg,
+.dark .widget svg {
+  @apply text-blue-400 drop-shadow;
+  filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.3));
+}
+
+/* Give key elements a subtle animation */
+.dark .dashboard-card:hover,
+.dark .widget:hover {
+  @apply border-blue-500 transition-all duration-300;
+  transform: translateY(-2px);
+}
+
+/* Enhance visualization elements */
+.dark .chart,
+.dark .graph,
+.dark .visualization {
+  @apply bg-gray-800 rounded-lg border border-gray-700 p-3;
+  filter: saturate(1.2) brightness(1.1);
+}
+
+/* Add extra pop to colored stats */
+.dark .positive-stat {
+  @apply text-green-400 font-semibold;
+}
+
+.dark .negative-stat {
+  @apply text-red-400 font-semibold;
+}
+
+.dark .neutral-stat {
+  @apply text-yellow-400 font-semibold;
+}
+
+/* Enhanced dark mode header styling */
+.dark .app-header,
+.dark header,
+.dark nav {
+  @apply bg-gray-900 border-b border-gray-700;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+}
+
+.dark .app-header *,
+.dark header * {
+  @apply text-white;
+}
+
+/* Make header icons stand out */
+.dark .app-header svg,
+.dark header svg,
+.dark .header-icon {
+  @apply text-blue-400;
+  filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.4));
+}
+
+/* Make user profile or avatar in header stand out */
+.dark .user-avatar,
+.dark .profile-icon {
+  @apply ring-2 ring-blue-500 ring-offset-1 ring-offset-gray-900;
 } 
