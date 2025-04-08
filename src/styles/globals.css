@@ -26,17 +26,17 @@
   [data-theme='dark'] {
     --bg-primary: theme('colors.gray.900');
     --bg-secondary: theme('colors.gray.800');
-    --bg-paper: theme('colors.gray.900');
-    --text-primary: theme('colors.gray.100');
-    --text-secondary: theme('colors.gray.300');
-    --text-muted: theme('colors.gray.500');
+    --bg-paper: theme('colors.gray.800');
+    --text-primary: theme('colors.white');
+    --text-secondary: theme('colors.gray.200');
+    --text-muted: theme('colors.gray.400');
     --input-bg: theme('colors.gray.800');
-    --input-text: theme('colors.gray.100');
+    --input-text: theme('colors.white');
     --input-border: theme('colors.gray.600');
   }
 
   [data-theme='dark'] body {
-    @apply bg-gray-900 text-gray-100;
+    @apply bg-gray-900 text-white;
   }
 
   [data-theme='cyberpunk'] {
@@ -75,13 +75,14 @@
 .dark {
   --bg-primary: theme('colors.gray.900');
   --bg-secondary: theme('colors.gray.800');
-  --bg-paper: theme('colors.gray.900');
-  --text-primary: theme('colors.gray.100');
-  --text-secondary: theme('colors.gray.300');
-  --text-muted: theme('colors.gray.500');
+  --bg-paper: theme('colors.gray.800');
+  --text-primary: theme('colors.white');
+  --text-secondary: theme('colors.gray.200');
+  --text-muted: theme('colors.gray.400');
   --input-bg: theme('colors.gray.800');
-  --input-text: theme('colors.gray.100');
+  --input-text: theme('colors.white');
   --input-border: theme('colors.gray.600');
+  color-scheme: dark;
 }
 
 .cyberpunk {
@@ -125,7 +126,27 @@
   }
 
   .dark .grid-item {
-    @apply bg-gray-800 border-gray-700;
+    @apply bg-gray-800 border-gray-700 shadow-md;
+  }
+
+  /* Add additional dark mode enhancements */
+  .dark .card,
+  .dark .dashboard-card {
+    @apply bg-gray-800 border-gray-700 shadow-lg;
+  }
+
+  .dark button:not(.btn-primary) {
+    @apply bg-gray-700 hover:bg-gray-600 text-white;
+  }
+
+  .dark .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-500 text-white shadow-md;
+  }
+
+  .dark input, 
+  .dark textarea, 
+  .dark select {
+    @apply bg-gray-800 border-gray-600 text-white placeholder-gray-400;
   }
 }
 
