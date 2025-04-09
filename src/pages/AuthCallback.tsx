@@ -90,19 +90,32 @@ export function AuthCallback() {
         setStatus('Waiting for authentication session...');
         
         // Wait for Supabase to process the OAuth callback and create a session
-        let retryCount = 0;
-        const maxRetries = 5;
         let session = null;
+        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
         
+        if (sessionError) {
+          throw new Error(`Failed to get session: ${sessionError.message}`);
+        }
+        
+        if (!initialSession) {
+          throw new Error('No session available after OAuth callback');
+        }
+        
+        session = initialSession;
+        
+        // Wait for the provider token to become available
+        setStatus('Waiting for provider token...');
+        let retryCount = 0;
+        const maxRetries = 10;
         while (retryCount < maxRetries) {
-          const { data, error: sessionError } = await supabase.auth.getSession();
+          const { data: { session: updatedSession }, error: sessionError } = await supabase.auth.getSession();
           
           if (sessionError) {
             throw new Error(`Failed to get session: ${sessionError.message}`);
           }
           
-          if (data.session) {
-            session = data.session;
+          if (updatedSession?.provider_token) {
+            session = updatedSession;
             break;
           }
           
@@ -111,12 +124,8 @@ export function AuthCallback() {
           retryCount++;
         }
         
-        if (!session) {
-          throw new Error('No session available after OAuth callback');
-        }
-        
-        if (!session.provider_token) {
-          throw new Error('No provider token available in session');
+        if (!session?.provider_token) {
+          throw new Error('No provider token available in session after waiting');
         }
         
         // Initialize the Google API client with the session token
