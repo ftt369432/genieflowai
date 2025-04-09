@@ -182,9 +182,9 @@ const createMockUser = (email: string, fullName: string): User => {
 
 // Login user
 export const loginUser = async ({ email, password }: LoginCredentials): Promise<AuthResponse> => {
-  const { useMock } = getEnv();
-
-  if (useMock) {
+    const { useMock } = getEnv();
+    
+    if (useMock) {
     const mockUser = createMockUser(email, 'Mock User');
     return {
       user: mockUser,
@@ -230,8 +230,8 @@ export const loginUser = async ({ email, password }: LoginCredentials): Promise<
 
 // Register new user
 export const registerUser = async (data: RegisterData): Promise<AuthResponse> => {
-  const { useMock } = getEnv();
-
+    const { useMock } = getEnv();
+    
   if (useMock) {
     const mockUser = createMockUser(data.email, `${data.firstName} ${data.lastName}`);
     return {

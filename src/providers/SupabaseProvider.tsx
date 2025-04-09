@@ -3,6 +3,7 @@ import { SupabaseClient, User, Session } from '@supabase/supabase-js';
 import { registerSupabaseUserSetter } from '../services/auth/authService';
 import { GoogleAPIClient } from '../services/google/GoogleAPIClient';
 import { supabase } from '../lib/supabase';
+import { useUserStore } from '../stores/userStore';
 
 // Supabase context type definition
 interface SupabaseContextType {
@@ -11,6 +12,7 @@ interface SupabaseContextType {
   session: Session | null;
   loading: boolean;
   setMockUser: (userData: { id: string; email: string; fullName?: string }) => void;
+  clearSession: () => void;
 }
 
 // Create the context
@@ -38,6 +40,22 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setUser(mockUser);
     setLoading(false);
   };
+  
+  // Function to clear session data
+  const clearSession = () => {
+    console.log('Clearing Supabase session');
+    setUser(null);
+    setSession(null);
+    
+    // Clear local storage
+    try {
+      localStorage.removeItem('supabase.auth.token');
+      localStorage.removeItem('sb-bpczmzsozjlqxercmnyu-auth-token');
+      sessionStorage.removeItem('supabase.auth.token');
+    } catch (e) {
+      console.error('Error clearing local storage:', e);
+    }
+  };
 
   useEffect(() => {
     // Register the mock user setter
@@ -59,14 +77,20 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change:', event);
       
-      // Update Google API client token when auth state changes
-      if (session?.provider_token) {
-        const googleClient = GoogleAPIClient.getInstance();
-        googleClient.setAccessToken(session.provider_token);
+      if (event === 'SIGNED_OUT') {
+        clearSession();
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        // Update Google API client token when auth state changes
+        if (session?.provider_token) {
+          const googleClient = GoogleAPIClient.getInstance();
+          googleClient.setAccessToken(session.provider_token);
+        }
       }
       
       setLoading(false);
@@ -78,7 +102,7 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   return (
-    <SupabaseContext.Provider value={{ supabase, user, session, loading, setMockUser }}>
+    <SupabaseContext.Provider value={{ supabase, user, session, loading, setMockUser, clearSession }}>
       {children}
     </SupabaseContext.Provider>
   );

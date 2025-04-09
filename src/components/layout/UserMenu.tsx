@@ -1,11 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { User, LogOut, Settings, ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { User, LogOut, Settings, ChevronDown, Mail } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useUserStore } from '../../stores/userStore';
 import { useNavigate } from 'react-router-dom';
 import { getAvatar } from '../../lib/utils';
 import { cn } from '../../lib/utils';
+import { getEnv } from '../../config/env';
 
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,32 +14,51 @@ export function UserMenu() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const { logout } = useAuth();
   const { showSuccess } = useNotifications();
-  const { user } = useUserStore();
+  const user = useUserStore(state => state.user);
   const navigate = useNavigate();
+  const { useMock } = getEnv();
 
-  // Handle missing user info gracefully
-  const safeUser = {
+  // Handle missing user info gracefully - memoize this to prevent re-renders
+  const safeUser = useMemo(() => ({
     fullName: user?.fullName || 'User',
     email: user?.email || 'user@example.com',
     avatar: user?.avatar
-  };
+  }), [user?.fullName, user?.email, user?.avatar]);
 
-  console.log("UserMenu rendering. User:", user);
-  console.log("Menu state:", isOpen ? "open" : "closed");
+  // Only log on initial render and when important values change
+  useEffect(() => {
+    console.log("UserMenu mounting with user:", user);
+    console.log("Mock mode:", useMock);
+  }, [user, useMock]);
+
+  // Log menu state changes separately
+  useEffect(() => {
+    console.log("Menu state:", isOpen ? "open" : "closed");
+  }, [isOpen]);
 
   // Close menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      // Only run if menu is open
+      if (!isOpen) return;
+      
+      // Check if click is outside both the menu and button
+      if (
+        menuRef.current && 
+        !menuRef.current.contains(event.target as Node) && 
+        buttonRef.current && 
+        !buttonRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside);
+    // Use capture phase to ensure our handler runs first
+    document.addEventListener('mousedown', handleClickOutside, true);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside, true);
     };
-  }, []);
+  }, [isOpen]); // Add isOpen as dependency to re-add listener when menu opens/closes
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -56,24 +76,44 @@ export function UserMenu() {
     };
   }, [isOpen]);
 
-  const handleLogout = async () => {
+  // Memoize event handlers to prevent recreation on each render
+  const handleLogout = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log("Logout button clicked");
     try {
+      setIsOpen(false); // Close menu first
       await logout();
     } catch (error) {
       console.error('Logout failed:', error);
-      showSuccess('Logged out successfully'); // Show success even on error since we're in mock mode
+      showSuccess('Logged out successfully');
       navigate('/login');
     }
-  };
+  }, [logout, showSuccess, navigate]);
 
-  const toggleMenu = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Stop event propagation
+  const toggleMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     console.log("Toggling menu from", isOpen, "to", !isOpen);
-    setIsOpen(!isOpen);
-  };
+    // Force a state update with function form
+    setIsOpen(currentState => !currentState);
+  }, [isOpen]);
+
+  const navigateTo = useCallback((path: string) => {
+    return () => {
+      navigate(path);
+      setIsOpen(false);
+    };
+  }, [navigate]);
+
+  if (!user) {
+    console.log("No user available, not rendering UserMenu");
+    return null;
+  }
 
   return (
-    <div className="relative z-[9999]" ref={menuRef} style={{ pointerEvents: 'auto' }}>
+    <div className="relative z-[100]" ref={menuRef} style={{ pointerEvents: 'auto' }}>
       <button
         ref={buttonRef}
         onClick={toggleMenu}
@@ -98,75 +138,81 @@ export function UserMenu() {
           {safeUser.fullName}
         </span>
         <ChevronDown className={cn(
-          "ml-1 md:ml-2 h-4 w-4 text-gray-500 transition-transform duration-200",
-          isOpen ? "transform rotate-180" : ""
+          "ml-2 h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform duration-200",
+          isOpen && "transform rotate-180"
         )} />
       </button>
 
       {isOpen && (
-        <>
-          {/* Backdrop for mobile to make it easier to see the menu */}
+        <div 
+          className={cn(
+            "fixed inset-0 z-[90]",
+            "bg-transparent" // Invisible overlay to catch clicks
+          )}
+          onClick={() => setIsOpen(false)}
+        >
           <div 
-            className="fixed inset-0 bg-black/20 z-40 sm:hidden" 
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsOpen(false);
-            }} 
-          />
-          
-          <div 
-            className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl py-1 border border-gray-200 dark:border-gray-700 z-[9999]"
-            role="menu"
-            aria-orientation="vertical"
-            data-testid="user-dropdown-menu"
-            onClick={(e) => e.stopPropagation()} // Prevent clicks from reaching parent elements
+            className={cn(
+              "absolute right-0 top-[40px] mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800",
+              "ring-1 ring-black ring-opacity-5 focus:outline-none",
+              "transform transition-all duration-200 ease-in-out",
+              "z-[101]" // Ensure dropdown is above overlay
+            )}
+            onClick={(e) => e.stopPropagation()} // Prevent clicks from closing menu
           >
-            <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{safeUser.fullName}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{safeUser.email}</p>
+            <div className="py-1" role="menu" aria-orientation="vertical">
+              {useMock && (
+                <div className="px-4 py-2 text-sm text-yellow-600 dark:text-yellow-400">
+                  Mock Mode Active
+                </div>
+              )}
+              <button
+                onClick={navigateTo('/profile')}
+                className={cn(
+                  "flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200",
+                  "hover:bg-gray-100 dark:hover:bg-gray-700"
+                )}
+                role="menuitem"
+              >
+                <User className="mr-2 h-4 w-4" />
+                Profile & Accounts
+              </button>
+              <button
+                onClick={navigateTo('/settings')}
+                className={cn(
+                  "flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200",
+                  "hover:bg-gray-100 dark:hover:bg-gray-700"
+                )}
+                role="menuitem"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </button>
+              <button
+                onClick={navigateTo('/gmail-test')}
+                className={cn(
+                  "flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 border-t border-gray-200 dark:border-gray-700 mt-1 pt-1",
+                  "hover:bg-gray-100 dark:hover:bg-gray-700"
+                )}
+                role="menuitem"
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Gmail Connection Test
+              </button>
+              <button
+                onClick={handleLogout}
+                className={cn(
+                  "flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400",
+                  "hover:bg-gray-100 dark:hover:bg-gray-700"
+                )}
+                role="menuitem"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </button>
             </div>
-            
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate('/profile');
-                setIsOpen(false);
-              }}
-              className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
-              role="menuitem"
-              data-testid="profile-menu-item"
-            >
-              <User className="h-4 w-4 mr-2" />
-              Profile
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate('/settings');
-                setIsOpen(false);
-              }}
-              className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
-              role="menuitem"
-              data-testid="settings-menu-item"
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </button>
-            <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleLogout();
-              }}
-              className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center text-red-600 dark:text-red-400 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
-              role="menuitem"
-              data-testid="logout-menu-item"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

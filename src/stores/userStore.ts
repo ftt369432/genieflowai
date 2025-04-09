@@ -53,6 +53,7 @@ interface UserState {
   setSubscription: (subscription: UserSubscription | null) => void;
   login: (email: string, password: string) => Promise<UserProfile>;
   logout: () => void;
+  clearUser: () => void;
   updateProfile: (profile: Partial<UserProfile>) => void;
   checkAuth: () => boolean;
   isSubscribed: () => boolean;
@@ -126,6 +127,17 @@ export const useUserStore = create<UserState>()(
           authToken: null,
           isAuthenticated: false,
           subscription: null
+        });
+      },
+      
+      clearUser: () => {
+        console.log('Clearing user state completely');
+        set({
+          user: null,
+          authToken: null,
+          isAuthenticated: false,
+          subscription: null,
+          isLoading: false
         });
       },
       

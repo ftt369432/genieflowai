@@ -133,21 +133,12 @@ export function AuthCallback() {
         await googleClient.initialize();
         
         // Get user info from Google
-        setStatus('Fetching user profile...');
-        const userInfo = await googleClient.request<{
-          id: string;
-          email: string;
-          name: string;
-          given_name?: string;
-          family_name?: string;
-          picture?: string;
-        }>('/oauth2/v2/userinfo', { method: 'GET' });
-        
-        console.log('Received user info:', userInfo);
+        setStatus('Fetching user information...');
+        const userInfo = await googleClient.getUserInfo();
         
         // Create user profile
         const subscription: UserSubscription = {
-          plan: 'pro' as SubscriptionTier,
+          plan: 'free' as SubscriptionTier,
           type: 'individual',
           status: 'active',
           currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -157,19 +148,13 @@ export function AuthCallback() {
           id: userInfo.id,
           email: userInfo.email,
           fullName: userInfo.name,
-          avatar: userInfo.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(userInfo.name)}&background=random`,
+          avatar: userInfo.picture,
           subscription
         };
         
         // Set the user in global state
         setUser(userProfile);
-        
-        // Set in Supabase context for protected routes
-        setMockUser({
-          id: userInfo.id,
-          email: userInfo.email,
-          fullName: userInfo.name
-        });
+        setAuthToken(session.provider_token);
         
         setStatus('Login successful! Redirecting...');
         
@@ -178,8 +163,8 @@ export function AuthCallback() {
           navigate('/dashboard', { replace: true });
         }, 1000);
       } catch (error) {
-        console.error('Error processing authentication:', error);
-        setError(error instanceof Error ? error.message : 'Authentication failed. Please try again.');
+        console.error('Error during auth callback:', error);
+        setError(error instanceof Error ? error.message : 'An unknown error occurred');
       }
     }
 

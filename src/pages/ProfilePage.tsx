@@ -17,7 +17,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
 import { Avatar } from '../components/ui/Avatar';
-import { Icons } from '@/components/icons';
 
 interface EmailConfig {
   type: 'gmail' | 'imap';

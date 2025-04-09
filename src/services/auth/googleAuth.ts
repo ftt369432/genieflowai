@@ -105,73 +105,77 @@ export class GoogleAuthService {
    * In development/mock mode, it creates a mock user
    */
   public async signIn(email?: string): Promise<GoogleAuthResponse> {
-    const { useMock, authCallbackUrl } = getEnv();
+    const { useMock } = getEnv();
     
-    if (useMock && this.mockUserSetter) {
-      const mockEmail = email || 'mock.user@example.com';
-      const mockId = 'mock-' + Math.random().toString(36).substring(2, 9);
+    // If in mock mode, use mock data
+    if (useMock) {
+      console.log('GoogleAuthService: Using mock sign in');
+      if (!this.mockUserSetter) {
+        throw new GoogleAuthError('Mock user setter not registered');
+      }
       
-      // Set mock user
+      const mockUser = {
+        id: 'mock-user-id',
+        email: email || 'mock@example.com',
+        name: 'Mock User',
+        picture: 'https://via.placeholder.com/150'
+      };
+      
       this.mockUserSetter({
-        id: mockId,
-        email: mockEmail,
-        fullName: 'Mock User'
+        id: mockUser.id,
+        email: mockUser.email,
+        fullName: mockUser.name
       });
       
-      // Return mock auth response
       return {
-        user: {
-          id: mockId,
-          email: mockEmail,
-          name: 'Mock User',
-          picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(mockEmail)}&background=random`
-        },
-        accessToken: 'mock-token-' + Math.random().toString(36).substring(2, 9),
+        user: mockUser,
+        accessToken: 'mock-token',
         expiresAt: Date.now() + 3600000 // 1 hour from now
       };
     }
-    
-    // In production, use Supabase OAuth
+
     try {
-      const callbackUrl = authCallbackUrl;
-      console.log('Using callback URL:', callbackUrl);
+      // Get the current session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
+      if (sessionError) {
+        throw new GoogleAuthError(`Failed to get session: ${sessionError.message}`);
+      }
+
+      // If we already have a session with a provider token, use it
+      if (session?.provider_token) {
+        console.log('GoogleAuthService: Using existing provider token');
+        return {
+          user: {
+            id: session.user.id,
+            email: session.user.email!,
+            name: session.user.user_metadata?.full_name,
+            picture: session.user.user_metadata?.avatar_url
+          },
+          accessToken: session.provider_token,
+          expiresAt: session.expires_at! * 1000 // Convert to milliseconds
+        };
+      }
+
+      // If no session or no provider token, initiate OAuth flow
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: callbackUrl,
-          scopes: [
-            'https://www.googleapis.com/auth/userinfo.email',
-            'https://www.googleapis.com/auth/userinfo.profile',
-            'https://www.googleapis.com/auth/gmail.readonly',
-            'https://www.googleapis.com/auth/calendar.readonly',
-            'https://www.googleapis.com/auth/drive.readonly'
-          ].join(' ')
+          redirectTo: this.getCallbackUrl(),
+          scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly'
         }
       });
-      
+
       if (error) {
-        console.error('Google Auth Error:', error);
-        throw new GoogleAuthError(error.message, error.status?.toString());
+        throw new GoogleAuthError(`Failed to initiate OAuth: ${error.message}`);
       }
-      
-      if (!data.url) {
-        throw new GoogleAuthError('No OAuth URL returned from Supabase');
-      }
-      
-      // This won't actually be reached as the user will be redirected
-      // The actual user data will be handled in the auth callback
-      return {
-        user: { id: '', email: '' },
-        accessToken: '',
-        expiresAt: 0
-      };
+
+      // The OAuth flow will redirect to the callback URL
+      // The callback handler will set the provider token
+      throw new GoogleAuthError('Redirecting to OAuth provider');
     } catch (error) {
-      console.error('Unexpected error during Google sign-in:', error);
-      if (error instanceof GoogleAuthError) {
-        throw error;
-      }
-      throw new GoogleAuthError('Failed to initiate Google sign-in');
+      console.error('Error during sign in:', error);
+      throw error;
     }
   }
 
