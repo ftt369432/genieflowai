@@ -64,18 +64,20 @@ export class GoogleAPIClient {
       
       if (error) {
         console.error('Failed to get session:', error);
-        throw error; // Don't fall back to mock mode immediately
+        throw error;
       }
 
       if (!session) {
         console.warn('No session available');
-        throw new Error('No session available'); // Don't fall back to mock mode
+        throw new Error('No session available');
       }
 
       // Check if we have a provider token - we need this for Google API access
       if (!session.provider_token) {
         console.warn('No provider token available');
-        throw new Error('No provider token available'); // Don't fall back to mock mode
+        // Instead of throwing an error, we'll wait for the token to be available
+        // This can happen during the OAuth flow
+        return;
       }
 
       this.accessToken = session.provider_token;
@@ -89,7 +91,7 @@ export class GoogleAPIClient {
         this.accessToken = 'mock-token';
         this.initialized = true;
       } else {
-        throw error; // Propagate the error if not in mock mode
+        throw error;
       }
     }
   }

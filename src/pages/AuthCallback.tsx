@@ -90,10 +90,25 @@ export function AuthCallback() {
         setStatus('Waiting for authentication session...');
         
         // Wait for Supabase to process the OAuth callback and create a session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        let retryCount = 0;
+        const maxRetries = 5;
+        let session = null;
         
-        if (sessionError) {
-          throw new Error(`Failed to get session: ${sessionError.message}`);
+        while (retryCount < maxRetries) {
+          const { data, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError) {
+            throw new Error(`Failed to get session: ${sessionError.message}`);
+          }
+          
+          if (data.session) {
+            session = data.session;
+            break;
+          }
+          
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          retryCount++;
         }
         
         if (!session) {
