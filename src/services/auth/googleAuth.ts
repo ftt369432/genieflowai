@@ -105,7 +105,7 @@ export class GoogleAuthService {
    * In development/mock mode, it creates a mock user
    */
   public async signIn(email?: string): Promise<GoogleAuthResponse> {
-    const { useMock } = getEnv();
+    const { useMock, authCallbackUrl } = getEnv();
     
     if (useMock && this.mockUserSetter) {
       const mockEmail = email || 'mock.user@example.com';
@@ -133,7 +133,7 @@ export class GoogleAuthService {
     
     // In production, use Supabase OAuth
     try {
-      const callbackUrl = this.getCallbackUrl();
+      const callbackUrl = authCallbackUrl;
       console.log('Using callback URL:', callbackUrl);
       
       const { data, error } = await supabase.auth.signInWithOAuth({
