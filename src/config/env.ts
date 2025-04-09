@@ -35,7 +35,9 @@ export function getEnv(): EnvironmentConfig {
   const isProduction = import.meta.env.MODE === 'production';
   
   // Determine whether to use mock data
-  const useMock = import.meta.env.VITE_USE_MOCK === 'true' || import.meta.env.VITE_USE_MOCK === true;
+  const useMock = import.meta.env.VITE_USE_MOCK === 'true' || 
+                 import.meta.env.VITE_USE_MOCK === true ||
+                 import.meta.env.VITE_USE_MOCK === '1';
 
   // Set up the base URL depending on environment
   const baseUrl = isDevelopment
