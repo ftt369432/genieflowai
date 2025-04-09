@@ -32,8 +32,9 @@ export function getEnv(): EnvironmentConfig {
   const isDevelopment = import.meta.env.MODE === 'development';
   const isProduction = import.meta.env.MODE === 'production';
   
-  // Determine if we should use mock data
-  const useMock = import.meta.env.VITE_USE_MOCK === 'true';
+  // Determine if we should use mock data - handle both string and boolean values
+  const useMock = import.meta.env.VITE_USE_MOCK === 'true' || 
+                 import.meta.env.VITE_USE_MOCK === true;
   
   // Get API URL with fallback
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
