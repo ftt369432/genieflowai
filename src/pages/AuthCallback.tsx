@@ -26,8 +26,6 @@ export function AuthCallback() {
     
     async function handleAuthCallback() {
       const { useMock } = getEnv();
-      // Force mock mode to be true to avoid API errors
-      const forceMock = true;
       const searchParams = new URLSearchParams(location.search);
       const code = searchParams.get('code');
       const authError = searchParams.get('error');
@@ -48,7 +46,7 @@ export function AuthCallback() {
 
       try {
         // If in mock mode, create a mock user directly without processing Google auth
-        if (useMock || forceMock) {
+        if (useMock) {
           setStatus('Processing in mock mode...');
           console.log('Auth callback processing in mock mode');
           
@@ -71,9 +69,6 @@ export function AuthCallback() {
           // Set the user in global state
           setUser(userProfile);
           
-          // Set mock token
-          setAuthToken('mock-access-token');
-          
           // Set in Supabase context for protected routes
           setMockUser({
             id: 'mock-user-id',
@@ -90,19 +85,21 @@ export function AuthCallback() {
           return;
         }
         
-        // Initialize the auth service
-        setStatus('Initializing Google Auth service...');
-        await googleAuthService.initialize();
+        // Real authentication flow (no mock)
+        setStatus('Waiting for authentication session...');
         
-        // Process the auth code with Google
-        setStatus('Processing authorization code...');
-        const accessToken = await googleAuthService.handleAuthCode(code);
+        // Supabase listener usually handles session creation after redirect.
+        // We might need to ensure the session is ready before proceeding.
+        // For now, we assume the session will be available shortly.
         
-        // Get user info from Google
+        // Get user info from Google using the GoogleAPIClient
         setStatus('Fetching user profile...');
         let userInfo;
         
-        if (!useMock && !forceMock) {
+        // Initialize the Google API client (which gets the token from Supabase session)
+        await googleClient.initialize(); 
+
+        if (!useMock) {
           // Only make this API request if not in mock mode
           userInfo = await googleClient.request<{
             id: string;
@@ -111,12 +108,13 @@ export function AuthCallback() {
             given_name?: string;
             family_name?: string;
             picture?: string;
-          }>({
-            path: 'https://www.googleapis.com/oauth2/v2/userinfo',
-            method: 'GET'
-          });
+          }>(
+            '/oauth2/v2/userinfo', // Correct endpoint path
+            { method: 'GET' }      // Correct options object
+          );
         } else {
-          // Use mock data instead
+          // This else block might be redundant now if the useMock check above returns,
+          // but keep it for safety or future refactoring.
           userInfo = {
             id: 'mock-google-user-id',
             email: 'mock-google@example.com',
@@ -145,9 +143,6 @@ export function AuthCallback() {
         
         // Set the user in global state
         setUser(userProfile);
-        
-        // Set token
-        setAuthToken(accessToken);
         
         // Set in Supabase context for protected routes
         setMockUser({
