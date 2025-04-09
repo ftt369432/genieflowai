@@ -107,10 +107,13 @@ export class GoogleAPIClient {
 
       if (!session) {
         console.warn('No session available');
-        // Force mock mode globally and fall back
-        console.log('GoogleAPIClient: Forcing mock mode due to no session');
-        updateEnvConfig({ useMock: true });
-        this.useMockData = true;
+        // Add this to force real authentication even without session
+        const forceReal = true; // Add this to your code or as env var
+        
+        if (!session && !forceReal) {
+          // Only fall back to mock if not forcing real auth
+          this.useMockData = true;
+        }
         this.accessToken = 'mock-token';
         this.initialized = true;
         return;
@@ -287,11 +290,14 @@ export class GoogleAPIClient {
   /**
    * Get mock response for development
    */
-  private getMockResponse<T>(path: string): T {
+  private getMockResponse<T>(path: string | object): T {
     console.log('Returning mock data for:', path);
     
+    // Handle case when path is an object
+    const pathString = typeof path === 'string' ? path : JSON.stringify(path);
+    
     // For Gmail messages list
-    if (path.includes('/gmail/v1/users/me/messages') && !path.includes('/messages/')) {
+    if (typeof path === 'string' && path.includes('/gmail/v1/users/me/messages') && !path.includes('/messages/')) {
       return {
         messages: [
           { id: 'mock1', threadId: 'thread1' },
@@ -304,7 +310,7 @@ export class GoogleAPIClient {
     }
     
     // For a specific message request
-    if (path.includes('/gmail/v1/users/me/messages/')) {
+    if (typeof path === 'string' && path.includes('/gmail/v1/users/me/messages/')) {
       const messageId = path.split('/').pop();
       return {
         id: messageId,
@@ -328,7 +334,7 @@ export class GoogleAPIClient {
     }
     
     // For user profile info
-    if (path.includes('userinfo')) {
+    if (typeof path === 'string' && path.includes('userinfo')) {
       return {
         id: 'mock-user-id',
         email: 'mock-user@example.com',
@@ -336,6 +342,19 @@ export class GoogleAPIClient {
         given_name: 'Mock',
         family_name: 'User',
         picture: 'https://ui-avatars.com/api/?name=Mock+User&background=random'
+      } as unknown as T;
+    }
+    
+    // For calendar accounts
+    if (pathString.includes('calendar/v3') || pathString.includes('calendar')) {
+      return {
+        items: [
+          {
+            id: 'primary',
+            summary: 'Mock User',
+            primary: true
+          }
+        ]
       } as unknown as T;
     }
     
@@ -369,6 +388,10 @@ export class GoogleAPIClient {
     });
 
     return response;
+  }
+
+  setUseMockData(useMock: boolean): void {
+    this.useMockData = useMock;
   }
 }
 

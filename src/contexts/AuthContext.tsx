@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { useSupabase } from '../providers/SupabaseProvider';
+import { useNavigate } from 'react-router-dom';
 
 type AuthContextType = {
   user: User | null;
@@ -12,7 +13,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { supabase } = useSupabase();
+  const { supabase, clearSession } = useSupabase();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,8 +31,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
-        setSession(newSession);
-        setUser(newSession?.user || null);
+        console.log('AuthContext: Auth state changed', event);
+        if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(newSession);
+          setUser(newSession?.user || null);
+        }
         setIsLoading(false);
       }
     );
@@ -42,7 +49,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      console.log('AuthContext: Signing out');
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+      clearSession();
+      
+      // Clear localStorage
+      try {
+        localStorage.removeItem('supabase.auth.token');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('sb-bpczmzsozjlqxercmnyu-auth-token');
+        sessionStorage.removeItem('supabase.auth.token');
+      } catch (e) {
+        console.error('Error clearing local storage:', e);
+      }
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   return (

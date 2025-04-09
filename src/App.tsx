@@ -31,6 +31,8 @@ import { AgentWizardPage } from './pages/AgentWizardPage';
 import { AutomationPage } from './pages/AutomationPage';
 import { LoadingExample } from './components/examples/LoadingExample';
 import { AutomationAuditDashboard } from './components/dashboard/AutomationAuditDashboard';
+import { GmailConnectionTest } from './pages/GmailConnectionTest';
+import { Settings } from './pages/Settings';
 
 // ProtectedRoute component that redirects to login if user is not authenticated
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -118,6 +120,16 @@ function App() {
               
               {/* Auth callback route */}
               <Route path="/auth/callback" element={<AuthCallback />} />
+              
+              {/* Gmail connection test route */}
+              <Route 
+                path="/gmail-test" 
+                element={
+                  <ProtectedRoute>
+                    <GmailConnectionTest />
+                  </ProtectedRoute>
+                } 
+              />
               
               {/* Protected routes */}
               <Route 
@@ -308,6 +320,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <ProjectsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Settings route */}
+              <Route 
+                path="/settings" 
+                element={
+                  <ProtectedRoute>
+                    <Settings />
                   </ProtectedRoute>
                 } 
               />
