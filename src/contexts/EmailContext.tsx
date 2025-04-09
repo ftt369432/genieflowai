@@ -22,38 +22,35 @@ export const EmailProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    const loadAccounts = async () => {
+    async function loadAccounts() {
       try {
-        const { useMock } = getEnv();
-        console.log('Loading email accounts for user:', useMock ? 'mock-user' : 'real-user');
-        
-        await emailServiceAdapter.initialize();
-        const fetchedAccounts = await emailServiceAdapter.getAccounts();
-        setAccounts(fetchedAccounts);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to load email accounts:', err);
-        setError(err as Error);
-        // In mock mode or development, set mock accounts even on error
-        if (process.env.NODE_ENV === 'development' || getEnv().useMock) {
-          setAccounts([{
-            id: 'mock-account-1',
-            email: 'mock@example.com',
-            provider: 'gmail',
-            name: 'Mock Account',
-            connected: true,
-            lastSynced: new Date()
-          }]);
+        if (!user?.email) {
+          console.log('No user email available, skipping email account load');
+          return;
         }
+
+        console.log('Loading email accounts for user:', user.email);
+        
+        // Initialize the email service
+        await emailServiceAdapter.initialize();
+        
+        // Get the accounts
+        const accounts = await emailServiceAdapter.getAccounts();
+        setAccounts(accounts);
+      } catch (error) {
+        console.error('Failed to load email accounts:', error);
+        // Don't throw the error, just log it and continue
+        // The user can retry later when the Google API client is ready
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     loadAccounts();
-  }, []);
+  }, [user?.email]);
 
   return (
     <EmailContext.Provider value={{ accounts, loading, error }}>
