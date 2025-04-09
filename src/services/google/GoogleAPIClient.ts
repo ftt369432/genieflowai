@@ -2,7 +2,10 @@
  * GoogleAPIClient.ts
  * 
  * This class handles authentication and API calls to Google services.
- * Streamlined implementation to avoid discovery document issues.
+ * To use live data and connect your Gmail:
+ * 1. Make sure VITE_USE_MOCK=false in your .env file
+ * 2. Complete Google OAuth flow by logging in through Google
+ * 3. The provider token will be set automatically after successful login
  */
 
 import { supabase } from '../../lib/supabase';
@@ -44,6 +47,33 @@ export class GoogleAPIClient {
     return GoogleAPIClient.instance;
   }
 
+  /**
+   * Check if we're using mock data
+   */
+  isUsingMockData(): boolean {
+    return this.useMockData;
+  }
+
+  /**
+   * Get the access token
+   */
+  getAccessToken(): string | null {
+    return this.accessToken;
+  }
+
+  /**
+   * Set the access token directly - useful for refreshing the token
+   */
+  setAccessToken(token: string): void {
+    this.accessToken = token;
+    this.initialized = true;
+  }
+
+  /**
+   * Initialize the Google API client with the provider token from Supabase auth
+   * The provider token is required for making authenticated Google API calls
+   * and is obtained when a user completes the Google OAuth flow.
+   */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
@@ -89,6 +119,9 @@ export class GoogleAPIClient {
       // Check if we have a provider token - we need this for Google API access
       if (!session.provider_token) {
         console.warn('No provider token available, retrying...');
+        console.log('To use real Google data, you need to sign in with Google OAuth and get a provider token.');
+        console.log('This happens when you sign in through Google and grant permissions to access your Gmail.');
+        
         // Retry getting the token a few times
         let retryCount = 0;
         const maxRetries = 5;
@@ -102,6 +135,7 @@ export class GoogleAPIClient {
             this.accessToken = updatedSession.provider_token;
             this.initialized = true;
             console.log('GoogleAPIClient: Initialized with real token after retry');
+            console.log('Successfully connected to Google. You can now use Gmail and other Google services.');
             return;
           }
           
@@ -110,6 +144,11 @@ export class GoogleAPIClient {
 
         // If we still don't have a token after retrying, force mock mode globally
         console.warn('No provider token available after retrying, forcing mock mode globally');
+        console.log('To connect your Gmail account:');
+        console.log('1. Make sure you set VITE_USE_MOCK=false in your .env file');
+        console.log('2. Log out and log back in using the Google sign-in button');
+        console.log('3. Grant the necessary permissions when prompted');
+        
         updateEnvConfig({ useMock: true });
         this.useMockData = true;
         this.accessToken = 'mock-token';
@@ -120,6 +159,7 @@ export class GoogleAPIClient {
       this.accessToken = session.provider_token;
       this.initialized = true;
       console.log('GoogleAPIClient: Initialized with real token');
+      console.log('Successfully connected to Google. You can now use Gmail and other Google services.');
     } catch (error) {
       console.error('Error during initialization:', error);
       // Force mock mode globally
@@ -228,20 +268,6 @@ export class GoogleAPIClient {
       console.error('GoogleAPIClient: Error checking sign in status:', error);
       return false;
     }
-  }
-
-  /**
-   * Get the access token
-   */
-  getAccessToken(): string | null {
-    return this.accessToken;
-  }
-
-  /**
-   * Set the access token (used after OAuth flow)
-   */
-  setAccessToken(token: string, expiresIn?: number): void {
-    this.accessToken = token;
   }
 
   /**

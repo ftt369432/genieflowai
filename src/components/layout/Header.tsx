@@ -4,6 +4,7 @@ import { Search, Bell, Settings, Menu, ChevronDown, Maximize, Minimize, StickyNo
 import { getAvatar } from '../../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
+import { UserMenu } from './UserMenu';
 
 // Type for sticky notes
 interface StickyNote {
@@ -199,30 +200,9 @@ export function Header({ className, onToggleSidebar, isSidebarCollapsed }: Heade
             <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>
           </button>
           
-          <button 
-            onClick={() => navigate('/settings')}
-            className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            <Settings size={20} />
-          </button>
-          
-          <div className="flex items-center ml-1 md:ml-2">
-            <button 
-              onClick={() => navigate('/profile')}
-              className="flex items-center py-1 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <div className="w-8 h-8 rounded-full overflow-hidden">
-                <img 
-                  src={user?.avatar || getAvatar(user?.fullName || '')} 
-                  alt="User avatar" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <span className="ml-2 font-medium text-gray-700 dark:text-gray-200 hidden sm:inline-block">
-                {user?.fullName || 'User'}
-              </span>
-              <ChevronDown className="ml-1 md:ml-2 h-4 w-4 text-gray-500 hidden sm:block" />
-            </button>
+          {/* Add debugging info */}
+          <div className="ml-2">
+            <UserMenu />
           </div>
         </div>
       </div>

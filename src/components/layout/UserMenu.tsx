@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils';
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const { logout } = useAuth();
   const { showSuccess } = useNotifications();
   const { user } = useUserStore();
@@ -65,14 +66,16 @@ export function UserMenu() {
     }
   };
 
-  const toggleMenu = () => {
+  const toggleMenu = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop event propagation
     console.log("Toggling menu from", isOpen, "to", !isOpen);
     setIsOpen(!isOpen);
   };
 
   return (
-    <div className="relative z-50" ref={menuRef}>
+    <div className="relative z-[9999]" ref={menuRef} style={{ pointerEvents: 'auto' }}>
       <button
+        ref={buttonRef}
         onClick={toggleMenu}
         className={cn(
           "flex items-center py-1 px-2 rounded-lg focus:outline-none",
@@ -103,13 +106,20 @@ export function UserMenu() {
       {isOpen && (
         <>
           {/* Backdrop for mobile to make it easier to see the menu */}
-          <div className="fixed inset-0 bg-black/20 z-40 sm:hidden" onClick={() => setIsOpen(false)} />
+          <div 
+            className="fixed inset-0 bg-black/20 z-40 sm:hidden" 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(false);
+            }} 
+          />
           
           <div 
-            className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl py-1 border border-gray-200 dark:border-gray-700 z-50"
+            className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl py-1 border border-gray-200 dark:border-gray-700 z-[9999]"
             role="menu"
             aria-orientation="vertical"
             data-testid="user-dropdown-menu"
+            onClick={(e) => e.stopPropagation()} // Prevent clicks from reaching parent elements
           >
             <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{safeUser.fullName}</p>
@@ -117,7 +127,8 @@ export function UserMenu() {
             </div>
             
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 navigate('/profile');
                 setIsOpen(false);
               }}
@@ -129,7 +140,8 @@ export function UserMenu() {
               Profile
             </button>
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 navigate('/settings');
                 setIsOpen(false);
               }}
@@ -142,7 +154,10 @@ export function UserMenu() {
             </button>
             <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
             <button
-              onClick={handleLogout}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLogout();
+              }}
               className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center text-red-600 dark:text-red-400 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
               role="menuitem"
               data-testid="logout-menu-item"
