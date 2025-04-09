@@ -6,6 +6,7 @@ import { useUserStore, SubscriptionTier, UserProfile, UserSubscription } from '.
 import { useSupabase } from '../providers/SupabaseProvider';
 import { Spinner } from '../components/ui/Spinner';
 import { getEnv } from '../config/env';
+import { supabase } from '../lib/supabase';
 
 export function AuthCallback() {
   const [error, setError] = useState<string | null>(null);
@@ -85,43 +86,38 @@ export function AuthCallback() {
           return;
         }
         
-        // Real authentication flow (no mock)
+        // Real authentication flow
         setStatus('Waiting for authentication session...');
         
-        // Supabase listener usually handles session creation after redirect.
-        // We might need to ensure the session is ready before proceeding.
-        // For now, we assume the session will be available shortly.
+        // Wait for Supabase to process the OAuth callback and create a session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        // Get user info from Google using the GoogleAPIClient
-        setStatus('Fetching user profile...');
-        let userInfo;
-        
-        // Initialize the Google API client (which gets the token from Supabase session)
-        await googleClient.initialize(); 
-
-        if (!useMock) {
-          // Only make this API request if not in mock mode
-          userInfo = await googleClient.request<{
-            id: string;
-            email: string;
-            name: string;
-            given_name?: string;
-            family_name?: string;
-            picture?: string;
-          }>(
-            '/oauth2/v2/userinfo', // Correct endpoint path
-            { method: 'GET' }      // Correct options object
-          );
-        } else {
-          // This else block might be redundant now if the useMock check above returns,
-          // but keep it for safety or future refactoring.
-          userInfo = {
-            id: 'mock-google-user-id',
-            email: 'mock-google@example.com',
-            name: 'Mock Google User',
-            picture: 'https://ui-avatars.com/api/?name=Mock+Google+User&background=random'
-          };
+        if (sessionError) {
+          throw new Error(`Failed to get session: ${sessionError.message}`);
         }
+        
+        if (!session) {
+          throw new Error('No session available after OAuth callback');
+        }
+        
+        if (!session.provider_token) {
+          throw new Error('No provider token available in session');
+        }
+        
+        // Initialize the Google API client with the session token
+        setStatus('Initializing Google API client...');
+        await googleClient.initialize();
+        
+        // Get user info from Google
+        setStatus('Fetching user profile...');
+        const userInfo = await googleClient.request<{
+          id: string;
+          email: string;
+          name: string;
+          given_name?: string;
+          family_name?: string;
+          picture?: string;
+        }>('/oauth2/v2/userinfo', { method: 'GET' });
         
         console.log('Received user info:', userInfo);
         

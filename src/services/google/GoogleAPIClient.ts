@@ -59,35 +59,38 @@ export class GoogleAPIClient {
     }
 
     try {
+      // Wait for Supabase to initialize and get the session
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error) {
         console.error('Failed to get session:', error);
-        this.handleAuthError(error);
-        return;
+        throw error; // Don't fall back to mock mode immediately
       }
 
       if (!session) {
-        console.warn('No session available - using mock mode');
-        this.useMockData = true;
-        this.accessToken = 'mock-token';
-        this.initialized = true;
-        return;
+        console.warn('No session available');
+        throw new Error('No session available'); // Don't fall back to mock mode
       }
 
       // Check if we have a provider token - we need this for Google API access
       if (!session.provider_token) {
-        console.warn('No provider token available - using mock data');
-        this.useMockData = true;
-        this.accessToken = 'mock-token';
-      } else {
-        this.accessToken = session.provider_token;
+        console.warn('No provider token available');
+        throw new Error('No provider token available'); // Don't fall back to mock mode
       }
-      
+
+      this.accessToken = session.provider_token;
       this.initialized = true;
+      console.log('GoogleAPIClient: Initialized with real token');
     } catch (error) {
       console.error('Error during initialization:', error);
-      this.handleAuthError(error);
+      // Only fall back to mock mode if explicitly configured
+      if (useMock) {
+        this.useMockData = true;
+        this.accessToken = 'mock-token';
+        this.initialized = true;
+      } else {
+        throw error; // Propagate the error if not in mock mode
+      }
     }
   }
 
