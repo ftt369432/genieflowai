@@ -95,6 +95,7 @@
     "eslint": "^9.23.0",
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^5.2.0",
+    "netlify-cli": "^16.13.1",
     "postcss": "^8.4.32",
     "postcss-import": "^16.1.0",
     "postcss-preset-env": "^10.1.5",
@@ -112,6 +113,9 @@
     "eject": "react-scripts eject",
     "deploy": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
     "deploy:unix": "node scripts/deploy.js",
+    "deploy:netlify": "netlify deploy --prod",
+    "deploy:netlify:draft": "netlify deploy",
+    "deploy:netlify:interactive": "node scripts/deploy-netlify.js",
     "lint": "eslint . --ext .ts,.tsx",
     "track-progress": "node scripts/update-progress.js",
     "custom-start": "vite --port 3001"

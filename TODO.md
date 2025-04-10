@@ -31,6 +31,15 @@
     - [ ] Add search functionality
     - [ ] Create document management UI
 
+- [ ] **Deployment & DevOps**
+  - [x] Add Netlify CLI to project
+  - [x] Create Netlify deployment scripts
+  - [x] Document Netlify deployment process
+  - [ ] Configure continuous deployment
+  - [ ] Set up environment variables in Netlify
+  - [ ] Test deployment process end-to-end
+  - [ ] Configure Netlify build hooks
+
 ## High Priority
 
 - [ ] **Code Cleanup**
