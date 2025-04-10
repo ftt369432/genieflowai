@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAvatar } from '../../lib/utils';
 import { cn } from '../../lib/utils';
 import { getEnv } from '../../config/env';
+import { useSupabase } from '../../providers/SupabaseProvider';
 
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,19 +18,20 @@ export function UserMenu() {
   const user = useUserStore(state => state.user);
   const navigate = useNavigate();
   const { useMock } = getEnv();
+  const { user: supabaseUser } = useSupabase();
 
   // Handle missing user info gracefully - memoize this to prevent re-renders
   const safeUser = useMemo(() => ({
-    fullName: user?.fullName || 'User',
-    email: user?.email || 'user@example.com',
+    fullName: user?.fullName || supabaseUser?.user_metadata?.full_name || 'User',
+    email: user?.email || supabaseUser?.email || 'user@example.com',
     avatar: user?.avatar
-  }), [user?.fullName, user?.email, user?.avatar]);
+  }), [user?.fullName, user?.email, user?.avatar, supabaseUser?.email, supabaseUser?.user_metadata?.full_name]);
 
   // Only log on initial render and when important values change
   useEffect(() => {
-    console.log("UserMenu mounting with user:", user);
+    console.log("UserMenu mounting with user:", user || supabaseUser);
     console.log("Mock mode:", useMock);
-  }, [user, useMock]);
+  }, [user, useMock, supabaseUser]);
 
   // Log menu state changes separately
   useEffect(() => {
@@ -107,11 +109,7 @@ export function UserMenu() {
     };
   }, [navigate]);
 
-  if (!user) {
-    console.log("No user available, not rendering UserMenu");
-    return null;
-  }
-
+  // Always render the dropdown even if user data is not fully available yet
   return (
     <div className="relative z-[100]" ref={menuRef} style={{ pointerEvents: 'auto' }}>
       <button
