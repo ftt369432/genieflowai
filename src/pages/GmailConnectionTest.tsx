@@ -48,6 +48,13 @@ export function GmailConnectionTest() {
             
             // Fetch user info if authenticated
             await fetchUserInfo();
+          } else {
+            console.log('No provider token found in session');
+            
+            // Force re-authentication with Google to get provider token
+            if (!getEnv().useMock) {
+              setError('Provider token missing. Please log out and log in again using Google authentication to grant Gmail access.');
+            }
           }
         }
       } catch (err: any) {
@@ -66,13 +73,45 @@ export function GmailConnectionTest() {
       setIsLoading(true);
       setError(null);
       
-      // Sign in with Google
-      await googleAuthService.signIn();
+      // Sign out first to ensure clean authentication
+      await supabase.auth.signOut();
       
-      // We don't need to check the result here as the page will reload after sign-in
+      // Sign in with Google using enhanced scopes
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin + '/auth/callback',
+          scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly'
+        }
+      });
+      
+      // The page will be redirected so we don't need to handle the result here
     } catch (err: any) {
       console.error('Sign in error:', err);
       setError(err.message || 'Failed to sign in with Google');
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      await supabase.auth.signOut();
+      
+      // Clear state
+      setIsAuthenticated(false);
+      setProviderToken(null);
+      setUserInfo(null);
+      setSessionDetails('');
+      setGmailLabels([]);
+      
+      // Reload page to ensure clean state
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Sign out error:', err);
+      setError(err.message || 'Failed to sign out');
       setIsLoading(false);
     }
   };
@@ -168,8 +207,8 @@ export function GmailConnectionTest() {
               </div>
             )}
             
-            <div className="mt-6">
-              <Button onClick={fetchUserInfo} disabled={isLoading} className="mr-4">
+            <div className="mt-6 flex space-x-4">
+              <Button onClick={fetchUserInfo} disabled={isLoading}>
                 {isLoading ? <Loader className="animate-spin mr-2" size={16} /> : null}
                 Test User Info API
               </Button>
@@ -177,6 +216,11 @@ export function GmailConnectionTest() {
               <Button onClick={fetchGmailLabels} disabled={isLoading}>
                 {isLoading ? <Loader className="animate-spin mr-2" size={16} /> : null}
                 Test Gmail API
+              </Button>
+              
+              <Button onClick={handleSignOut} disabled={isLoading} variant="destructive">
+                {isLoading ? <Loader className="animate-spin mr-2" size={16} /> : null}
+                Sign Out
               </Button>
             </div>
           </div>
