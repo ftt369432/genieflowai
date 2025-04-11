@@ -202,6 +202,17 @@ export interface EmailPreferences {
   defaultFontSize?: number;
   inlineImages?: boolean;
   showSnippets?: boolean;
+  autoReply?: {
+    enabled: boolean;
+    message: string;
+    startDate?: Date;
+    endDate?: Date;
+    frequency?: 'once' | 'daily' | 'always'; // How often to send auto-replies to the same sender
+    limitToContacts?: boolean; // Only send auto-replies to contacts
+    excludeDomains?: string[]; // Don't send auto-replies to these domains
+    customSubject?: string; // Custom subject line for auto-replies
+    includeOriginalMessage?: boolean; // Include the original message in the reply
+  };
 }
 
 /**

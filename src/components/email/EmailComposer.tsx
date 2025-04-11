@@ -4,7 +4,8 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle,
-  DialogFooter 
+  DialogFooter,
+  DialogDescription
 } from '../ui/Dialog';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -23,7 +24,9 @@ import {
   Trash2, 
   Send,
   Sparkles,
-  X
+  X,
+  Book,
+  Loader2
 } from 'lucide-react';
 import { useEmail } from '../../contexts/EmailContext';
 import { Card } from '../ui/Card';
@@ -31,6 +34,7 @@ import { Spinner } from '../ui/Spinner';
 import { EmailDraft } from '../../services/email/types';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
+import { EmailKnowledgeBase } from './EmailKnowledgeBase';
 
 interface EmailComposerProps {
   isOpen: boolean;
@@ -95,6 +99,7 @@ export function EmailComposer({
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState<boolean>(false);
   const [showCc, setShowCc] = useState<boolean>(!!cc);
   const [showBcc, setShowBcc] = useState<boolean>(!!bcc);
+  const [showKnowledgeBase, setShowKnowledgeBase] = useState(false);
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -298,323 +303,179 @@ export function EmailComposer({
     setAiSuggestion(null);
   };
   
+  const handleInsertFromKnowledgeBase = (content: string) => {
+    setBody(prev => {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        // Get the current selection
+        const range = selection.getRangeAt(0);
+        // Check if the selection is within our editor
+        const container = document.getElementById('email-body');
+        if (container && container.contains(range.commonAncestorContainer)) {
+          // Get positions
+          const selectionStart = range.startOffset;
+          const selectionEnd = range.endOffset;
+          const textNode = range.startContainer;
+          if (textNode.nodeType === Node.TEXT_NODE) {
+            const text = textNode.textContent || '';
+            const beforeSelection = text.substring(0, selectionStart);
+            const afterSelection = text.substring(selectionEnd);
+            return beforeSelection + content + afterSelection;
+          }
+        }
+      }
+      
+      // Fallback: just append to the end
+      return prev + '\n\n' + content;
+    });
+  };
+  
   return (
-    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      modal={true}
+    >
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Compose Email</DialogTitle>
+          <DialogTitle>{getDialogTitle()}</DialogTitle>
+          <DialogDescription>
+            {getDialogDescription()}
+          </DialogDescription>
         </DialogHeader>
         
-        <div className="flex-1 overflow-y-auto py-2">
-          {/* Email header fields */}
+        <div className="grid grid-cols-1 gap-4">
+          {/* Recipients */}
           <div className="space-y-2">
-            <div className="flex items-center">
-              <span className="w-16 text-sm">From:</span>
-              <Input value={accountEmail} readOnly className="bg-muted/50" />
-            </div>
-            
-            <div className="flex items-center">
-              <span className="w-16 text-sm">To:</span>
-              <div className="flex-1">
-                <Input 
-                  value={to} 
-                  onChange={e => setTo(e.target.value)} 
-                  placeholder="Recipients (comma separated)"
-                />
+            <div className="flex justify-between">
+              <Label htmlFor="to">To</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCc(!showCc)}
+                  className="text-xs text-blue-500 hover:underline"
+                >
+                  {showCc ? 'Hide Cc' : 'Cc'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBcc(!showBcc)}
+                  className="text-xs text-blue-500 hover:underline"
+                >
+                  {showBcc ? 'Hide Bcc' : 'Bcc'}
+                </button>
               </div>
             </div>
-            
-            <div className="flex items-center justify-end text-sm">
-              <button 
-                onClick={() => setShowCc(!showCc)} 
-                className="text-muted-foreground hover:text-foreground mr-3"
-              >
-                {showCc ? 'Hide Cc' : 'Show Cc'}
-              </button>
-              <button 
-                onClick={() => setShowBcc(!showBcc)} 
-                className="text-muted-foreground hover:text-foreground"
-              >
-                {showBcc ? 'Hide Bcc' : 'Show Bcc'}
-              </button>
-            </div>
-            
-            {showCc && (
-              <div className="flex items-center">
-                <span className="w-16 text-sm">Cc:</span>
-                <Input 
-                  value={cc} 
-                  onChange={e => setCc(e.target.value)} 
-                  placeholder="Cc recipients (comma separated)"
-                />
-              </div>
-            )}
-            
-            {showBcc && (
-              <div className="flex items-center">
-                <span className="w-16 text-sm">Bcc:</span>
-                <Input 
-                  value={bcc} 
-                  onChange={e => setBcc(e.target.value)} 
-                  placeholder="Bcc recipients (comma separated)"
-                />
-              </div>
-            )}
-            
-            <div className="flex items-center">
-              <span className="w-16 text-sm">Subject:</span>
+            <Input 
+              id="to" 
+              placeholder="recipient@example.com"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </div>
+          
+          {/* Cc */}
+          {showCc && (
+            <div className="space-y-2">
+              <Label htmlFor="cc">Cc</Label>
               <Input 
-                value={subject} 
-                onChange={e => setSubject(e.target.value)} 
-                placeholder="Subject"
+                id="cc" 
+                placeholder="cc@example.com"
+                value={cc}
+                onChange={(e) => setCc(e.target.value)}
               />
             </div>
-            
-            <div className="h-px bg-border my-2"></div>
-            
-            {/* Formatting toolbar */}
-            <div className="flex items-center flex-wrap gap-1 p-1 bg-muted/40 rounded-md">
+          )}
+          
+          {/* Bcc */}
+          {showBcc && (
+            <div className="space-y-2">
+              <Label htmlFor="bcc">Bcc</Label>
+              <Input 
+                id="bcc" 
+                placeholder="bcc@example.com"
+                value={bcc}
+                onChange={(e) => setBcc(e.target.value)}
+              />
+            </div>
+          )}
+          
+          {/* Subject */}
+          <div className="space-y-2">
+            <Label htmlFor="subject">Subject</Label>
+            <Input 
+              id="subject" 
+              placeholder="Email subject"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+            />
+          </div>
+          
+          {/* Body */}
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <Label htmlFor="body">Message</Label>
               <Button 
-                type="button" 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => applyFormatting('bold')}
-                className="h-8 w-8 p-0"
+                onClick={() => setShowKnowledgeBase(!showKnowledgeBase)}
               >
-                <Bold className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('italic')}
-                className="h-8 w-8 p-0"
-              >
-                <Italic className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('underline')}
-                className="h-8 w-8 p-0"
-              >
-                <Underline className="h-4 w-4" />
-              </Button>
-              <span className="mx-1 h-6 w-px bg-border"></span>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('bullet-list')}
-                className="h-8 w-8 p-0"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('ordered-list')}
-                className="h-8 w-8 p-0"
-              >
-                <ListOrdered className="h-4 w-4" />
-              </Button>
-              <span className="mx-1 h-6 w-px bg-border"></span>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('align-left')}
-                className="h-8 w-8 p-0"
-              >
-                <AlignLeft className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('align-center')}
-                className="h-8 w-8 p-0"
-              >
-                <AlignCenter className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('align-right')}
-                className="h-8 w-8 p-0"
-              >
-                <AlignRight className="h-4 w-4" />
-              </Button>
-              <span className="mx-1 h-6 w-px bg-border"></span>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('link')}
-                className="h-8 w-8 p-0"
-              >
-                <Link className="h-4 w-4" />
-              </Button>
-              <div className="flex-1"></div>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setHtmlMode(!htmlMode)}
-                className="text-xs"
-              >
-                {htmlMode ? 'Plain Text' : 'HTML'}
+                <Book className="h-4 w-4 mr-2" />
+                {showKnowledgeBase ? 'Hide Knowledge Base' : 'Knowledge Base'}
               </Button>
             </div>
             
-            {/* Email body */}
-            <Textarea 
-              ref={bodyTextareaRef}
-              value={body} 
-              onChange={e => setBody(e.target.value)} 
-              placeholder="Write your message here..."
-              className="min-h-[200px] font-sans"
-            />
-            
-            {/* AI suggestion */}
-            {aiSuggestion && (
-              <Card className="p-3 bg-primary/5 border-primary/20">
-                <div className="flex items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center mb-1">
-                      <Sparkles className="h-4 w-4 text-primary mr-2" />
-                      <span className="text-sm font-medium">AI Suggestion</span>
-                    </div>
-                    <p className="text-sm">{aiSuggestion}</p>
-                  </div>
-                  <div className="flex items-center">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setAiSuggestion(null)}
-                      className="h-8 w-8 p-0 mr-1"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={applyAiSuggestion}
-                    >
-                      Apply
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            )}
-            
-            {/* Attachments section */}
-            {(attachments.length > 0 || isUploading) && (
-              <div className="border rounded-md p-3 mt-4">
-                <h3 className="text-sm font-medium mb-2">Attachments</h3>
-                {isUploading && (
-                  <div className="flex items-center text-sm text-muted-foreground mb-2">
-                    <Spinner className="h-4 w-4 mr-2" />
-                    Uploading...
-                  </div>
-                )}
-                <div className="space-y-2">
-                  {attachments.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between bg-muted/50 p-2 rounded-md">
-                      <div className="flex items-center">
-                        <Paperclip className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <span className="text-sm truncate max-w-[300px]">{file.name}</span>
-                        <span className="text-xs text-muted-foreground ml-2">
-                          {(file.size / 1024).toFixed(0)} KB
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeAttachment(index)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              className="hidden" 
-              multiple 
-            />
-          </div>
-        </div>
-        
-        <DialogFooter className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleFileSelect}
-              disabled={isUploading}
-            >
-              <Paperclip className="h-4 w-4 mr-2" />
-              Attach
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={generateAiSuggestion}
-              disabled={isGeneratingSuggestion}
-              className="ml-2"
-            >
-              {isGeneratingSuggestion ? (
-                <>
-                  <Spinner className="h-4 w-4 mr-2" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  AI Suggest
-                </>
+            <div className="grid grid-cols-1 gap-4">
+              {showKnowledgeBase && (
+                <EmailKnowledgeBase onInsertContent={handleInsertFromKnowledgeBase} />
               )}
-            </Button>
+              
+              <Textarea 
+                id="email-body"
+                placeholder="Write your message here..."
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                className="min-h-[200px]"
+              />
+            </div>
           </div>
-          <div>
+          
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-4">
+            {onSaveDraft && (
+              <Button 
+                variant="outline" 
+                type="button" 
+                onClick={handleSaveDraft}
+                disabled={isSending}
+              >
+                Save Draft
+              </Button>
+            )}
+            <Button 
+              variant="ghost" 
+              type="button" 
+              onClick={onClose}
+              disabled={isSending}
+            >
+              Cancel
+            </Button>
             <Button 
               type="button" 
-              variant="outline" 
-              onClick={handleSaveDraft} 
-              className="mr-2"
-            >
-              Save Draft
-            </Button>
-            <Button 
-              type="button"
               onClick={handleSendEmail}
               disabled={isSending}
             >
               {isSending ? (
                 <>
-                  <Spinner className="h-4 w-4 mr-2" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Sending...
                 </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Send
-                </>
-              )}
+              ) : 'Send Email'}
             </Button>
           </div>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
