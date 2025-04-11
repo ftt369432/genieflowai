@@ -28,8 +28,9 @@ export function AuthCallback() {
     async function handleAuthCallback() {
       const { useMock } = getEnv();
       const searchParams = new URLSearchParams(location.search);
-      const code = searchParams.get('code');
-      const authError = searchParams.get('error');
+      const hashParams = new URLSearchParams(location.hash.replace('#', '?'));
+      const code = searchParams.get('code') || hashParams.get('code');
+      const authError = searchParams.get('error') || hashParams.get('error');
       
       // Mark as processed to prevent duplicate processing
       processedRef.current = true;
@@ -41,8 +42,94 @@ export function AuthCallback() {
       }
       
       if (!code) {
-        setError('No authentication code found in URL');
-        return;
+        // Try to process the authentication directly using the existing session
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session?.user) {
+            console.log('No code found but session exists, attempting to continue...');
+            setStatus('Existing authentication session found, continuing...');
+            
+            // Initialize the Google API client
+            await googleClient.initialize();
+            
+            // Check if we have a provider token
+            if (session.provider_token) {
+              setStatus('Using existing provider token');
+              
+              // Get user info from Google
+              try {
+                const userInfo = await googleClient.getUserInfo();
+                
+                // Create user profile
+                const subscription: UserSubscription = {
+                  plan: 'free' as SubscriptionTier,
+                  type: 'individual',
+                  status: 'active',
+                  currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                };
+                
+                const userProfile: UserProfile = {
+                  id: userInfo.id || session.user.id,
+                  email: userInfo.email || session.user.email || '',
+                  fullName: userInfo.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+                  avatar: userInfo.picture || session.user.user_metadata?.avatar_url,
+                  subscription
+                };
+                
+                // Set the user in global state
+                setUser(userProfile);
+                setAuthToken(session.provider_token);
+                
+                setStatus('Login successful! Redirecting...');
+                
+                // Navigate to dashboard
+                setTimeout(() => {
+                  navigate('/dashboard', { replace: true });
+                }, 1000);
+                return;
+              } catch (userInfoError) {
+                console.error('Error getting user info, but continuing with session data', userInfoError);
+                
+                // Fall back to using session data
+                const userProfile: UserProfile = {
+                  id: session.user.id,
+                  email: session.user.email || '',
+                  fullName: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+                  avatar: session.user.user_metadata?.avatar_url,
+                  subscription: {
+                    plan: 'free' as SubscriptionTier,
+                    type: 'individual',
+                    status: 'active',
+                    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                  }
+                };
+                
+                // Set the user in global state
+                setUser(userProfile);
+                
+                setStatus('Login successful! Redirecting...');
+                
+                // Navigate to dashboard
+                setTimeout(() => {
+                  navigate('/dashboard', { replace: true });
+                }, 1000);
+                return;
+              }
+            } else {
+              console.warn('No provider token in session');
+              setError('Authentication incomplete. Please log in again with Google to access Gmail features.');
+              return;
+            }
+          } else {
+            setError('No authentication code found in URL and no active session');
+            return;
+          }
+        } catch (sessionError) {
+          console.error('Error getting session', sessionError);
+          setError('No authentication code found in URL');
+          return;
+        }
       }
 
       try {
@@ -169,7 +256,7 @@ export function AuthCallback() {
     }
 
     handleAuthCallback();
-  }, [location.search]); // Only dependency is location.search
+  }, [location.search, location.hash]); // Added location.hash as dependency
 
   if (error) {
     return (
