@@ -95,7 +95,7 @@
     "eslint": "^9.23.0",
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^5.2.0",
-    "netlify-cli": "^16.13.1",
+    "netlify-cli": "^20.0.0",
     "postcss": "^8.4.32",
     "postcss-import": "^16.1.0",
     "postcss-preset-env": "^10.1.5",
