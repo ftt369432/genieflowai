@@ -4,6 +4,7 @@ import { setupGmailAPIToken, setupGmailLabels } from '../../services/email/setup
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Textarea } from '../ui/Textarea';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * Component to initialize Gmail connection with a given token
@@ -12,6 +13,7 @@ export function InitializeGmailConnection() {
   const [tokenJson, setTokenJson] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const navigate = useNavigate();
 
   const handleInitialize = async () => {
     if (!tokenJson) {
@@ -35,9 +37,15 @@ export function InitializeGmailConnection() {
       
       setIsConnected(true);
       toast.success('Gmail connection initialized successfully');
+      
+      // Navigate to the bypass page to avoid routing issues
+      setTimeout(() => {
+        // Use the bypass route to force redirect to inbox
+        window.location.href = '/email/bypass';
+      }, 1500);
     } catch (error) {
       console.error('Error initializing Gmail connection:', error);
-      toast.error('Failed to initialize Gmail connection');
+      toast.error('Failed to initialize Gmail connection: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +65,13 @@ export function InitializeGmailConnection() {
             <Textarea
               value={tokenJson}
               onChange={(e) => setTokenJson(e.target.value)}
-              placeholder='{"provider_token": "...", "access_token": "...", ...}'
+              placeholder={`{
+  "access_token": "ya29.your-access-token-value-here",
+  "refresh_token": "1//your-refresh-token-value-here",
+  "scope": "https://www.googleapis.com/auth/gmail.readonly",
+  "token_type": "Bearer",
+  "expiry_date": 1698765432123
+}`}
               rows={10}
               className="font-mono text-xs"
             />

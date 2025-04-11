@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useSupabase } from '../providers/SupabaseProvider';
 import { InitializeGmailConnection } from '../components/email/InitializeGmailConnection';
+import { GoogleAPIClient } from '../services/google/GoogleAPIClient';
 
 export function EmailPage() {
   const navigate = useNavigate();
@@ -18,6 +19,35 @@ export function EmailPage() {
   const [emails, setEmails] = useState<any[]>([]);
   const [showCompose, setShowCompose] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isTokenReady, setIsTokenReady] = useState(false);
+  const [checkingToken, setCheckingToken] = useState(true);
+
+  useEffect(() => {
+    // Check if Google API token is already initialized
+    const checkGoogleToken = async () => {
+      setCheckingToken(true);
+      try {
+        const googleClient = GoogleAPIClient.getInstance();
+        await googleClient.initialize();
+        const token = googleClient.getAccessToken();
+        setIsTokenReady(!!token);
+        
+        // If token exists, redirect to inbox
+        if (token) {
+          console.log('Gmail token is already initialized, redirecting to inbox');
+          setTimeout(() => {
+            navigate('/email/bypass');
+          }, 500);
+        }
+      } catch (error) {
+        console.error('Error checking Google token:', error);
+      } finally {
+        setCheckingToken(false);
+      }
+    };
+    
+    checkGoogleToken();
+  }, [navigate]);
 
   useEffect(() => {
     // Wait for auth to complete before making decisions
@@ -60,8 +90,8 @@ export function EmailPage() {
     }
   };
 
-  // If auth is loading, show spinner
-  if (authLoading) {
+  // If auth is loading or checking token, show spinner
+  if (authLoading || checkingToken) {
     return (
       <div className="flex justify-center items-center h-full">
         <Spinner className="h-8 w-8" />
@@ -71,6 +101,12 @@ export function EmailPage() {
 
   // If not authenticated, redirect (this should be handled by the effect)
   if (!user) {
+    return null;
+  }
+
+  // If token is ready but we're still on the email page, redirect to inbox
+  if (isTokenReady) {
+    navigate('/email/bypass');
     return null;
   }
 

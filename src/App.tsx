@@ -34,6 +34,9 @@ import { LoadingExample } from './components/examples/LoadingExample';
 import { AutomationAuditDashboard } from './components/dashboard/AutomationAuditDashboard';
 import { GmailConnectionTest } from './pages/GmailConnectionTest';
 import { Settings } from './pages/Settings';
+import EmailConnectSuccess from './pages/EmailConnectSuccess';
+import EmailConnectError from './pages/EmailConnectError';
+import EmailBypass from './pages/EmailBypass';
 
 // ProtectedRoute component that redirects to login if user is not authenticated
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -221,14 +224,42 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
-              <Route 
-                path="/email/*" 
-                element={
-                  <ProtectedRoute>
-                    <EmailPage />
-                  </ProtectedRoute>
-                } 
-              />
+              <Route path="/email" element={
+                <ProtectedRoute>
+                  <EmailPage />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/email/connect" element={
+                <ProtectedRoute>
+                  <EmailConnectSuccess />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/email/connect/success" element={
+                <ProtectedRoute>
+                  <EmailConnectSuccess />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/email/connect/error" element={
+                <ProtectedRoute>
+                  <EmailConnectError />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/email/inbox" element={
+                <ProtectedRoute>
+                  <EmailInboxPage />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/email/bypass" element={
+                <ProtectedRoute>
+                  <EmailBypass />
+                </ProtectedRoute>
+              } />
+              
               <Route 
                 path="/notifications" 
                 element={

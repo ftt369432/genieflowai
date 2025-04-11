@@ -83,13 +83,18 @@
 ## Low Priority
 
 - [ ] **Future Features**
-  - [ ] Voice controls
-  - [ ] Analytics dashboard
-  - [ ] Workflow automation
-  - [ ] Enterprise features
+  - [x] Add voice controls to main interface
+  - [ ] Implement advanced analytics dashboard
+  - [ ] Build workflow automation builder
+  - [ ] Create enterprise admin features
+  - [ ] Mobile application development
+    - [ ] NoteGPT-style dictation interface
+    - [ ] Live transcription capability
+    - [ ] Dictation machine connectivity
+    - [ ] Medical/legal specialized transcription
 
 - [ ] **Optimizations**
-  - [ ] PWA support
-  - [ ] Client-side caching
-  - [ ] Mobile optimizations
-  - [ ] Advanced animations 
+  - [ ] PWA support for offline functionality
+  - [ ] Add client-side caching strategies
+  - [ ] Optimize for mobile touch interactions
+  - [ ] Implement advanced animation transitions 

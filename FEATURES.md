@@ -93,11 +93,29 @@
 2. Mobile Features
 
 - [ ] Mobile app development
+  - [ ] NoteGPT-style dictation interface
+  - [ ] Live transcription capability
+  - [ ] Voice command integration
+  - [ ] Dictation machine connectivity
+  - [ ] Background noise filtering
+  - [ ] Multi-language dictation support
 - [ ] Offline support
 - [ ] Push notifications
 - [ ] Mobile document scanning
 
-3. Security & Compliance
+3. Chrome Extension
+
+- [ ] Browser extension development
+  - [ ] Grammarly-style content assistance
+  - [ ] Dictation overlay for any web application
+  - [ ] Context-aware suggestions
+  - [ ] Web content capture
+  - [ ] Quick access to GenieFlowAI features
+- [ ] Cross-browser compatibility
+- [ ] Enterprise deployment options
+- [ ] Extension marketplace publication
+
+4. Security & Compliance
 
 - [ ] Two-factor authentication
 - [ ] Audit logging
