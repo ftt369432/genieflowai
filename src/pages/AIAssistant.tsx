@@ -42,6 +42,7 @@ import remarkGfm from 'remark-gfm';
 import { MarkdownMessage } from '../components/ai/MarkdownMessage';
 import { ProfessionalModeService } from '../services/legalDoc/professionalModeService';
 import { AIContext } from '../contexts/AIContext';
+import { useNavigate, Link } from 'react-router-dom';
 
 interface MessageMetadata extends BaseMessageMetadata {
   edited?: boolean;
@@ -598,6 +599,7 @@ export function AIAssistantPage() {
     autoIndex: true,
     maxResults: 10
   });
+  const navigate = useNavigate();
 
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -1615,14 +1617,33 @@ export function AIAssistantPage() {
             )}>
               <div className="h-full flex flex-col">
                 <div className="p-4 border-b border-border/50">
-                  <Button 
-                    variant="outline"
-                    className="w-full justify-start gap-2"
-                    onClick={handleNewChat}
-                  >
-                    <Plus className="h-4 w-4 interactive-icon" />
-                    New Chat
-                  </Button>
+                  <div className="space-y-2">
+                    <Button
+                      variant="default"
+                      className="w-full justify-start gap-2 bg-gradient-to-r from-gray-400 via-gray-300 to-gray-500 hover:from-gray-500 hover:via-gray-400 hover:to-gray-600 border border-black/50 shadow-md text-black font-medium transition-all duration-300"
+                      style={{ 
+                        backgroundSize: '200% 100%', 
+                        animation: 'shimmer 3s infinite linear',
+                        boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.8), 0 2px 5px rgba(0,0,0,0.3)'
+                      }}
+                      onClick={() => {
+                        console.log("Create Assistant button clicked");
+                        // Try opening in new tab as a debugging technique
+                        window.open('/assistants', '_blank');
+                      }}
+                    >
+                      <Brain className="h-4 w-4 text-black" />
+                      Create Assistant
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start gap-2"
+                      onClick={handleNewChat}
+                    >
+                      <Plus className="h-4 w-4 interactive-icon" />
+                      New Chat
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto">
@@ -1633,7 +1654,7 @@ export function AIAssistantPage() {
                         "flex items-start gap-2 p-3 cursor-pointer hover:bg-muted/80 transition-colors sidebar-item",
                         currentConversation === conversation.id ? "bg-muted active" : ""
                       )}
-                      onClick={() => {
+                    onClick={() => {
                         if (currentConversation !== conversation.id) {
                           setCurrentConversation(conversation.id);
                           setChatMessages(conversation.messages);
@@ -1666,19 +1687,19 @@ export function AIAssistantPage() {
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => setIsLeftPanelCollapsed(false)}
-                    >
+                  >
                       <Menu className="h-4 w-4 interactive-icon" />
                     </Button>
                   )}
-                  
+                
                   <h1 className="text-lg font-semibold">
                     {currentConversation 
                       ? conversations.find(c => c.id === currentConversation)?.title || 'Chat'
                       : 'New Chat'
                     }
-                  </h1>
-                </div>
-                
+            </h1>
+          </div>
+          
                 <div className="flex items-center gap-2">
                   <Tooltip content="Model Settings">
                     <Button 
@@ -1696,9 +1717,9 @@ export function AIAssistantPage() {
                     </Button>
                   </Tooltip>
                   
-                  <Button
-                    variant="ghost"
-                    size="icon"
+                    <Button
+                      variant="ghost"
+                      size="icon"
                     className="h-8 w-8"
                     onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
                   >
@@ -1707,9 +1728,9 @@ export function AIAssistantPage() {
                       isRightSidebarOpen && "rotate-180"
                     )} />
                   </Button>
-                </div>
-              </header>
-              
+          </div>
+        </header>
+
               {/* Chat area */}
               <div className="flex-1 overflow-y-auto p-4">
                 {chatMessages.length === 0 ? (
@@ -1725,25 +1746,25 @@ export function AIAssistantPage() {
                         'Generate a JavaScript function to sort an array', 
                         'Create a marketing email template',
                         'Explain quantum computing in simple terms'].map(prompt => (
-                        <Button 
+                      <Button
                           key={prompt}
                           variant="outline" 
                           className="justify-start text-left h-auto py-3 recent-query"
-                          onClick={() => {
+                        onClick={() => {
                             setInput(prompt);
                           }}
                         >
                           <MessageSquare className="h-4 w-4 mr-2 interactive-icon" />
                           {prompt}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
+                      </Button>
+                  ))}
+                </div>
+                </div>
                 ) : (
                   <div className="space-y-6">
                     {chatMessages.map(message => (
-                      <div 
-                        key={message.id}
+                          <div
+                            key={message.id}
                         className={cn(
                           "flex",
                           message.role === 'user' ? "justify-end" : "justify-start"
@@ -1757,9 +1778,9 @@ export function AIAssistantPage() {
                               : "bg-muted message-assistant"
                           )}
                         >
-                          {renderMessage(message)}
-                        </div>
-                      </div>
+                              {renderMessage(message)}
+              </div>
+                </div>
                     ))}
                     {isLoading && (
                       <div className="flex items-center gap-2 p-3 bg-muted rounded-lg typing-indicator">
@@ -1769,45 +1790,45 @@ export function AIAssistantPage() {
                           <div className="w-2 h-2 bg-primary rounded-full animate-bounce delay-200" />
                         </div>
                         <span className="text-sm text-muted-foreground">AI is thinking...</span>
-                      </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
+      </div>
                 )}
-              </div>
+                <div ref={messagesEndRef} />
+                          </div>
+                        )}
+                </div>
               
               {/* Input area */}
               <div className="border-t p-4 bg-background/95 backdrop-blur-md">
                 <form onSubmit={handleSubmit} className="flex items-end gap-2">
-                  <Textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Message AI Assistant..."
+                        <Textarea
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder="Message AI Assistant..."
                     className="flex-1 min-h-[60px] resize-none chat-input"
                   />
-                  <Button 
-                    type="submit" 
-                    size="icon" 
+                        <Button
+                          type="submit"
+                          size="icon"
                     className="primary"
-                    disabled={isLoading || !input.trim()}
-                  >
+                          disabled={isLoading || !input.trim()}
+                        >
                     <Send className="h-4 w-4 interactive-icon" />
                   </Button>
-                </form>
-              </div>
-            </div>
-            
+                  </form>
+          </div>
+        </div>
+
             {/* Right sidebar - context and tools */}
-            <div className={cn(
+              <div className={cn(
               "border-l border-border/50 bg-muted/30 transition-all duration-300 overflow-hidden",
               isRightSidebarOpen ? "w-80" : "w-0"
             )}>
               <div className="h-full flex flex-col">
                 <div className="p-4 border-b border-border/50">
                   <h2 className="font-semibold card-title">Context & Tools</h2>
-                </div>
-                
+    </div>
+
                 <div className="flex-1 overflow-y-auto p-4">
                   <div className="space-y-4">
                     {/* System prompt */}
@@ -1824,7 +1845,7 @@ export function AIAssistantPage() {
                     {/* Document references */}
                     <div className="space-y-2">
                       <h3 className="text-sm font-medium card-title">Reference Documents</h3>
-                      <Button 
+                    <Button
                         variant="outline" 
                         size="sm"
                         className="w-full justify-start gap-2 secondary"
@@ -1832,7 +1853,7 @@ export function AIAssistantPage() {
                       >
                         <Plus className="h-4 w-4 interactive-icon" />
                         Add Document
-                      </Button>
+                    </Button>
                       
                       {selectedDocs.length > 0 ? (
                         <div className="space-y-1 mt-2">
@@ -1845,21 +1866,21 @@ export function AIAssistantPage() {
                                 <FileText className="h-3 w-3 inline mr-2" />
                                 {doc.title || doc.id}
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
+                    <Button
+                      variant="ghost"
+                      size="icon"
                                 className="h-5 w-5"
                                 onClick={() => setSelectedDocs(selectedDocs.filter(d => d.id !== doc.id))}
-                              >
+                    >
                                 <X className="h-3 w-3" />
-                              </Button>
+                    </Button>
                             </div>
                           ))}
-                        </div>
-                      ) : (
+              </div>
+                ) : (
                         <div className="text-xs text-muted-foreground italic">
                           No documents added
-                        </div>
+    </div>
                       )}
                     </div>
                     
@@ -1875,12 +1896,12 @@ export function AIAssistantPage() {
                         <Search className="h-4 w-4 interactive-icon" />
                         Search Web
                       </Button>
-                    </div>
+                          </div>
+                  </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
         </div>
       </TooltipProvider>
     </AIErrorBoundary>

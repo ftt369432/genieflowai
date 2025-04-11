@@ -602,4 +602,258 @@
 .dark .ai-assistant-container .recent-query:hover {
   background-color: rgba(99, 102, 241, 0.1);
   color: white;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Enhanced AI Assistant layout in dark mode */
+[data-theme="dark"] {
+  /* Chat interface improvements */
+  .AIAssistantPage {
+    --sidebar-bg: hsl(218, 14%, 10%);
+    --chat-bg: hsl(222, 20%, 7%);
+    --message-user-bg: hsl(212, 100%, 34%);
+    --message-ai-bg: hsl(220, 10%, 14%);
+    --highlighted-text: rgba(255, 255, 255, 0.92);
+  }
+  
+  /* Sidebar styling */
+  .AIAssistantPage .flex > div[class*="border-r"],
+  .AIAssistantPage .flex > div[class*="border-l"] {
+    background-color: var(--sidebar-bg);
+    border-color: hsla(220, 13%, 20%, 0.5) !important;
+  }
+  
+  /* Chat area */
+  .AIAssistantPage .flex-1.flex.flex-col {
+    background-color: var(--chat-bg);
+  }
+  
+  /* Message bubbles */
+  .AIAssistantPage div[class*="bg-primary"] {
+    background-color: var(--message-user-bg) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+  
+  .AIAssistantPage div[class*="bg-muted"]:not(header, .flex > div, button) {
+    background-color: var(--message-ai-bg) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    color: var(--highlighted-text);
+  }
+  
+  /* Headers and controls */
+  .AIAssistantPage header {
+    background-color: var(--sidebar-bg) !important;
+    border-color: hsla(220, 13%, 20%, 0.5) !important;
+  }
+  
+  .AIAssistantPage h1, 
+  .AIAssistantPage h2, 
+  .AIAssistantPage h3 {
+    color: var(--highlighted-text);
+  }
+  
+  /* Input area */
+  .AIAssistantPage textarea {
+    background-color: hsl(220, 10%, 12%);
+    border-color: hsla(220, 13%, 20%, 0.7);
+  }
+  
+  .AIAssistantPage button[type="submit"] {
+    background-color: hsl(212, 100%, 34%);
+    color: white;
+  }
+  
+  /* Animation effects */
+  .AIAssistantPage div.animate-bounce {
+    animation-duration: 1.5s;
+  }
+  
+  /* Sidebar conversations */
+  .AIAssistantPage div[class*="hover:bg-muted"] {
+    transition: all 0.2s ease;
+  }
+  
+  .AIAssistantPage div[class*="hover:bg-muted"]:hover {
+    background-color: hsla(220, 13%, 18%, 0.7) !important;
+    transform: translateY(-1px);
+  }
+  
+  .AIAssistantPage div[class*="bg-muted"]:not(div[class*="rounded-lg"]) {
+    background-color: hsla(220, 13%, 14%, 0.7) !important;
+    border-left: 2px solid hsl(212, 100%, 34%);
+  }
+}
+
+/* Enhanced AIAssistant Dark Mode Styling */
+.dark [role="navigation"] .sidebar-link {
+  color: white;
+  font-weight: 500;
+}
+
+.dark .ai-assistant-container {
+  --glow-color: rgba(59, 130, 246, 0.5);
+  --accent-glow: rgba(99, 102, 241, 0.4);
+}
+
+.dark .ai-header {
+  background-color: #121827;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.dark .ai-header h1, 
+.dark .ai-header h2 {
+  color: white;
+  font-weight: 700;
+}
+
+.dark .ai-assistant-container .card-title,
+.dark .ai-assistant-container .card-header h3,
+.dark .ai-assistant-container .card-header .text-xl {
+  color: white;
+  font-weight: 600;
+}
+
+/* Handle heading size styles separately */
+.dark .ai-assistant-container h2.text-2xl {
+  color: white;
+  font-weight: 600;
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+.dark .ai-assistant-container .card-description {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Message styling in dark mode */
+.dark .ai-assistant-container .message-user {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  border: none;
+}
+
+.dark .ai-assistant-container .message-assistant {
+  background-color: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+/* Make code blocks more readable in dark mode */
+.dark .ai-assistant-container pre,
+.dark .ai-assistant-container code {
+  background-color: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+/* Enhance sidebar items */
+.dark .ai-assistant-container .sidebar-item {
+  color: rgba(255, 255, 255, 0.8);
+  transition: all 0.2s ease;
+}
+
+.dark .ai-assistant-container .sidebar-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(2px);
+}
+
+.dark .ai-assistant-container .sidebar-item.active {
+  background-color: rgba(99, 102, 241, 0.2);
+  color: white;
+  border-left: 2px solid #6366f1;
+}
+
+/* Icon enhancements */
+.dark .ai-assistant-container svg {
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+  transition: all 0.3s ease;
+}
+
+.dark .ai-assistant-container button:hover svg,
+.dark .ai-assistant-container .interactive-icon:hover {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 6px var(--glow-color));
+}
+
+/* Animations for typing indicator */
+.dark .ai-assistant-container .typing-indicator div {
+  background: #6366f1;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+}
+
+/* Enhance Buttons */
+.dark .ai-assistant-container button.primary {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.dark .ai-assistant-container button.primary:hover {
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.dark .ai-assistant-container button.secondary {
+  background-color: rgba(99, 102, 241, 0.1);
+  color: white;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+.dark .ai-assistant-container button.secondary:hover {
+  background-color: rgba(99, 102, 241, 0.2);
+}
+
+/* Model selector styling */
+.dark .ai-assistant-container .model-card {
+  background-color: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.dark .ai-assistant-container .model-card:hover {
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
+  transform: translateY(-2px);
+}
+
+.dark .ai-assistant-container .model-card.selected {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px #6366f1, 0 4px 20px rgba(99, 102, 241, 0.3);
+}
+
+/* Chat input area */
+.dark .ai-assistant-container .chat-input {
+  background-color: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.dark .ai-assistant-container .chat-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+/* Recent queries styling */
+.dark .ai-assistant-container .recent-query {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.dark .ai-assistant-container .recent-query:hover {
+  background-color: rgba(99, 102, 241, 0.1);
+  color: white;
 } 
