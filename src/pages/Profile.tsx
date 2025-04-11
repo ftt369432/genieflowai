@@ -1,17 +1,111 @@
-import React, { useEffect } from 'react';
-import { useUserStore } from '../stores/userStore';
+import React, { useEffect, useState } from 'react';
+import { useUserStore, SubscriptionTier, SubscriptionType, UserProfile } from '../stores/userStore';
 import { getEnv } from '../config/env';
 import { getAvatar } from '../lib/utils';
+import { Spinner } from '../components/ui/Spinner';
+import { supabase } from '../lib/supabase';
 
 export function Profile() {
-  const { user } = useUserStore();
+  const { user, setUser } = useUserStore();
   const { useMock } = getEnv();
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('Profile component mounted');
     console.log('User data:', user);
     console.log('Mock mode:', useMock);
-  }, [user, useMock]);
+    
+    async function loadUserData() {
+      try {
+        setIsLoading(true);
+        
+        // If we already have user data, use it
+        if (user) {
+          console.log('User data already available in store');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Otherwise, try to get data from Supabase session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          console.log('Creating user profile from Supabase session data');
+          
+          // Create a user profile from session data
+          const userProfile: UserProfile = {
+            id: session.user.id,
+            email: session.user.email || '',
+            fullName: session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
+            avatar: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
+            subscription: {
+              plan: 'free' as SubscriptionTier,
+              type: 'individual' as SubscriptionType,
+              status: 'active',
+              currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+            }
+          };
+          
+          // Update the global user store
+          setUser(userProfile);
+        } else {
+          console.warn('No user session found');
+          setLoadError('Unable to load profile data. Please log in again.');
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setLoadError('Error loading profile data');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    loadUserData();
+  }, [user, useMock, setUser]);
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-[50vh]">
+        <Spinner className="h-12 w-12 text-primary mb-4" />
+        <p className="text-lg font-medium">Loading your profile...</p>
+      </div>
+    );
+  }
+  
+  if (loadError) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+          <h2 className="text-lg font-medium mb-2">Error Loading Profile</h2>
+          <p>{loadError}</p>
+          <button 
+            onClick={() => window.location.href = '/login'}
+            className="mt-4 bg-red-100 hover:bg-red-200 text-red-800 font-medium py-2 px-4 rounded transition"
+          >
+            Return to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-6">
+          <h2 className="text-lg font-medium mb-2">Profile Unavailable</h2>
+          <p>No profile data is available. Please log in to view your profile.</p>
+          <button 
+            onClick={() => window.location.href = '/login'}
+            className="mt-4 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-medium py-2 px-4 rounded transition"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
