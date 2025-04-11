@@ -390,6 +390,20 @@ export class GoogleAPIClient {
     return response;
   }
 
+  /**
+   * Set a provider token directly
+   * This is useful for testing with known tokens
+   */
+  setProviderToken(token: string): void {
+    console.log('GoogleAPIClient: Manually setting provider token');
+    this.accessToken = token;
+    this.useMockData = false;
+    this.initialized = true;
+  }
+
+  /**
+   * Set use mock data
+   */
   setUseMockData(useMock: boolean): void {
     this.useMockData = useMock;
   }

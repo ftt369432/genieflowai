@@ -21,6 +21,7 @@ import {
 } from './emailService';
 
 import emailService from './emailService';
+import { supabase } from '../../lib/supabase';
 
 export class EmailService {
   private static instance: EmailService;
@@ -43,7 +44,26 @@ export class EmailService {
   
   // Account methods
   async getAccounts(): Promise<EmailAccount[]> {
-    // For now, return mock accounts
+    // Try to get the real user's email from auth
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.email) {
+        return [
+          {
+            id: 'gmail-account',
+            provider: 'gmail',
+            email: session.user.email,
+            name: session.user.user_metadata?.full_name || 'Gmail Account',
+            connected: true,
+            lastSynced: new Date()
+          }
+        ];
+      }
+    } catch (error) {
+      console.error('Error getting user session:', error);
+    }
+
+    // Fallback to mock account if no session
     return [
       {
         id: 'mock-account-1',
