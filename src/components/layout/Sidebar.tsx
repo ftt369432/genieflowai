@@ -32,7 +32,8 @@ import {
   HardDrive,
   PanelLeftClose,
   Mail,
-  FolderOpen
+  FolderOpen,
+  Table
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -69,6 +70,12 @@ const sidebarSections: SidebarSection[] = [
         icon: ListTodo,
         href: '/tasks',
         color: 'text-orange-500',
+      },
+      {
+        title: 'Tasks Spreadsheet',
+        icon: Table,
+        href: '/tasks/new',
+        color: 'text-orange-400',
       },
       {
         title: 'Calendar',

@@ -16,6 +16,7 @@ import { AIPage } from './pages/AIPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { ContactsPage } from './pages/ContactsPage';
 import { TasksPage } from './pages/TasksPage';
+import { TaskPage } from './pages/TaskPage';
 import { LegalDocumentPage } from './pages/LegalDocumentPage';
 import { NotebooksPage } from './pages/NotebooksPage';
 import { EmailPage } from './pages/EmailPage';
@@ -281,6 +282,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <TasksPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Add new TaskPage route with spreadsheet view */}
+              <Route 
+                path="/tasks/new" 
+                element={
+                  <ProtectedRoute>
+                    <TaskPage />
                   </ProtectedRoute>
                 } 
               />

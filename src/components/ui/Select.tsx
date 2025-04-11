@@ -4,23 +4,98 @@ import { Check, ChevronDown } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 
-const Select = ({ children }: { children: React.ReactNode }) => {
-  return <div className="select-container">{children}</div>;
-};
+// Improved Select Root component that supports value and onValueChange
+interface SelectProps {
+  children: React.ReactNode;
+  value?: string;
+  onValueChange?: (value: string) => void;
+  defaultValue?: string;
+}
+
+const Select = React.forwardRef<HTMLDivElement, SelectProps>(
+  ({ children, value, onValueChange, defaultValue, ...props }, ref) => {
+    return (
+      <SelectPrimitive.Root
+        value={value}
+        onValueChange={onValueChange}
+        defaultValue={defaultValue}
+      >
+        <div ref={ref} className="select-container" {...props}>
+          {children}
+        </div>
+      </SelectPrimitive.Root>
+    );
+  }
+);
+Select.displayName = "Select";
 
 const SelectGroup = SelectPrimitive.Group;
 
-const SelectValue = ({ placeholder }: { placeholder?: string }) => {
-  return <span className="select-value">{placeholder}</span>;
-};
+interface SelectValueProps {
+  placeholder?: string;
+  className?: string;
+}
 
-const SelectTrigger = ({ children }: { children: React.ReactNode }) => {
-  return <button className="select-trigger">{children}</button>;
-};
+const SelectValue = React.forwardRef<React.ElementRef<typeof SelectPrimitive.Value>, SelectValueProps>(
+  ({ placeholder, className }, ref) => {
+    return (
+      <SelectPrimitive.Value 
+        ref={ref} 
+        placeholder={placeholder}
+        className={cn("select-value", className)}
+      />
+    );
+  }
+);
+SelectValue.displayName = "SelectValue";
 
-const SelectContent = ({ children }: { children: React.ReactNode }) => {
-  return <div className="select-content">{children}</div>;
-};
+interface SelectTriggerProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+const SelectTrigger = React.forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger>, SelectTriggerProps>(
+  ({ children, className, ...props }, ref) => {
+    return (
+      <SelectPrimitive.Trigger
+        ref={ref}
+        className={cn("select-trigger", className)}
+        {...props}
+      >
+        {children}
+        <SelectPrimitive.Icon>
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </SelectPrimitive.Icon>
+      </SelectPrimitive.Trigger>
+    );
+  }
+);
+SelectTrigger.displayName = "SelectTrigger";
+
+interface SelectContentProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+const SelectContent = React.forwardRef<React.ElementRef<typeof SelectPrimitive.Content>, SelectContentProps>(
+  ({ children, className, ...props }, ref) => {
+    return (
+      <SelectPrimitive.Portal>
+        <SelectPrimitive.Content
+          ref={ref}
+          className={cn("select-content", className)}
+          position="popper"
+          {...props}
+        >
+          <SelectPrimitive.Viewport className="select-viewport">
+            {children}
+          </SelectPrimitive.Viewport>
+        </SelectPrimitive.Content>
+      </SelectPrimitive.Portal>
+    );
+  }
+);
+SelectContent.displayName = "SelectContent";
 
 const SelectLabel = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Label>,
@@ -34,13 +109,32 @@ const SelectLabel = React.forwardRef<
 ));
 SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
-const SelectItem = ({ value, children }: { value: string; children: React.ReactNode }) => {
-  return (
-    <div className="select-item" data-value={value}>
-      {children}
-    </div>
-  );
-};
+interface SelectItemProps {
+  value: string;
+  children: React.ReactNode;
+  className?: string;
+}
+
+const SelectItem = React.forwardRef<React.ElementRef<typeof SelectPrimitive.Item>, SelectItemProps>(
+  ({ value, children, className, ...props }, ref) => {
+    return (
+      <SelectPrimitive.Item
+        ref={ref}
+        value={value}
+        className={cn("select-item", className)}
+        {...props}
+      >
+        <SelectPrimitive.ItemIndicator className="select-item-indicator">
+          <Check className="h-4 w-4" />
+        </SelectPrimitive.ItemIndicator>
+        <SelectPrimitive.ItemText className="select-item-text">
+          {children}
+        </SelectPrimitive.ItemText>
+      </SelectPrimitive.Item>
+    );
+  }
+);
+SelectItem.displayName = "SelectItem";
 
 const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
