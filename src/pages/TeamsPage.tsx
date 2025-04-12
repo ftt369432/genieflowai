@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { TeamsSidebar } from '../components/teams/TeamsSidebar';
+import TeamsSidebar from '../components/teams/TeamsSidebar';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Textarea } from '../components/ui/Textarea';
@@ -14,6 +14,30 @@ import { EmailAccountConnect } from '../components/email/EmailAccountConnect';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/Dialog';
 import { toast } from 'sonner';
 import { useTeam } from '../contexts/TeamContext';
+import { TeamCreationDialog } from '../components/teams/TeamCreationDialog';
+import { useAuth } from '../contexts/AuthContext';
+import { AIService } from '../services/ai/aiService';
+import { 
+  PenSquare, 
+  MessageCircle, 
+  MoreVertical,
+  Hash
+} from 'lucide-react';
+import { Team, DirectMessage, Thread, Page } from '../types/team';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardFooter, 
+  CardHeader, 
+  CardTitle 
+} from '../components/ui/Card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/DropdownMenu';
 
 // Define Message interface
 interface Message {
@@ -125,28 +149,28 @@ const mockMessages: Message[] = [
 const mockAIAssistants: AIAssistant[] = [
   {
     id: 'ai-1',
-    name: 'Design Assistant',
-    avatar: '/avatars/ai-design.png',
-    description: 'Specialized in UI/UX design feedback and suggestions',
-    capabilities: ['Design analysis', 'Accessibility checks', 'User flow optimization'],
-    isActive: true
+    name: 'Research Assistant',
+    avatar: '/avatars/ai-research.png',
+    description: 'Helps with research, citations, and fact-checking',
+    capabilities: ['Research', 'Citation', 'Fact-checking'],
+    isActive: false,
   },
   {
     id: 'ai-2',
-    name: 'Code Helper',
-    avatar: '/avatars/ai-code.png',
-    description: 'Helps with code review, bug identification, and best practices',
-    capabilities: ['Code review', 'Bug detection', 'Performance suggestions'],
-    isActive: false
+    name: 'Meeting Summarizer',
+    avatar: '/avatars/ai-meeting.png',
+    description: 'Automatically creates summaries of team discussions',
+    capabilities: ['Meeting summarization', 'Team collaboration', 'Information extraction'],
+    isActive: false,
   },
   {
     id: 'ai-3',
     name: 'Project Manager',
-    avatar: '/avatars/ai-pm.png',
-    description: 'Assists with task management, deadlines, and resource allocation',
-    capabilities: ['Timeline planning', 'Resource allocation', 'Risk assessment'],
-    isActive: false
-  }
+    avatar: '/avatars/ai-project.png',
+    description: 'Helps track tasks, deadlines, and project milestones',
+    capabilities: ['Task management', 'Deadline tracking', 'Resource allocation'],
+    isActive: false,
+  },
 ];
 
 // Add expert responses for different topics
@@ -173,6 +197,7 @@ const expertResponses = {
 };
 
 export const TeamsPage: React.FC = () => {
+  const { user } = useAuth();
   const { 
     teams, 
     activeTeam, 
@@ -197,7 +222,7 @@ export const TeamsPage: React.FC = () => {
   
   const [messageInput, setMessageInput] = useState('');
   const [showAIPanel, setShowAIPanel] = useState(false);
-  const [activeAssistants, setActiveAssistants] = useState<string[]>(['ai-1']);
+  const [activeAssistants, setActiveAssistants] = useState<AIAssistant[]>(mockAIAssistants);
   const [messages, setMessages] = useState<Message[]>(mockMessages);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
@@ -212,6 +237,14 @@ export const TeamsPage: React.FC = () => {
   });
   const [threadTitle, setThreadTitle] = useState('');
   const [threadBody, setThreadBody] = useState('');
+  const [showTeamCreation, setShowTeamCreation] = useState(false);
+  const [newPageTitle, setNewPageTitle] = useState('');
+  const [newPageContent, setNewPageContent] = useState('');
+  const [showNewPage, setShowNewPage] = useState(false);
+  const [activeTab, setActiveTab] = useState('board');
+  const [activePage, setActivePage] = useState<Page | null>(null);
+  const [activeThread, setActiveThread] = useState<Thread | null>(null);
+  const [activeDirectMessage, setActiveDirectMessage] = useState<DirectMessage | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -220,6 +253,15 @@ export const TeamsPage: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    // Reset states when active team changes
+    setMessages([]);
+    setActivePage(null);
+    setActiveThread(null);
+    setActiveDirectMessage(null);
+    setActiveTab('board');
+  }, [activeTeam]);
 
   const handleCreateTeam = async () => {
     try {
@@ -237,13 +279,15 @@ export const TeamsPage: React.FC = () => {
 
   const toggleAIAssistant = (assistantId: string) => {
     setActiveAssistants(prev => 
-      prev.includes(assistantId)
-        ? prev.filter(id => id !== assistantId)
-        : [...prev, assistantId]
+      prev.map((assistant) =>
+        assistant.id === assistantId
+          ? { ...assistant, isActive: !assistant.isActive }
+          : assistant
+      )
     );
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (messageInput.trim()) {
       const newMessage: Message = {
         id: `m${messages.length + 1}`,
@@ -380,144 +424,706 @@ export const TeamsPage: React.FC = () => {
     mention.name.toLowerCase().includes(mentionFilter.toLowerCase())
   );
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  }
+  const handleCreatePage = async () => {
+    if (!newPageTitle.trim() || !activeTeam) return;
 
-  if (error) {
-    return <div className="flex items-center justify-center h-screen text-red-500">Error: {error.message}</div>;
+    try {
+      const newPage = await createPage(activeTeam.id, {
+        title: newPageTitle,
+        content: newPageContent,
+      });
+
+      setNewPageTitle('');
+      setNewPageContent('');
+      setShowNewPage(false);
+      
+      if (newPage) {
+        setActivePage(newPage);
+        setActiveTab('pages');
+      }
+      
+      toast.success('Page created successfully');
+    } catch (error) {
+      console.error('Error creating page:', error);
+      toast.error('Failed to create page');
+    }
+  };
+
+  const renderTeamBoard = () => {
+    if (!activeTeam) return null;
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+        {/* Team Overview Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Team Overview
+            </CardTitle>
+            <CardDescription>
+              Key information about {activeTeam.name}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-12 w-12">
+                  <AvatarImage src={activeTeam.avatar} />
+                  <AvatarFallback>{activeTeam.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="font-medium">{activeTeam.name}</h3>
+                  <p className="text-sm text-muted-foreground">{activeTeam.description || 'No description'}</p>
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium mb-2">Members ({activeTeam.members.length})</h4>
+                <div className="flex -space-x-2 overflow-hidden">
+                  {activeTeam.members.slice(0, 5).map((member) => (
+                    <Avatar key={member.id} className="border-2 border-background h-8 w-8">
+                      <AvatarImage src={member.avatar} />
+                      <AvatarFallback>{member.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                  ))}
+                  {activeTeam.members.length > 5 && (
+                    <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary text-primary-foreground text-xs border-2 border-background">
+                      +{activeTeam.members.length - 5}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button variant="outline" size="sm" className="w-full">
+              Manage Team
+            </Button>
+          </CardFooter>
+        </Card>
+
+        {/* Recent Activity Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              Recent Activity
+            </CardTitle>
+            <CardDescription>
+              Latest updates and messages
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {activeTeam.threads.slice(0, 3).map((thread) => (
+                <div key={thread.id} className="flex items-start gap-3 pb-3 border-b">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={thread.creator.avatar} />
+                    <AvatarFallback>{thread.creator.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium text-sm">{thread.creator.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        in #{thread.title}
+                      </span>
+                    </div>
+                    <p className="text-sm line-clamp-2">{thread.lastMessage}</p>
+                  </div>
+                </div>
+              ))}
+              
+              {activeTeam.threads.length === 0 && (
+                <div className="text-center text-muted-foreground py-4">
+                  <p>No recent activity</p>
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    onClick={() => setActiveTab('threads')}
+                  >
+                    Start a thread
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+              onClick={() => setActiveTab('threads')}
+            >
+              View All Activity
+            </Button>
+          </CardFooter>
+        </Card>
+
+        {/* Pages Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Team Pages
+            </CardTitle>
+            <CardDescription>
+              Documentation and shared resources
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {activeTeam.pages.slice(0, 4).map((page) => (
+                <div 
+                  key={page.id} 
+                  className="flex items-center gap-2 p-2 hover:bg-accent rounded-md cursor-pointer"
+                  onClick={() => {
+                    setActivePage(page);
+                    setActiveTab('pages');
+                  }}
+                >
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">{page.title}</span>
+                </div>
+              ))}
+              
+              {activeTeam.pages.length === 0 && (
+                <div className="text-center text-muted-foreground py-4">
+                  <p>No pages yet</p>
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    onClick={() => {
+                      setShowNewPage(true);
+                      setActiveTab('pages');
+                    }}
+                  >
+                    Create a page
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+              onClick={() => {
+                setShowNewPage(true);
+                setActiveTab('pages');
+              }}
+            >
+              Create New Page
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  };
+
+  const renderTeamPages = () => {
+    if (!activeTeam) return null;
+
+    if (showNewPage) {
+      return (
+        <div className="flex flex-col h-full p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Create New Page</h2>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setShowNewPage(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+          
+          <div className="space-y-4 flex-1">
+            <Input
+              placeholder="Page Title"
+              value={newPageTitle}
+              onChange={(e) => setNewPageTitle(e.target.value)}
+              className="text-lg font-medium"
+            />
+            
+            <Textarea
+              placeholder="Write your content here..."
+              value={newPageContent}
+              onChange={(e) => setNewPageContent(e.target.value)}
+              className="flex-1 min-h-[300px]"
+            />
+          </div>
+          
+          <div className="mt-4 flex justify-end">
+            <Button onClick={handleCreatePage}>
+              Save Page
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    if (activePage) {
+      return (
+        <div className="flex flex-col h-full p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">{activePage.title}</h2>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm">
+                <PenSquare className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem>Share</DropdownMenuItem>
+                  <DropdownMenuItem>Export</DropdownMenuItem>
+                  <DropdownMenuItem className="text-red-500">Delete</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto">
+            <div className="prose max-w-none">
+              {activePage.content || <p className="text-muted-foreground">No content</p>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col h-full p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Team Pages</h2>
+          <Button 
+            onClick={() => setShowNewPage(true)}
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Create Page
+          </Button>
+        </div>
+        
+        {activeTeam.pages.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {activeTeam.pages.map((page) => (
+              <Card 
+                key={page.id} 
+                className="cursor-pointer hover:bg-accent/5"
+                onClick={() => setActivePage(page)}
+              >
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    {page.title}
+                  </CardTitle>
+                  <CardDescription>
+                    Created by {page.creator.name}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="line-clamp-2 text-sm">
+                    {page.content || 'No content'}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full">
+            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Pages Yet</h3>
+            <p className="text-muted-foreground mb-4 text-center max-w-md">
+              Pages help your team share knowledge and document important information.
+            </p>
+            <Button onClick={() => setShowNewPage(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Create Your First Page
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTeamThreads = () => {
+    if (!activeTeam) return null;
+
+    if (activeThread) {
+      return (
+        <div className="flex flex-col h-full">
+          <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center gap-2">
+              <Hash className="h-5 w-5 text-muted-foreground" />
+              <h2 className="font-medium">{activeThread.title}</h2>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setActiveThread(null)}
+            >
+              Back
+            </Button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.length > 0 ? (
+              messages.map((message) => (
+                <div key={message.id} className="flex gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={message.sender.avatar} />
+                    <AvatarFallback>
+                      {message.isAI ? <Bot className="h-4 w-4" /> : <UserIcon className="h-4 w-4" />}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">
+                        {message.sender.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {message.timestamp.toLocaleTimeString()}
+                      </span>
+                      {message.isAI && (
+                        <span className="bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded-full">
+                          AI
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm">{message.content}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>No messages yet. Start the conversation!</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="p-4 border-t">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={user?.photoURL || undefined} />
+                <AvatarFallback>
+                  <UserIcon className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
+              <Input
+                placeholder="Type your message..."
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+              />
+              <Button onClick={handleSendMessage} size="icon" disabled={!messageInput.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="mt-3">
+              <h4 className="text-xs font-medium mb-2">AI Assistants</h4>
+              <div className="flex flex-wrap gap-2">
+                {activeAssistants.map((assistant) => (
+                  <Button
+                    key={assistant.id}
+                    variant={assistant.isActive ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleAIAssistant(assistant.id)}
+                    className="h-8"
+                  >
+                    <Bot className="h-3 w-3 mr-1" />
+                    {assistant.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col h-full p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Team Threads</h2>
+          <Button size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            New Thread
+          </Button>
+        </div>
+        
+        {activeTeam.threads.length > 0 ? (
+          <div className="space-y-2">
+            {activeTeam.threads.map((thread) => (
+              <div 
+                key={thread.id} 
+                className="flex items-start p-3 hover:bg-accent rounded-md cursor-pointer"
+                onClick={() => setActiveThread(thread)}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Hash className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="font-medium">{thread.title}</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    {thread.lastMessage}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="flex -space-x-2">
+                      {thread.participants.slice(0, 3).map((participant) => (
+                        <Avatar key={participant.id} className="border-2 border-background h-6 w-6">
+                          <AvatarImage src={participant.avatar} />
+                          <AvatarFallback>{participant.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                      ))}
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {thread.messageCount} messages
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full">
+            <MessageCircle className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Threads Yet</h3>
+            <p className="text-muted-foreground mb-4 text-center max-w-md">
+              Create threads to organize team discussions around specific topics.
+            </p>
+            <Button>
+              <Plus className="h-4 w-4 mr-1" />
+              Create Your First Thread
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTeamChat = () => {
+    if (!activeTeam) return null;
+
+    if (activeDirectMessage) {
+      // Render the direct message chat
+      return (
+        <div className="flex flex-col h-full">
+          <div className="flex items-center gap-3 p-4 border-b">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={activeDirectMessage.user.avatar} />
+              <AvatarFallback>{activeDirectMessage.user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <div>
+              <h2 className="font-medium">{activeDirectMessage.user.name}</h2>
+              <span className="text-xs text-muted-foreground">
+                {activeDirectMessage.user.status === 'online' ? 'Online' : 'Offline'}
+              </span>
+            </div>
+            <div className="ml-auto">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setActiveDirectMessage(null)}
+              >
+                Back
+              </Button>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.length > 0 ? (
+              messages.map((message) => (
+                <div key={message.id} className="flex gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={message.sender.avatar} />
+                    <AvatarFallback>
+                      {message.isAI ? <Bot className="h-4 w-4" /> : <UserIcon className="h-4 w-4" />}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">
+                        {message.sender.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {message.timestamp.toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <p className="text-sm">{message.content}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>No messages yet. Start the conversation!</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="p-4 border-t">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={user?.photoURL || undefined} />
+                <AvatarFallback>
+                  <UserIcon className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
+              <Input
+                placeholder="Type your message..."
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+              />
+              <Button onClick={handleSendMessage} size="icon" disabled={!messageInput.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col h-full p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Direct Messages</h2>
+        </div>
+        
+        {activeTeam.directMessages.length > 0 ? (
+          <div className="space-y-2">
+            {activeTeam.directMessages.map((dm) => (
+              <div 
+                key={dm.id} 
+                className="flex items-center p-3 hover:bg-accent rounded-md cursor-pointer"
+                onClick={() => setActiveDirectMessage(dm)}
+              >
+                <Avatar className="h-10 w-10 mr-3">
+                  <AvatarImage src={dm.user.avatar} />
+                  <AvatarFallback>{dm.user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-medium">{dm.user.name}</h3>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(dm.lastMessageTime).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    {dm.lastMessage}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full">
+            <MessageCircle className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Direct Messages</h3>
+            <p className="text-muted-foreground mb-4 text-center max-w-md">
+              Start a private conversation with a team member by selecting them from the sidebar.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderNoTeamSelected = () => (
+    <div className="flex flex-col items-center justify-center h-full p-4">
+      <Users className="h-16 w-16 text-muted-foreground mb-6" />
+      <h2 className="text-2xl font-bold mb-2">Select or Create a Team</h2>
+      <p className="text-muted-foreground mb-6 text-center max-w-md">
+        Teams help you organize your work and collaborate with others. Select an existing team or create a new one to get started.
+      </p>
+      <Button onClick={() => setShowTeamCreation(true)}>
+        <Plus className="h-4 w-4 mr-2" />
+        Create New Team
+      </Button>
+    </div>
+  );
+
+  const renderTeamContent = () => {
+    if (!activeTeam) {
+      return renderNoTeamSelected();
+    }
+
+    return (
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+        <TabsList className="grid grid-cols-4 mb-4">
+          <TabsTrigger value="board">Board</TabsTrigger>
+          <TabsTrigger value="pages">Pages</TabsTrigger>
+          <TabsTrigger value="threads">Threads</TabsTrigger>
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="board" className="flex-1 overflow-y-auto">
+          {renderTeamBoard()}
+        </TabsContent>
+        
+        <TabsContent value="pages" className="flex-1 overflow-hidden">
+          {renderTeamPages()}
+        </TabsContent>
+        
+        <TabsContent value="threads" className="flex-1 overflow-hidden">
+          {renderTeamThreads()}
+        </TabsContent>
+        
+        <TabsContent value="chat" className="flex-1 overflow-hidden">
+          {renderTeamChat()}
+        </TabsContent>
+      </Tabs>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-      <TeamsSidebar />
+    <div className="flex h-screen overflow-hidden">
+      <TeamsSidebar 
+        onCreateTeam={() => setShowTeamCreation(true)}
+        onTeamSelect={(team) => setActiveTeam(team)}
+        onDirectMessageSelect={(dm) => {
+          setActiveDirectMessage(dm);
+          setActiveTab('chat');
+        }}
+      />
       
-      <div className="flex-1 flex flex-col">
-        {/* Main content area */}
-        <div className="flex-1 p-4 overflow-y-auto">
-          {activeTeam ? (
-            <div className="space-y-4">
-              {/* Team header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={activeTeam.avatar} alt={activeTeam.name} />
-                    <AvatarFallback>{activeTeam.name.substring(0, 2)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h1 className="text-xl font-semibold">{activeTeam.name}</h1>
-                    <p className="text-sm text-gray-500">{activeTeam.description}</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm">
-                    <Settings className="h-4 w-4 mr-1" />
-                    Settings
-                  </Button>
-                </div>
-              </div>
-
-              {/* Team content */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Main content area */}
-                <div className="md:col-span-2 space-y-4">
-                  {/* Team activity feed */}
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-                    <h2 className="text-lg font-semibold mb-4">Team Activity</h2>
-                    {/* Activity feed content */}
-                  </div>
-
-                  {/* Team pages */}
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-semibold">Pages</h2>
-                      <Button variant="outline" size="sm">
-                        <Plus className="h-4 w-4 mr-1" />
-                        New Page
-                      </Button>
-                    </div>
-                    {/* Pages content */}
-                  </div>
-                </div>
-
-                {/* Right sidebar */}
-                <div className="space-y-4">
-                  {/* AI Assistants */}
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-semibold">AI Assistants</h2>
-                      <Button variant="outline" size="sm">
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add
-                      </Button>
-                    </div>
-                    {/* AI Assistants content */}
-                  </div>
-
-                  {/* Team members */}
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-semibold">Team Members</h2>
-                      <Button variant="outline" size="sm">
-                        <UserPlus className="h-4 w-4 mr-1" />
-                        Invite
-                      </Button>
-                    </div>
-                    {/* Team members content */}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full">
-              <h2 className="text-2xl font-semibold mb-4">No Team Selected</h2>
-              <p className="text-gray-500 mb-4">Select a team from the sidebar or create a new one</p>
-              <Button onClick={() => setShowCreateTeamDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Team
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Create Team Dialog */}
-      <Dialog open={showCreateTeamDialog} onOpenChange={setShowCreateTeamDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Team</DialogTitle>
-            <DialogDescription>
-              Create a new team workspace for collaboration.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Team Name</label>
-              <Input
-                placeholder="Enter team name"
-                value={newTeamData.name}
-                onChange={(e) => setNewTeamData({...newTeamData, name: e.target.value})}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <Input
-                placeholder="Enter team description"
-                value={newTeamData.description}
-                onChange={(e) => setNewTeamData({...newTeamData, description: e.target.value})}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateTeamDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreateTeam}>
-              Create Team
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <main className="flex-1 overflow-hidden bg-background">
+        {renderTeamContent()}
+      </main>
+      
+      <TeamCreationDialog 
+        isOpen={showTeamCreation} 
+        onClose={() => setShowTeamCreation(false)} 
+      />
     </div>
   );
-}; 
+};
+
+export default TeamsPage; 
