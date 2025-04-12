@@ -1,43 +1,12 @@
-import { AIService } from './AIService';
-
-export interface Email {
-  id: string;
-  subject: string;
-  from: string;
-  to: string[];
-  cc?: string[];
-  bcc?: string[];
-  content: string;
-  attachments?: Array<{
-    name: string;
-    type: string;
-    content: string;
-  }>;
-  labels?: string[];
-  timestamp: Date;
-  read: boolean;
-  starred: boolean;
-  important: boolean;
-}
-
-export interface EmailDraft {
-  subject: string;
-  to: string[];
-  cc?: string[];
-  bcc?: string[];
-  content: string;
-  attachments?: Array<{
-    name: string;
-    type: string;
-    content: string;
-  }>;
-}
+import { AIService } from './ai/baseAIService';
+import { geminiSimplifiedService } from './gemini-simplified';
+import { Email, EmailDraft } from '../types/email';
 
 export class EmailService {
   private aiService: AIService;
 
-  constructor(aiService?: AIService) {
-    this.aiService = aiService || new AIService();
+  constructor(aiService?: any) {
+    this.aiService = aiService || geminiSimplifiedService;
   }
 
   async analyzeEmail(email: Email): Promise<{
@@ -75,7 +44,7 @@ export class EmailService {
       Draft a response to the following email:
       Subject: ${email.subject}
       From: ${email.from}
-      Content: ${email.content}
+      Content: ${email.content || email.body || ''}
       ${context ? `Context: ${JSON.stringify(context)}` : ''}
 
       Consider:
@@ -86,11 +55,15 @@ export class EmailService {
     `;
 
     const response = await this.aiService.getCompletion(prompt);
-
+    
+    const now = new Date();
     return {
+      id: `draft-${Date.now()}`,
       subject: `Re: ${email.subject}`,
-      to: [email.from],
-      content: response
+      to: Array.isArray(email.to) ? email.to : [email.to],
+      body: response,
+      savedAt: now,
+      lastEditedAt: now
     };
   }
 

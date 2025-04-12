@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Filter, 
@@ -83,6 +84,7 @@ const adaptTaskForConversion = (task: Task): TasksTypeTask => {
 };
 
 export function TasksPage() {
+  const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -94,6 +96,13 @@ export function TasksPage() {
     key: null,
     direction: 'asc',
   });
+  
+  // Redirect to new unified task page
+  useEffect(() => {
+    // Redirect to the new task page with the current view mode
+    const targetView = viewMode === 'kanban' ? 'board' : 'list';
+    navigate(`/tasks/${targetView}`, { replace: true });
+  }, [navigate, viewMode]);
   
   // For column reordering in list view
   const [columns, setColumns] = useState<Column[]>([

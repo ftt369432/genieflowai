@@ -72,12 +72,6 @@ const sidebarSections: SidebarSection[] = [
         color: 'text-orange-500',
       },
       {
-        title: 'Tasks Spreadsheet',
-        icon: Table,
-        href: '/tasks/new',
-        color: 'text-orange-400',
-      },
-      {
         title: 'Calendar',
         icon: CalendarDays,
         href: '/calendar',
@@ -187,6 +181,17 @@ const sidebarSections: SidebarSection[] = [
         icon: UserCircle,
         href: '/profile',
         color: 'text-sky-500',
+      },
+    ],
+  },
+  {
+    title: 'Developer Tools',
+    items: [
+      {
+        title: 'Email Test',
+        icon: Mail,
+        href: '/email-test',
+        color: 'text-purple-500',
       },
     ],
   },

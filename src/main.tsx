@@ -14,7 +14,9 @@ import { Toaster } from 'sonner';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { SupabaseProvider } from './providers/SupabaseProvider';
-import { ThemeProvider, NotificationProvider, EmailProvider } from './contexts';
+import { ThemeProvider, NotificationProvider } from './contexts';
+import { EmailProvider } from './contexts/EmailContext';
+import { CalendarProvider } from './contexts/CalendarContext';
 import { services } from './services/core/initializeServices';
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -37,10 +39,12 @@ root.render(
           <SupabaseProvider>
             <AuthProvider>
               <EmailProvider>
-                <DndProvider backend={HTML5Backend}>
-                  <App />
-                  <Toaster />
-                </DndProvider>
+                <CalendarProvider>
+                  <DndProvider backend={HTML5Backend}>
+                    <App />
+                    <Toaster />
+                  </DndProvider>
+                </CalendarProvider>
               </EmailProvider>
             </AuthProvider>
           </SupabaseProvider>

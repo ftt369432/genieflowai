@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useAssistantStore } from '../../store/assistantStore';
 import { useKnowledgeBaseStore } from '../../store/knowledgeBaseStore';
-import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { AIAssistant } from '../../types/ai';
-import { PlusCircle, Edit, Trash2, MessageSquare, FolderOpen } from 'lucide-react';
-import { AssistantConfig } from './AssistantConfig';
+import { Card, CardContent } from '../ui/Card';
+import { PlusCircle, Edit, Trash, MessageSquare, Brain } from 'lucide-react';
+import { InteractiveAssistantCreator } from './InteractiveAssistantCreator';
+import type { AIAssistant } from '../../types/ai';
 
 interface AssistantListProps {
   onSelectAssistant?: (assistant: AIAssistant) => void;
@@ -18,6 +18,7 @@ export function AssistantList({ onSelectAssistant, onCreateAssistant }: Assistan
   
   const [editingAssistantId, setEditingAssistantId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isInteractiveMode, setIsInteractiveMode] = useState(false);
   
   // Function to display folder names assigned to an assistant
   const getAssistantFolderNames = (assistantId: string) => {
@@ -45,6 +46,7 @@ export function AssistantList({ onSelectAssistant, onCreateAssistant }: Assistan
     e.stopPropagation();
     setEditingAssistantId(assistantId);
     setIsCreating(false);
+    setIsInteractiveMode(true);
   };
   
   // Handle chat with assistant
@@ -63,100 +65,126 @@ export function AssistantList({ onSelectAssistant, onCreateAssistant }: Assistan
     }
   };
   
+  // Handle interactive assistant creation
+  const handleInteractiveCreate = () => {
+    setIsCreating(true);
+    setEditingAssistantId(null);
+    setIsInteractiveMode(true);
+  };
+  
   // Handle save after editing or creating
   const handleSave = () => {
     setEditingAssistantId(null);
     setIsCreating(false);
+    setIsInteractiveMode(false);
   };
   
   // Handle cancel
   const handleCancel = () => {
     setEditingAssistantId(null);
     setIsCreating(false);
+    setIsInteractiveMode(false);
   };
+  
+  // If we're in editing or creating mode with interactive creator
+  if (isInteractiveMode && (isCreating || editingAssistantId)) {
+    return (
+      <InteractiveAssistantCreator
+        assistantId={editingAssistantId || undefined}
+        onSave={handleSave}
+        onCancel={handleCancel}
+      />
+    );
+  }
   
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Your Assistants</h2>
-        <Button onClick={handleCreateAssistant} className="flex items-center gap-1">
-          <PlusCircle className="h-4 w-4" />
-          New Assistant
-        </Button>
+        <h2 className="text-2xl font-bold">AI Assistants</h2>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleCreateAssistant}
+            className="flex items-center gap-2"
+          >
+            <PlusCircle size={16} />
+            <span>Quick Create</span>
+          </Button>
+          <Button 
+            onClick={handleInteractiveCreate}
+            variant="secondary"
+            className="flex items-center gap-2"
+          >
+            <Brain size={16} />
+            <span>Interactive Create</span>
+          </Button>
+        </div>
       </div>
       
-      {isCreating && (
-        <AssistantConfig 
-          onSave={handleSave}
-          onCancel={handleCancel}
-        />
-      )}
-      
-      {editingAssistantId && (
-        <AssistantConfig 
-          assistantId={editingAssistantId}
-          onSave={handleSave}
-          onCancel={handleCancel}
-        />
-      )}
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {assistants.length > 0 ? (
-          assistants.map(assistant => (
+      {assistants.length === 0 ? (
+        <div className="text-center p-8 border rounded-lg bg-muted">
+          <p className="mb-4 text-muted-foreground">No assistants created yet.</p>
+          <Button 
+            onClick={handleInteractiveCreate}
+            className="flex items-center gap-2 mx-auto"
+          >
+            <Brain size={16} />
+            <span>Create Your First Assistant</span>
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {assistants.map(assistant => (
             <Card 
               key={assistant.id}
-              className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+              className="cursor-pointer hover:shadow-md transition-shadow"
               onClick={() => handleSelectAssistant(assistant)}
             >
-              <div className="flex justify-between items-start">
-                <h3 className="text-xl font-semibold">{assistant.name}</h3>
-                <div className="flex gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={(e) => handleEdit(assistant.id, e)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={(e) => handleDelete(assistant.id, e)}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
+              <CardContent className="p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-lg">{assistant.name}</h3>
+                    <p className="text-sm text-muted-foreground">{assistant.description || 'No description'}</p>
+                    
+                    <div className="mt-2">
+                      <p className="text-xs font-medium mb-1">Knowledge Base:</p>
+                      <p className="text-xs">{getAssistantFolderNames(assistant.id)}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="px-2 h-8"
+                      onClick={(e) => handleEdit(assistant.id, e)}
+                    >
+                      <Edit size={16} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="px-2 h-8 text-destructive"
+                      onClick={(e) => handleDelete(assistant.id, e)}
+                    >
+                      <Trash size={16} />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              
-              {assistant.description && (
-                <p className="text-muted-foreground text-sm mt-1">{assistant.description}</p>
-              )}
-              
-              <div className="flex items-center gap-1 mt-3 text-sm text-muted-foreground">
-                <FolderOpen className="h-4 w-4" />
-                <span>{getAssistantFolderNames(assistant.id)}</span>
-              </div>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="mt-4 w-full flex items-center justify-center gap-2"
-                onClick={() => handleSelectAssistant(assistant)}
-              >
-                <MessageSquare className="h-4 w-4" />
-                Chat with this assistant
-              </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 w-full flex items-center justify-center gap-2"
+                  onClick={() => handleSelectAssistant(assistant)}
+                >
+                  <MessageSquare size={16} />
+                  <span>Chat with Assistant</span>
+                </Button>
+              </CardContent>
             </Card>
-          ))
-        ) : (
-          !isCreating && (
-            <div className="col-span-full flex flex-col items-center justify-center p-8 border rounded-lg bg-muted/10">
-              <p className="text-muted-foreground mb-4">You haven't created any assistants yet.</p>
-              <Button onClick={handleCreateAssistant}>Create Your First Assistant</Button>
-            </div>
-          )
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 } 

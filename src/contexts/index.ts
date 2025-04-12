@@ -11,4 +11,7 @@ export { NotificationProvider, useNotifications } from './NotificationContext';
 export { AIProvider, useAI } from './AIContext';
 
 // Export Team Context
-export { TeamProvider, useTeam } from './TeamContext'; 
+export { TeamProvider, useTeam } from './TeamContext';
+
+// Export Calendar Context
+export { CalendarProvider, useCalendar } from './CalendarContext'; 

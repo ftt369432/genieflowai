@@ -24,10 +24,10 @@ export async function setupGmailAPIToken(tokenData: any): Promise<void> {
     
     // Set the provider token
     if (tokenData.provider_token) {
-      googleClient.setProviderToken(tokenData.provider_token);
+      googleClient.setAccessToken(tokenData.provider_token);
       console.log('Set provider token successfully');
     } else if (tokenData.access_token) {
-      googleClient.setProviderToken(tokenData.access_token);
+      googleClient.setAccessToken(tokenData.access_token);
       console.log('Set access token successfully');
     } else {
       console.error('No valid token found in token data');

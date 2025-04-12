@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useContext } from 'react';
+import React, { useState, useRef, useEffect, useContext, useCallback, useMemo } from 'react';
 import { useAI } from '../hooks/useAI';
 import { useTheme } from '../contexts/ThemeContext';
 import { useKnowledgeBase } from '../hooks/useKnowledgeBase';
@@ -583,6 +583,11 @@ const documentUtils = {
   }
 };
 
+// Extend the Message type to include metadata
+interface ExtendedMessage extends Message {
+  metadata?: MessageMetadata;
+}
+
 export function AIAssistantPage() {
   const { 
     messages, 
@@ -601,7 +606,7 @@ export function AIAssistantPage() {
   });
   const navigate = useNavigate();
 
-  const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  const [chatMessages, setChatMessages] = useState<ExtendedMessage[]>([]);
   const [input, setInput] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<'google' | 'openai' | 'xai'>('google');
   const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash');
@@ -872,7 +877,7 @@ export function AIAssistantPage() {
     react: (messageId: string, emoji: string) => {
       setChatMessages(prev => prev.map(msg => {
         if (msg.id === messageId) {
-          const reactions = (msg.metadata as MessageMetadata)?.reactions || {};
+          const reactions = msg.metadata?.reactions || {};
           const userReactions = reactions[emoji] || [];
           const hasReacted = userReactions.includes('user');
           
@@ -883,7 +888,7 @@ export function AIAssistantPage() {
               reactions: {
                 ...reactions,
                 [emoji]: hasReacted 
-                  ? userReactions.filter(u => u !== 'user')
+                  ? userReactions.filter(user => user !== 'user')
                   : [...userReactions, 'user']
               }
             }
@@ -924,7 +929,7 @@ export function AIAssistantPage() {
             metadata: {
               ...msg.metadata,
               formatting: {
-                ...(msg.metadata as MessageMetadata)?.formatting,
+                ...(msg.metadata?.formatting || {}),
                 [type === 'bold' ? 'isBold' : type === 'italic' ? 'isItalic' : 'isCode']: true,
                 ...(type === 'code' && language ? { language } : {})
               }
@@ -954,7 +959,7 @@ export function AIAssistantPage() {
     });
     },
     
-    edit: (message: Message) => {
+    edit: (message: ExtendedMessage) => {
       setChatMessages(prev => prev.map(msg => msg.id === message.id ? message : msg));
     },
     
@@ -1012,7 +1017,7 @@ export function AIAssistantPage() {
   };
 
   // Replace existing renderMessageActions with consolidated version
-  const renderMessageActions = (message: Message): MessageActions => ({
+  const renderMessageActions = (message: ExtendedMessage): MessageActions => ({
     like: () => messageActions.like(message.id),
     dislike: () => messageActions.dislike(message.id),
     copy: () => messageActions.copy(message.id),
@@ -1244,7 +1249,7 @@ export function AIAssistantPage() {
   const handleMessageReaction = (messageId: string, emoji: string) => {
     setChatMessages(prev => prev.map(msg => {
       if (msg.id === messageId) {
-        const reactions = (msg.metadata as MessageMetadata)?.reactions || {};
+        const reactions = msg.metadata?.reactions || {};
         const userReactions = reactions[emoji] || [];
         const hasReacted = userReactions.includes('user');
         
@@ -1255,7 +1260,7 @@ export function AIAssistantPage() {
             reactions: {
               ...reactions,
               [emoji]: hasReacted 
-                ? userReactions.filter(u => u !== 'user')
+                ? userReactions.filter(user => user !== 'user')
                 : [...userReactions, 'user']
             }
           }
@@ -1273,7 +1278,7 @@ export function AIAssistantPage() {
           metadata: {
             ...msg.metadata,
             formatting: {
-              ...(msg.metadata as MessageMetadata)?.formatting,
+              ...(msg.metadata?.formatting || {}),
               [type === 'bold' ? 'isBold' : type === 'italic' ? 'isItalic' : 'isCode']: true,
               ...(type === 'code' && language ? { language } : {})
             }
@@ -1400,7 +1405,7 @@ export function AIAssistantPage() {
     
     try {
       // Add the user message
-      const userMessage: Message = {
+      const userMessage: ExtendedMessage = {
         id: Date.now().toString(),
         content: input,
         role: 'user',
@@ -1495,13 +1500,13 @@ export function AIAssistantPage() {
   );
 
   // Render function for messages to handle typing indicators
-  const renderMessage = (message: Message) => {
-    if (message.role === 'error') {
+  const renderMessage = (message: ExtendedMessage) => {
+    if (message.role === 'system' && message.content === 'error') {
       return <div className="text-destructive">{message.content}</div>;
     }
     
     // For streaming messages
-    if (message.metadata && (message.metadata as MessageMetadata).isTyping) {
+    if (message.metadata?.isTyping) {
       return <MarkdownMessage content={message.content} isStreaming={true} />;
     }
     
@@ -1628,8 +1633,12 @@ export function AIAssistantPage() {
                       }}
                       onClick={() => {
                         console.log("Create Assistant button clicked");
-                        // Try opening in new tab as a debugging technique
-                        window.open('/assistants', '_blank');
+                        // Navigate to assistants page in current tab and trigger interactive creation mode
+                        const event = new CustomEvent('createInteractiveAssistant', {
+                          detail: { mode: 'interactive' }
+                        });
+                        window.dispatchEvent(event);
+                        navigate('/assistants');
                       }}
                     >
                       <Brain className="h-4 w-4 text-black" />

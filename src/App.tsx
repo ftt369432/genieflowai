@@ -37,6 +37,7 @@ import { Settings } from './pages/Settings';
 import EmailConnectSuccess from './pages/EmailConnectSuccess';
 import EmailConnectError from './pages/EmailConnectError';
 import EmailBypass from './pages/EmailBypass';
+import { EmailTestPage } from './pages/EmailTest';
 
 // ProtectedRoute component that redirects to login if user is not authenticated
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -260,6 +261,13 @@ function App() {
                 </ProtectedRoute>
               } />
               
+              {/* Add Email Test Route */}
+              <Route path="/email-test" element={
+                <ProtectedRoute>
+                  <EmailTestPage />
+                </ProtectedRoute>
+              } />
+              
               <Route 
                 path="/notifications" 
                 element={
@@ -312,14 +320,14 @@ function App() {
                 path="/tasks" 
                 element={
                   <ProtectedRoute>
-                    <TasksPage />
+                    <Navigate to="/tasks/board" replace />
                   </ProtectedRoute>
                 } 
               />
               
-              {/* Add new TaskPage route with spreadsheet view */}
+              {/* Add new TaskPage route with view parameter */}
               <Route 
-                path="/tasks/new" 
+                path="/tasks/:viewType" 
                 element={
                   <ProtectedRoute>
                     <TaskPage />

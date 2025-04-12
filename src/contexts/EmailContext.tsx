@@ -3,6 +3,7 @@ import emailServiceAdapter from '../services/email/EmailServiceAdapter';
 import { getEnv } from '../config/env';
 import { EmailAccount } from '../services/email/types';
 import { toast } from 'sonner';
+import { useUserStore } from '../stores/userStore';
 
 interface EmailContextType {
   accounts: EmailAccount[];
@@ -22,13 +23,14 @@ export const EmailProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const user = useUserStore(state => state.user);
 
   useEffect(() => {
     async function loadAccounts() {
       try {
         if (!user?.email) {
           console.log('No user email available, skipping email account load');
+          setLoading(false);
           return;
         }
 

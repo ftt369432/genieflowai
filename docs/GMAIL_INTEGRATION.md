@@ -14,26 +14,58 @@ Follow these steps to connect your Gmail account:
    - In your `.env` file, make sure `VITE_USE_MOCK=false` is set
    - This tells the application you want to use real data instead of fake data
 
-2. **Complete Sign Out**
-   - Log out of the application completely using the "Sign Out" button
-   - If you're on the Gmail Test page, use the Sign Out button there
-   - This ensures you start with a clean session
-
-3. **Sign In with Google OAuth**
+2. **Option 1: Using Google OAuth Flow (Recommended)**
+   - Complete sign out of the application using the "Sign Out" button
    - Sign back in using the Google Sign-In button - **NOT** email/password
    - This is critical: you must use the Google authentication option to get provider tokens
    - Using email/password login will not grant the necessary Gmail access permissions
 
-4. **Grant Required Permissions**
-   - When redirected to Google's authorization page, you'll be asked to grant permissions
-   - Make sure to allow all requested permissions (Gmail read access, profile, etc.)
-   - If you don't see permission requests for Gmail, something is wrong with the OAuth configuration
+3. **Option 2: Using Gmail API Tokens Directly**
+   - If you're having trouble with the OAuth flow, you can use Gmail API tokens directly
+   - You'll need to obtain access tokens from the Google Cloud Console for your account
+   - Go to the Email page and use the "Initialize Gmail Connection" section
+   - Paste your token JSON in the format shown below
 
-5. **Verify the Connection**
-   - After successful authentication, you should see:
-     - "✓ You are authenticated with Google"
-     - "✓ Provider token is available"
-   - If you still see "No provider token available" after logging in with Google, try clearing your browser cache and cookies, then repeat steps 2-4
+## Getting Gmail API Tokens for Testing
+
+If you don't have Gmail API tokens yet, follow these steps to obtain them:
+
+1. **Create a Google Cloud Project**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project (or use an existing one)
+   - Enable the Gmail API for your project
+
+2. **Create OAuth Credentials**
+   - Go to "APIs & Services" > "Credentials"
+   - Create OAuth 2.0 Client ID credentials
+   - Add `http://localhost:5173` (or your development URL) as an authorized redirect URI
+
+3. **Get Tokens Using OAuth Playground**
+   - Go to [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/)
+   - Click the gear icon in the upper right to configure settings
+   - Check "Use your own OAuth credentials" and enter your Client ID and Secret
+   - Select Gmail API v1 scopes from the list (e.g., `.../auth/gmail.readonly`)
+   - Click "Authorize APIs" and follow the OAuth flow
+   - After authorization, click "Exchange authorization code for tokens"
+   - Copy the full JSON response which should include access_token, refresh_token, etc.
+
+4. **Sample Token Format**
+```json
+{
+  "access_token": "ya29.a0AfB_byDtlG7MFpS9QyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "refresh_token": "1//04XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-XXXXXXXXXXXX-XXXXXXXXXX",
+  "scope": "https://www.googleapis.com/auth/gmail.readonly",
+  "token_type": "Bearer",
+  "expiry_date": 1698765432123
+}
+```
+
+## Using the Initialize Gmail Connection
+
+1. Copy the token JSON from the OAuth Playground or your token source
+2. Paste it into the text area in the "Initialize Gmail Connection" section
+3. Click "Initialize Connection"
+4. If successful, you should see "Gmail connection initialized successfully"
 
 ## Troubleshooting
 
@@ -41,44 +73,19 @@ Follow these steps to connect your Gmail account:
 
 If you see "No provider token available" even after following the steps above:
 
-1. **Check Third-Party Cookies**
-   - Make sure your browser allows third-party cookies
-   - Some privacy settings might block the authentication process
+1. Make sure you're not in mock mode (check your .env file)
+2. Try clearing browser cache and cookies, then repeat the OAuth flow
+3. Check browser console for any errors
+4. Try using direct token initialization as described above
 
-2. **Use Incognito/Private Window**
-   - Try logging in with a fresh incognito/private window
-   - This eliminates potential conflicts with existing cookies or sessions
+### Connection Fails with Error
 
-3. **Clear Browser Data**
-   - Clear your browser cache, cookies, and local storage
-   - In Chrome: Settings → Privacy and Security → Clear browsing data
-   - Make sure to include cookies and site data
+If you get an error when trying to initialize the connection:
 
-4. **Check for Browser Extensions**
-   - Temporarily disable privacy/ad-blocking extensions
-   - These can sometimes interfere with OAuth flows
-
-5. **Examine Session Details**
-   - On the Gmail Test page, check the Session Details section
-   - Look for `provider_token` in the JSON - if it's missing entirely, the OAuth flow didn't complete correctly
-
-### Gmail API Access Issues
-
-If you have a provider token but still can't access Gmail data:
-
-1. **Check OAuth Scopes**
-   - The application needs specific scopes to access Gmail
-   - Required scopes include `https://www.googleapis.com/auth/gmail.readonly`
-   - If you previously connected with insufficient scopes, you'll need to disconnect and reconnect
-
-2. **Provider Token Expiration**
-   - Provider tokens expire after a certain period
-   - If your token is expired, sign out and sign back in with Google
-
-3. **API Quota Limits**
-   - Google APIs have usage quotas
-   - If you exceed these limits, API calls will fail
-   - Check browser console for quota-related errors
+1. Make sure the token is in the correct JSON format
+2. Check that the token hasn't expired
+3. Verify that you've granted the necessary permissions
+4. Try getting a fresh token from the OAuth Playground
 
 ## For Developers
 

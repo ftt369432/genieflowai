@@ -17,6 +17,8 @@ export interface AIDocument {
   };
   embedding?: number[];
   relevanceScore?: number;
+  folderId?: string | null; // For organization in folders
+  tags?: string[]; // For searchability and filtering
 }
 
 export interface AIFolder {
@@ -25,6 +27,7 @@ export interface AIFolder {
   documents: AIDocument[];
   createdAt: Date;
   updatedAt: Date;
+  parentId?: string | null; // For nested folder structure
 }
 
 export interface AIPrompt {
@@ -65,6 +68,14 @@ export interface Message {
   timestamp: Date;
 }
 
+export interface AIMessage {
+  id: string;
+  content: string;
+  role: MessageRole;
+  timestamp: Date;
+  metadata?: MessageMetadata;
+}
+
 export type AgentType = 'research' | 'work' | 'learning' | 'building' | 'general' | 'tasks' | 'email' | 'calendar' | 'drive';
 
 export interface AIAssistant {
@@ -77,6 +88,15 @@ export interface AIAssistant {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  systemPrompt?: string; // Instructions for the AI
+  knowledgeBase?: AIFolder[]; // Connected knowledge base folders
+  model?: AIModel; // AI model configuration
+  settings?: {
+    temperature?: number;
+    maxTokens?: number;
+    frequencyPenalty?: number;
+    presencePenalty?: number;
+  };
 }
 
 export interface AssistantResponse {
@@ -159,12 +179,8 @@ export interface DocumentReference {
 }
 
 export interface SearchResult {
-  id: string;
-  title: string;
-  content: string;
-  url?: string;
-  score: number;
-  metadata?: Record<string, unknown>;
+  document: AIDocument;
+  similarity: number;
 }
 
 export interface EmbeddingResponse {
