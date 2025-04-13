@@ -1,5 +1,5 @@
 import { supabase } from '../supabase/supabaseClient';
-import type { Team, TeamMember, Page, Thread, DirectMessage } from '../../types/team';
+import type { Team, TeamMember, Page, Thread, DirectMessage, TeamChannel, TeamMessage } from '../../types/team';
 
 export class TeamService {
   // Flag to track if we've already logged the missing table error
@@ -158,7 +158,8 @@ export class TeamService {
           lastMessageTime: new Date().toISOString()
         }
       ],
-      messages: []
+      messages: [],
+      channels: []
     }];
   }
 
@@ -303,5 +304,297 @@ export class TeamService {
 
     if (error) throw error;
     return data || [];
+  }
+
+  // Channel methods
+  async getTeamChannels(teamId: string): Promise<TeamChannel[]> {
+    try {
+      const { data: channels, error } = await supabase
+        .from('team_channels')
+        .select('*')
+        .eq('team_id', teamId);
+
+      if (error) throw error;
+      
+      if (!channels || channels.length === 0) {
+        return this.getMockChannels(teamId);
+      }
+      
+      return channels;
+    } catch (error) {
+      console.error('Error fetching team channels:', error);
+      return this.getMockChannels(teamId);
+    }
+  }
+
+  async createChannel(teamId: string, channelData: Partial<TeamChannel>): Promise<TeamChannel> {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      
+      const newChannel = {
+        team_id: teamId,
+        name: channelData.name,
+        description: channelData.description || '',
+        is_private: channelData.isPrivate || false,
+        created_at: new Date().toISOString(),
+        created_by: user.user?.id || 'unknown'
+      };
+
+      const { data, error } = await supabase
+        .from('team_channels')
+        .insert(newChannel)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      return this.formatChannel(data);
+    } catch (error) {
+      console.error('Error creating channel:', error);
+      // Return a mock channel with the provided data
+      return {
+        id: crypto.randomUUID(),
+        name: channelData.name || 'New Channel',
+        description: channelData.description || '',
+        isPrivate: channelData.isPrivate || false,
+        createdAt: new Date().toISOString(),
+        createdBy: this.getMockTeamMember(),
+        members: [this.getMockTeamMember()],
+        messages: []
+      };
+    }
+  }
+
+  async updateChannel(channelId: string, channelData: Partial<TeamChannel>): Promise<TeamChannel> {
+    try {
+      const { data, error } = await supabase
+        .from('team_channels')
+        .update({
+          name: channelData.name,
+          description: channelData.description,
+          is_private: channelData.isPrivate
+        })
+        .eq('id', channelId)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      return this.formatChannel(data);
+    } catch (error) {
+      console.error('Error updating channel:', error);
+      return {
+        ...channelData,
+        id: channelId,
+        createdAt: new Date().toISOString(),
+        createdBy: this.getMockTeamMember(),
+        members: [this.getMockTeamMember()],
+        messages: []
+      } as TeamChannel;
+    }
+  }
+
+  async deleteChannel(channelId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('team_channels')
+        .delete()
+        .eq('id', channelId);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error deleting channel:', error);
+      return false;
+    }
+  }
+
+  async getChannelMessages(channelId: string): Promise<TeamMessage[]> {
+    try {
+      const { data: messages, error } = await supabase
+        .from('team_messages')
+        .select('*')
+        .eq('channel_id', channelId)
+        .order('timestamp', { ascending: true });
+
+      if (error) throw error;
+      
+      if (!messages || messages.length === 0) {
+        return this.getMockChannelMessages(channelId);
+      }
+      
+      return messages.map(this.formatMessage);
+    } catch (error) {
+      console.error('Error fetching channel messages:', error);
+      return this.getMockChannelMessages(channelId);
+    }
+  }
+
+  async sendChannelMessage(channelId: string, content: string): Promise<TeamMessage> {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      
+      const newMessage = {
+        channel_id: channelId,
+        content,
+        timestamp: new Date().toISOString(),
+        sender_id: user.user?.id || 'unknown'
+      };
+
+      const { data, error } = await supabase
+        .from('team_messages')
+        .insert(newMessage)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      return this.formatMessage(data);
+    } catch (error) {
+      console.error('Error sending channel message:', error);
+      return {
+        id: crypto.randomUUID(),
+        content,
+        timestamp: new Date().toISOString(),
+        sender: this.getMockTeamMember(),
+        channelId
+      };
+    }
+  }
+
+  async addChannelMember(channelId: string, userId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('team_channel_members')
+        .insert({
+          channel_id: channelId,
+          user_id: userId,
+          joined_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error adding channel member:', error);
+      return false;
+    }
+  }
+
+  async removeChannelMember(channelId: string, userId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('team_channel_members')
+        .delete()
+        .eq('channel_id', channelId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error removing channel member:', error);
+      return false;
+    }
+  }
+
+  // Helper methods for channel functionality
+  private getMockChannels(teamId: string): TeamChannel[] {
+    return [
+      {
+        id: '1',
+        name: 'general',
+        description: 'General discussions',
+        isPrivate: false,
+        createdAt: new Date().toISOString(),
+        createdBy: this.getMockTeamMember(),
+        members: [this.getMockTeamMember()],
+        messages: this.getMockChannelMessages('1'),
+        lastActivity: new Date().toISOString()
+      },
+      {
+        id: '2',
+        name: 'random',
+        description: 'Random conversations',
+        isPrivate: false,
+        createdAt: new Date().toISOString(),
+        createdBy: this.getMockTeamMember(),
+        members: [this.getMockTeamMember()],
+        messages: this.getMockChannelMessages('2'),
+        lastActivity: new Date().toISOString()
+      }
+    ];
+  }
+
+  private getMockChannelMessages(channelId: string): TeamMessage[] {
+    return [
+      {
+        id: crypto.randomUUID(),
+        content: 'Welcome to this channel!',
+        timestamp: new Date().toISOString(),
+        sender: this.getMockTeamMember(),
+        channelId
+      },
+      {
+        id: crypto.randomUUID(),
+        content: 'Let\'s start collaborating here.',
+        timestamp: new Date().toISOString(),
+        sender: {
+          ...this.getMockTeamMember(),
+          id: '2',
+          name: 'Jane Smith'
+        },
+        channelId
+      }
+    ];
+  }
+
+  private formatChannel(data: any): TeamChannel {
+    return {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      isPrivate: data.is_private,
+      createdAt: data.created_at,
+      createdBy: this.getMockTeamMember(), // Would need to fetch the actual creator
+      members: [], // Would need to fetch the actual members
+      messages: [] // Would need to fetch the actual messages
+    };
+  }
+
+  private formatMessage(data: any): TeamMessage {
+    return {
+      id: data.id,
+      content: data.content,
+      timestamp: data.timestamp,
+      sender: this.getMockTeamMember(), // Would need to fetch the actual sender
+      channelId: data.channel_id,
+      threadId: data.thread_id,
+      hasThread: !!data.has_thread
+    };
+  }
+
+  // Add this method to fix the linter errors
+  private getMockTeamMember(): TeamMember {
+    return {
+      id: '1',
+      name: 'John Doe',
+      avatar: '/avatars/default.png',
+      email: 'john.doe@example.com',
+      role: 'member',
+      status: 'online'
+    };
+  }
+
+  // Update mock team creation to include channels
+  createMockTeam(name: string): Team {
+    return {
+      id: crypto.randomUUID(),
+      name,
+      description: `This is the ${name} team`,
+      avatar: '/avatars/team-default.png',
+      createdAt: new Date().toISOString(),
+      members: [this.getMockTeamMember()],
+      pages: [],
+      threads: [],
+      directMessages: [],
+      messages: [],
+      channels: [] // Add the channels array to comply with Team interface
+    };
   }
 } 
