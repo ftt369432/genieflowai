@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-import { useTheme } from '../../hooks/useTheme';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useEmail } from '../../contexts/EmailContext';
 import { IMAPConfigForm } from '../email/IMAPConfigForm';
 import { EmailService } from '../../services/email';

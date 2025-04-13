@@ -1,5 +1,8 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+import * as React from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 import App from './App';
 import './index.css';
 // Import CSS directly since @import isn't working
@@ -19,37 +22,58 @@ import { EmailProvider } from './contexts/EmailContext';
 import { CalendarProvider } from './contexts/CalendarContext';
 import { services } from './services/core/initializeServices';
 import { AuthProvider } from './contexts/AuthContext';
+import { ModalProvider } from './contexts/ModalContext';
+import { ToastProvider } from './contexts/ToastContext';
 
 // Create a context for services
 export const ServicesContext = React.createContext(services);
 
-// Create root element
-const rootElement = document.getElementById('root');
-if (!rootElement) throw new Error('Root element not found');
+// Ensure single React instance
+if (typeof window !== 'undefined') {
+  window.React = React;
+}
 
-// Create root
-const root = ReactDOM.createRoot(rootElement);
+// Create the query client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
-// Render app
+const container = document.getElementById('root');
+if (!container) throw new Error('Failed to find the root element');
+const root = createRoot(container);
+
 root.render(
   <React.StrictMode>
-    <ServicesContext.Provider value={services}>
-      <ThemeProvider>
-        <NotificationProvider>
-          <SupabaseProvider>
-            <AuthProvider>
-              <EmailProvider>
-                <CalendarProvider>
-                  <DndProvider backend={HTML5Backend}>
-                    <App />
-                    <Toaster />
-                  </DndProvider>
-                </CalendarProvider>
-              </EmailProvider>
-            </AuthProvider>
-          </SupabaseProvider>
-        </NotificationProvider>
-      </ThemeProvider>
-    </ServicesContext.Provider>
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <ServicesContext.Provider value={services}>
+          <ThemeProvider>
+            <NotificationProvider>
+              <SupabaseProvider>
+                <AuthProvider>
+                  <EmailProvider>
+                    <CalendarProvider>
+                      <DndProvider backend={HTML5Backend}>
+                        <ModalProvider>
+                          <ToastProvider>
+                            <App />
+                            <Toaster />
+                          </ToastProvider>
+                        </ModalProvider>
+                      </DndProvider>
+                    </CalendarProvider>
+                  </EmailProvider>
+                </AuthProvider>
+              </SupabaseProvider>
+            </NotificationProvider>
+          </ThemeProvider>
+        </ServicesContext.Provider>
+      </QueryClientProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

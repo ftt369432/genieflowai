@@ -33,8 +33,11 @@ import {
   PanelLeftClose,
   Mail,
   FolderOpen,
-  Table
+  Table,
+  Gavel,
+  Stethoscope
 } from 'lucide-react';
+import { useAssistantStore } from '../../store/assistantStore';
 
 interface SidebarItem {
   title: string;
@@ -89,6 +92,12 @@ const sidebarSections: SidebarSection[] = [
     title: 'Documents & Knowledge',
     items: [
       {
+        title: 'Documents',
+        icon: FileText,
+        href: '/documents',
+        color: 'text-purple-500',
+      },
+      {
         title: 'Notebooks',
         icon: BookOpen,
         href: '/notebooks',
@@ -112,6 +121,12 @@ const sidebarSections: SidebarSection[] = [
     title: 'AI Features',
     items: [
       {
+        title: 'Assistants',
+        icon: Wand2,
+        href: '/assistants',
+        color: 'text-green-500 font-semibold',
+      },
+      {
         title: 'AI Assistant',
         icon: MessageSquare,
         href: '/assistant',
@@ -122,12 +137,6 @@ const sidebarSections: SidebarSection[] = [
         icon: FolderOpen,
         href: '/drive',
         color: 'text-indigo-500',
-      },
-      {
-        title: 'Assistants',
-        icon: Wand2,
-        href: '/assistants',
-        color: 'text-violet-500',
       },
       {
         title: 'AI Agents',

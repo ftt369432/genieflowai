@@ -21,7 +21,8 @@ import {
   PenSquare, 
   MessageCircle, 
   MoreVertical,
-  Hash
+  Hash,
+  User as UserIcon
 } from 'lucide-react';
 import { Team, DirectMessage, Thread, Page } from '../types/team';
 import { 
@@ -49,7 +50,7 @@ interface Message {
     avatar: string;
     role?: 'admin' | 'member' | 'guest' | 'ai';
   };
-  timestamp: string;
+  timestamp: Date | string; // Change to allow both Date and string
   reactions?: {
     emoji: string;
     count: number;
@@ -62,6 +63,7 @@ interface Message {
     thumbnail?: string;
     size?: string;
   }[];
+  isAI?: boolean;        // Add this property for consistency
   isAIGenerated?: boolean;
   aiMetadata?: {
     model: string;
@@ -519,12 +521,12 @@ export const TeamsPage: React.FC = () => {
               {activeTeam.threads.slice(0, 3).map((thread) => (
                 <div key={thread.id} className="flex items-start gap-3 pb-3 border-b">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={thread.creator.avatar} />
-                    <AvatarFallback>{thread.creator.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                    <AvatarImage src={thread.participants[0]?.avatar || ''} />
+                    <AvatarFallback>{thread.participants[0]?.name.substring(0, 2).toUpperCase() || 'TM'}</AvatarFallback>
                   </Avatar>
                   <div>
                     <div className="flex items-center gap-1">
-                      <span className="font-medium text-sm">{thread.creator.name}</span>
+                      <span className="font-medium text-sm">{thread.participants[0]?.name || 'Team Member'}</span>
                       <span className="text-xs text-muted-foreground">
                         in #{thread.title}
                       </span>
@@ -725,7 +727,7 @@ export const TeamsPage: React.FC = () => {
                     {page.title}
                   </CardTitle>
                   <CardDescription>
-                    Created by {page.creator.name}
+                    Created by {page.createdBy.name}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -789,7 +791,9 @@ export const TeamsPage: React.FC = () => {
                         {message.sender.name}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {message.timestamp.toLocaleTimeString()}
+                        {typeof message.timestamp === 'object' 
+                          ? message.timestamp.toLocaleTimeString() 
+                          : new Date(message.timestamp).toLocaleTimeString()}
                       </span>
                       {message.isAI && (
                         <span className="bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded-full">
@@ -812,7 +816,7 @@ export const TeamsPage: React.FC = () => {
           <div className="p-4 border-t">
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={user?.photoURL || undefined} />
+                <AvatarImage src={user?.user_metadata?.avatar_url || undefined} />
                 <AvatarFallback>
                   <UserIcon className="h-4 w-4" />
                 </AvatarFallback>
@@ -960,7 +964,9 @@ export const TeamsPage: React.FC = () => {
                         {message.sender.name}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {message.timestamp.toLocaleTimeString()}
+                        {typeof message.timestamp === 'object' 
+                          ? message.timestamp.toLocaleTimeString() 
+                          : new Date(message.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
                     <p className="text-sm">{message.content}</p>
@@ -978,7 +984,7 @@ export const TeamsPage: React.FC = () => {
           <div className="p-4 border-t">
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={user?.photoURL || undefined} />
+                <AvatarImage src={user?.user_metadata?.avatar_url || undefined} />
                 <AvatarFallback>
                   <UserIcon className="h-4 w-4" />
                 </AvatarFallback>
@@ -1025,11 +1031,11 @@ export const TeamsPage: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium">{dm.user.name}</h3>
                     <span className="text-xs text-muted-foreground">
-                      {new Date(dm.lastMessageTime).toLocaleDateString()}
+                      {dm.lastMessageTime ? new Date(dm.lastMessageTime).toLocaleDateString() : 'New'}
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-1">
-                    {dm.lastMessage}
+                    {dm.lastMessage ? dm.lastMessage.content : 'No messages yet'}
                   </p>
                 </div>
               </div>
@@ -1107,7 +1113,12 @@ export const TeamsPage: React.FC = () => {
     <div className="flex h-screen overflow-hidden">
       <TeamsSidebar 
         onCreateTeam={() => setShowTeamCreation(true)}
-        onTeamSelect={(team) => setActiveTeam(team)}
+        onTeamSelect={(team) => {
+          const teamIndex = teams.findIndex(t => t.id === team.id);
+          if (teamIndex >= 0) {
+            window.location.href = `/teams?team=${team.id}`;
+          }
+        }}
         onDirectMessageSelect={(dm) => {
           setActiveDirectMessage(dm);
           setActiveTab('chat');

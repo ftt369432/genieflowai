@@ -1,14 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './index.css';
+import './styles/main.css';
 import App from './App';
+import { SupabaseProvider } from './providers/SupabaseProvider';
 
-const root = ReactDOM.createRoot(
-  document.getElementById('root') as HTMLElement
-);
+// Ensure we're using a single React instance
+window.React = React;
 
-root.render(
+ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <SupabaseProvider>
+      <App />
+    </SupabaseProvider>
   </React.StrictMode>
 ); 

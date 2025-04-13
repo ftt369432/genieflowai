@@ -54,7 +54,7 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
     try {
       // Get response from the assistant using the chatWithAssistant service
       const result = await chatWithAssistant(
-        assistant.id,
+        assistant,
         input,
         messages.filter(m => m.id !== 'welcome') // Filter out welcome message from context
       );

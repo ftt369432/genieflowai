@@ -22,6 +22,9 @@ export function AssistantsPage() {
       setIsInteractiveMode(true);
     };
 
+    // Debug
+    console.log("Setting up event listener for createInteractiveAssistant");
+    
     window.addEventListener('createInteractiveAssistant', handleCreateInteractiveEvent as EventListener);
     
     return () => {

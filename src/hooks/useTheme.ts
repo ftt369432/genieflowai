@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { useGlobalStore } from '../store';
 
-export function useTheme() {
+// Rename to avoid conflict with ThemeContext
+export function useGlobalTheme() {
   const { theme, setTheme } = useGlobalStore();
 
   const toggleTheme = useCallback(() => {

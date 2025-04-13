@@ -1,143 +1,187 @@
 import React, { useState } from 'react';
-import { X, Save, Edit2, Tag as TagIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/Dialog';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { useKnowledgeBaseStore } from '../../store/knowledgeBaseStore';
-import type { AIDocument } from '../../types/ai';
-import { TagSelector } from './TagSelector';
+import { FileText, Download, Trash2, X, Clock, Tag as TagIcon, Calendar, HardDrive, Link } from 'lucide-react';
+import { Badge } from '../ui/Badge';
+import { PDFViewer } from './PDFViewer';
+import { AIDocument } from '../../types/ai';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 
 interface DocumentViewerProps {
   document: AIDocument;
   onClose: () => void;
+  onDelete?: (id: string) => void;
 }
 
-export function DocumentViewer({ document, onClose }: DocumentViewerProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [title, setTitle] = useState(document.title);
-  const [content, setContent] = useState(document.content);
-  const [tags, setTags] = useState(document.tags);
-  const [newTag, setNewTag] = useState('');
-  const { updateDocument } = useKnowledgeBaseStore();
-
-  const handleSave = () => {
-    updateDocument(document.id, {
-      title,
-      content,
-      tags,
-      updatedAt: new Date()
-    });
-    setIsEditing(false);
+export function DocumentViewer({ document, onClose, onDelete }: DocumentViewerProps) {
+  const [activeTab, setActiveTab] = useState<string>('preview');
+  
+  const isPDF = document.url?.endsWith('.pdf');
+  const isImage = document.url?.endsWith('.jpg') || document.url?.endsWith('.png') || document.url?.endsWith('.jpeg');
+  
+  // Format date
+  const formatDate = (date?: Date | string) => {
+    if (!date) return 'Unknown';
+    return new Date(date).toLocaleDateString();
   };
-
-  const handleAddTag = () => {
-    if (newTag && !tags.includes(newTag)) {
-      setTags([...tags, newTag]);
-      setNewTag('');
+  
+  // Format file size
+  const formatFileSize = (size?: number) => {
+    if (!size) return 'Unknown';
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  };
+  
+  // Handle document deletion with confirmation
+  const handleDelete = () => {
+    if (window.confirm('Are you sure you want to delete this document?')) {
+      onDelete?.(document.id);
+      onClose();
     }
   };
-
+  
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-[800px] max-h-[80vh] flex flex-col">
-        <div className="p-4 border-b flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-medium">
-              {isEditing ? (
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="font-medium"
-                />
-              ) : (
-                document.title
-              )}
-            </h2>
-            <span className="text-sm text-gray-500">
-              Last updated: {new Date(document.updatedAt).toLocaleDateString()}
-            </span>
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-blue-500" />
+            <DialogTitle className="text-xl">
+              {document.metadata?.title || document.id.substring(0, 8)}
+            </DialogTitle>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsEditing(!isEditing)}
-            >
-              <Edit2 className="h-4 w-4" />
-            </Button>
-            {isEditing && (
-              <Button variant="ghost" size="sm" onClick={handleSave}>
-                <Save className="h-4 w-4" />
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
-          {isEditing ? (
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="w-full h-full min-h-[300px] p-2 border rounded-lg resize-none"
-            />
-          ) : (
-            <div className="prose max-w-none">
-              <pre className="whitespace-pre-wrap">{content}</pre>
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+            <X className="h-4 w-4" />
+          </Button>
+        </DialogHeader>
+        
+        {/* Document Metadata */}
+        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-4">
+          {document.createdAt && (
+            <div className="flex items-center gap-1">
+              <Calendar className="h-4 w-4" />
+              <span>Created: {formatDate(document.createdAt)}</span>
+            </div>
+          )}
+          
+          {document.updatedAt && document.updatedAt !== document.createdAt && (
+            <div className="flex items-center gap-1">
+              <Clock className="h-4 w-4" />
+              <span>Updated: {formatDate(document.updatedAt)}</span>
+            </div>
+          )}
+          
+          {document.metadata?.fileSize && (
+            <div className="flex items-center gap-1">
+              <HardDrive className="h-4 w-4" />
+              <span>Size: {formatFileSize(document.metadata.fileSize)}</span>
+            </div>
+          )}
+          
+          {document.url && (
+            <div className="flex items-center gap-1">
+              <Link className="h-4 w-4" />
+              <a 
+                href={document.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline"
+              >
+                Source
+              </a>
             </div>
           )}
         </div>
-
-        <div className="p-4 border-t">
-          <div className="flex items-center gap-2 mb-2">
-            <TagIcon className="h-4 w-4 text-gray-500" />
-            <span className="text-sm font-medium">Tags</span>
-          </div>
-          {isEditing ? (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <Input
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
-                  placeholder="Add tags"
-                />
-                <Button onClick={handleAddTag}>Add</Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <div
-                    key={tag}
-                    className="px-2 py-1 rounded-full bg-gray-100 text-xs text-gray-600 flex items-center gap-1"
-                  >
-                    <TagIcon className="h-3 w-3" />
-                    {tag}
-                    <button
-                      onClick={() => setTags(tags.filter(t => t !== tag))}
-                      className="ml-1 hover:text-red-500"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {document.tags.map((tag) => (
-                <div
-                  key={tag}
-                  className="px-2 py-1 rounded-full bg-gray-100 text-xs text-gray-600 flex items-center gap-1"
-                >
-                  <TagIcon className="h-3 w-3" />
+        
+        {/* Tags */}
+        {document.tags && document.tags.length > 0 && (
+          <div className="flex items-center gap-2 mb-4">
+            <TagIcon className="h-4 w-4 text-gray-400" />
+            <div className="flex flex-wrap gap-1">
+              {document.tags.map(tag => (
+                <Badge key={tag} variant="secondary">
                   {tag}
-                </div>
+                </Badge>
               ))}
             </div>
-          )}
-        </div>
-      </div>
-    </div>
+          </div>
+        )}
+        
+        {/* Tabs for different view modes */}
+        <Tabs defaultValue="preview" className="flex-1 flex flex-col overflow-hidden" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="mb-2">
+            <TabsTrigger value="preview">Preview</TabsTrigger>
+            <TabsTrigger value="text">Text Content</TabsTrigger>
+            {document.metadata && (
+              <TabsTrigger value="metadata">Metadata</TabsTrigger>
+            )}
+          </TabsList>
+          
+          <TabsContent value="preview" className="flex-1 overflow-auto">
+            {isPDF ? (
+              <PDFViewer url={document.url || ''} title={document.metadata?.title || 'Document'} />
+            ) : isImage ? (
+              <div className="flex items-center justify-center h-full">
+                <img 
+                  src={document.url} 
+                  alt={document.metadata?.title || 'Document'} 
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+            ) : (
+              <div className="p-4 border rounded bg-gray-50 dark:bg-gray-900 whitespace-pre-wrap h-full overflow-auto">
+                {document.content}
+              </div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="text" className="flex-1 overflow-auto">
+            <div className="p-4 border rounded bg-gray-50 dark:bg-gray-900 whitespace-pre-wrap h-full overflow-auto font-mono text-sm">
+              {document.content || 'No text content available for this document type.'}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="metadata" className="flex-1 overflow-auto">
+            <div className="p-4 border rounded bg-gray-50 dark:bg-gray-900 h-full overflow-auto">
+              <h3 className="font-medium mb-2">Document Metadata</h3>
+              {document.metadata ? (
+                <pre className="whitespace-pre-wrap text-sm font-mono">
+                  {JSON.stringify(document.metadata, null, 2)}
+                </pre>
+              ) : (
+                <p className="text-muted-foreground">No metadata available.</p>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+        
+        <DialogFooter className="flex justify-between mt-4">
+          <div>
+            {onDelete && (
+              <Button variant="destructive" size="sm" onClick={handleDelete} className="flex items-center gap-1">
+                <Trash2 className="h-4 w-4" />
+                <span>Delete</span>
+              </Button>
+            )}
+          </div>
+          
+          <div className="flex gap-2">
+            {document.url && (
+              <Button variant="outline" size="sm" className="flex items-center gap-1" asChild>
+                <a href={document.url} download target="_blank" rel="noopener noreferrer">
+                  <Download className="h-4 w-4" />
+                  <span>Download</span>
+                </a>
+              </Button>
+            )}
+            
+            <Button variant="default" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 } 

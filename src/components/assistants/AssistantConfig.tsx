@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useAssistantStore } from '../../store/assistantStore';
-import { useKnowledgeBaseStore } from '../../store/knowledgeBaseStore';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
-import { Card } from '../ui/Card';
-import { Checkbox } from '../ui/Checkbox';
-import { Label } from '../ui/Label';
-import type { AIAssistant, AIModel, AIFolder } from '../../types/ai';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../ui/Card';
+import { Brain, Book, MessageSquare, Settings } from 'lucide-react';
+import { KnowledgeBaseSelector } from './KnowledgeBaseSelector';
+import { useAssistantStore } from '../../store/assistantStore';
+import type { AIAssistant } from '../../types/ai';
 
 interface AssistantConfigProps {
   assistantId?: string;
@@ -15,26 +15,25 @@ interface AssistantConfigProps {
   onCancel?: () => void;
 }
 
+/**
+ * Component for configuring an assistant with knowledge base integration
+ */
 export function AssistantConfig({ assistantId, onSave, onCancel }: AssistantConfigProps) {
   const { 
-    assistants, 
     addAssistant, 
     updateAssistant, 
     getAssistantById,
-    assignFolderToAssistant,
-    removeFolderFromAssistant,
-    getAssistantFolders
+    getAssistantFolders 
   } = useAssistantStore();
-  
-  const { folders } = useKnowledgeBaseStore();
   
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
+  const [activeTab, setActiveTab] = useState('basic');
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  // If editing an existing assistant, load its data
+  // Load data if editing an existing assistant
   useEffect(() => {
     if (assistantId) {
       const assistant = getAssistantById(assistantId);
@@ -47,43 +46,19 @@ export function AssistantConfig({ assistantId, onSave, onCancel }: AssistantConf
     }
   }, [assistantId, getAssistantById, getAssistantFolders]);
   
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = () => {
+    if (!name) return;
+    
     setIsLoading(true);
     
     try {
-      // Create a default AI model if needed (for simplicity)
-      const defaultModel: AIModel = {
-        id: 'default-model',
-        name: 'Default Model',
-        provider: 'openai',
-        capabilities: ['text-generation', 'chat'],
-        contextSize: 8192
-      };
-      
       if (assistantId) {
         // Update existing assistant
         updateAssistant(assistantId, {
           name,
           description,
           systemPrompt,
-        });
-        
-        // Update folder assignments
-        const currentFolders = getAssistantFolders(assistantId);
-        
-        // Remove folders that were deselected
-        currentFolders.forEach(folderId => {
-          if (!selectedFolders.includes(folderId)) {
-            removeFolderFromAssistant(assistantId, folderId);
-          }
-        });
-        
-        // Add newly selected folders
-        selectedFolders.forEach(folderId => {
-          if (!currentFolders.includes(folderId)) {
-            assignFolderToAssistant(assistantId, folderId);
-          }
+          updatedAt: new Date()
         });
         
         if (onSave) {
@@ -98,16 +73,18 @@ export function AssistantConfig({ assistantId, onSave, onCancel }: AssistantConf
           name,
           description,
           systemPrompt,
-          model: defaultModel,
-          settings: {
-            temperature: 0.7,
-            maxTokens: 2000
-          }
+          type: 'general',
+          capabilities: ['text-generation', 'chat', 'document-analysis'],
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
         });
         
         // Assign selected folders
         selectedFolders.forEach(folderId => {
-          assignFolderToAssistant(newAssistant.id, folderId);
+          updateAssistant(newAssistant.id, {
+            knowledgeBase: [...(newAssistant.knowledgeBase || []), { id: folderId }]
+          });
         });
         
         if (onSave) {
@@ -121,88 +98,168 @@ export function AssistantConfig({ assistantId, onSave, onCancel }: AssistantConf
     }
   };
   
-  const handleFolderToggle = (folderId: string) => {
-    setSelectedFolders(prev => 
-      prev.includes(folderId)
-        ? prev.filter(id => id !== folderId)
-        : [...prev, folderId]
-    );
-  };
-  
   return (
-    <Card className="p-6">
-      <h2 className="text-2xl font-bold mb-4">
-        {assistantId ? 'Edit Assistant' : 'Create New Assistant'}
-      </h2>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="text-2xl font-bold">
+          {assistantId ? 'Edit Assistant' : 'Create New Assistant'}
+        </CardTitle>
+        <CardDescription>
+          Configure your AI assistant's capabilities and knowledge
+        </CardDescription>
+      </CardHeader>
       
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <Label htmlFor="name">Name</Label>
-          <Input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            placeholder="Assistant Name"
-          />
-        </div>
-        
-        <div>
-          <Label htmlFor="description">Description</Label>
-          <Input
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Brief description of this assistant's purpose"
-          />
-        </div>
-        
-        <div>
-          <Label htmlFor="systemPrompt">System Prompt</Label>
-          <Textarea
-            id="systemPrompt"
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-            placeholder="Instructions that define how the assistant behaves"
-            rows={4}
-          />
-        </div>
-        
-        <div>
-          <Label className="block mb-2">Knowledge Base Folders</Label>
-          <div className="space-y-2 max-h-60 overflow-y-auto border rounded p-3">
-            {folders.length > 0 ? (
-              folders.map(folder => (
-                <div key={folder.id} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`folder-${folder.id}`}
-                    checked={selectedFolders.includes(folder.id)}
-                    onCheckedChange={() => handleFolderToggle(folder.id)}
-                  />
-                  <Label htmlFor={`folder-${folder.id}`} className="cursor-pointer">
-                    {folder.name}
-                  </Label>
-                </div>
-              ))
-            ) : (
-              <p className="text-muted-foreground">
-                No folders found. Create folders in the Knowledge Base to assign them to this assistant.
+      <CardContent>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="mb-4">
+            <TabsTrigger value="basic" className="flex items-center gap-2">
+              <Brain size={16} />
+              <span>Basic Info</span>
+            </TabsTrigger>
+            <TabsTrigger value="knowledge" className="flex items-center gap-2">
+              <Book size={16} />
+              <span>Knowledge</span>
+            </TabsTrigger>
+            <TabsTrigger value="prompts" className="flex items-center gap-2">
+              <MessageSquare size={16} />
+              <span>Prompt Templates</span>
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <Settings size={16} />
+              <span>Advanced Settings</span>
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="basic" className="space-y-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium mb-1">
+                Name
+              </label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Assistant Name"
+                required
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium mb-1">
+                Description
+              </label>
+              <Input
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Brief description of this assistant's purpose"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="systemPrompt" className="block text-sm font-medium mb-1">
+                System Prompt
+              </label>
+              <Textarea
+                id="systemPrompt"
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="Instructions that define how the assistant behaves"
+                rows={6}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                This prompt defines your assistant's personality, knowledge domains, and how it should respond.
               </p>
-            )}
-          </div>
-        </div>
-        
-        <div className="flex justify-end gap-2 pt-4">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-          <Button type="submit" disabled={isLoading || !name}>
-            {isLoading ? 'Saving...' : (assistantId ? 'Update' : 'Create')}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="knowledge" className="space-y-4">
+            <div className="space-y-4">
+              <p className="text-sm">
+                Assign knowledge base folders to this assistant. The assistant will use documents in these folders to respond to queries.
+              </p>
+              
+              <KnowledgeBaseSelector
+                selectedFolderIds={selectedFolders}
+                onSelectFolder={setSelectedFolders}
+                assistantId={assistantId}
+              />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="prompts" className="space-y-4">
+            <div className="space-y-4">
+              <p className="text-sm">
+                Create template prompts that your assistant can use. This helps the assistant understand common requests.
+              </p>
+              
+              <div className="p-8 text-center border border-dashed rounded-lg">
+                <p className="text-sm text-gray-500">Prompt templates feature coming soon</p>
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="settings" className="space-y-4">
+            <div className="space-y-4">
+              <p className="text-sm">
+                Configure advanced settings for your assistant.
+              </p>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="temperature" className="block text-sm font-medium mb-1">
+                    Temperature
+                  </label>
+                  <Input
+                    id="temperature"
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    defaultValue="0.7"
+                    placeholder="0.7"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Controls randomness. Lower values are more focused, higher values more creative.
+                  </p>
+                </div>
+                
+                <div>
+                  <label htmlFor="maxTokens" className="block text-sm font-medium mb-1">
+                    Max Tokens
+                  </label>
+                  <Input
+                    id="maxTokens"
+                    type="number"
+                    min="100"
+                    max="4000"
+                    step="100"
+                    defaultValue="1000"
+                    placeholder="1000"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Maximum length of the assistant's responses.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+      
+      <CardFooter className="flex justify-between">
+        {onCancel && (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
           </Button>
-        </div>
-      </form>
+        )}
+        <Button 
+          onClick={handleSave} 
+          disabled={isLoading || !name}
+        >
+          {isLoading ? 'Saving...' : (assistantId ? 'Update Assistant' : 'Create Assistant')}
+        </Button>
+      </CardFooter>
     </Card>
   );
 } 

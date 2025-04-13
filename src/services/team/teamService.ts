@@ -106,27 +106,59 @@ export class TeamService {
 
   // Generate consistent mock data for demo/development
   private static getMockTeam(): Team[] {
+    // Create a demo member that matches the TeamMember interface
+    const demoMember: TeamMember = {
+      id: 'mock-member-1',
+      name: 'Demo User',
+      avatar: '/avatars/default.png',
+      role: 'admin', // Use specific type from TeamMember interface
+      status: 'online',
+      email: 'demo@example.com'
+    };
+
     return [{
       id: 'mock-team-1',
       name: 'Demo Team',
       description: 'This is a demo team (tables not yet created in database)',
       avatar: '/logos/default.png',
-      members: [
+      createdAt: new Date().toISOString(),
+      members: [demoMember],
+      pages: [
         {
-          id: 'mock-member-1',
-          name: 'Demo User',
-          avatar: '/avatars/default.png',
-          role: 'admin',
-          status: 'online',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          id: 'mock-page-1',
+          title: 'Welcome Page',
+          content: 'Welcome to your team workspace!',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: demoMember
         }
       ],
-      pages: [],
-      threads: [],
-      direct_messages: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      threads: [
+        {
+          id: 'mock-thread-1',
+          title: 'Getting Started',
+          createdAt: new Date().toISOString(),
+          lastUpdate: new Date().toISOString(),
+          messageCount: 2,
+          participants: [demoMember],
+          lastMessage: 'Welcome to the team! Let\'s get started.',
+          creator: demoMember
+        }
+      ],
+      directMessages: [
+        {
+          id: 'mock-dm-1',
+          user: demoMember,
+          lastMessage: {
+            content: 'Hello! This is a test message.',
+            timestamp: new Date().toISOString(),
+            senderId: demoMember.id
+          },
+          unreadCount: 0,
+          lastMessageTime: new Date().toISOString()
+        }
+      ],
+      messages: []
     }];
   }
 

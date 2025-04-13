@@ -65,11 +65,29 @@ export function AssistantList({ onSelectAssistant, onCreateAssistant }: Assistan
     }
   };
   
-  // Handle interactive assistant creation
+  // Handle interactive assistant creation with improved navigation
   const handleInteractiveCreate = () => {
     setIsCreating(true);
     setEditingAssistantId(null);
     setIsInteractiveMode(true);
+    
+    console.log("Interactive Create button clicked - triggering assistant creation");
+    
+    // Dispatch a custom event to trigger interactive mode
+    const event = new CustomEvent('createInteractiveAssistant', {
+      detail: { interactive: true, timestamp: Date.now() }
+    });
+    window.dispatchEvent(event);
+    
+    // Call the parent callback
+    if (onCreateAssistant) {
+      console.log("Calling parent onCreateAssistant callback");
+      onCreateAssistant();
+    } else {
+      console.log("No parent callback provided, using direct navigation");
+      // Fallback: Direct navigation if no callback provided
+      window.location.href = '/assistants';
+    }
   };
   
   // Handle save after editing or creating
@@ -110,9 +128,12 @@ export function AssistantList({ onSelectAssistant, onCreateAssistant }: Assistan
             <span>Quick Create</span>
           </Button>
           <Button 
-            onClick={handleInteractiveCreate}
+            onClick={(e) => {
+              console.log("Button clicked: Interactive Create");
+              handleInteractiveCreate();
+            }}
             variant="secondary"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-zinc-300 hover:bg-zinc-400 text-black"
           >
             <Brain size={16} />
             <span>Interactive Create</span>
@@ -124,8 +145,11 @@ export function AssistantList({ onSelectAssistant, onCreateAssistant }: Assistan
         <div className="text-center p-8 border rounded-lg bg-muted">
           <p className="mb-4 text-muted-foreground">No assistants created yet.</p>
           <Button 
-            onClick={handleInteractiveCreate}
-            className="flex items-center gap-2 mx-auto"
+            onClick={(e) => {
+              console.log("Button clicked: Create Your First Assistant");
+              handleInteractiveCreate();
+            }}
+            className="flex items-center gap-2 mx-auto bg-zinc-300 hover:bg-zinc-400 text-black"
           >
             <Brain size={16} />
             <span>Create Your First Assistant</span>

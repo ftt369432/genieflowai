@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
 import type { AIAssistant, AIFolder } from '../types/ai';
+import { templateAssistants } from '../data/templateAssistants';
 
 interface AssistantState {
   assistants: AIAssistant[];
@@ -16,6 +17,9 @@ interface AssistantState {
   assignFolderToAssistant: (assistantId: string, folderId: string) => void;
   removeFolderFromAssistant: (assistantId: string, folderId: string) => void;
   getAssistantFolders: (assistantId: string) => string[];
+  
+  // Template operations
+  addTemplateAssistants: () => void;
 }
 
 export const useAssistantStore = create<AssistantState>()(
@@ -27,6 +31,8 @@ export const useAssistantStore = create<AssistantState>()(
         const assistant: AIAssistant = {
           id: nanoid(),
           ...assistantData,
+          createdAt: assistantData.createdAt || new Date(),
+          updatedAt: assistantData.updatedAt || new Date(),
         };
         set((state) => ({
           assistants: [...state.assistants, assistant]
@@ -37,7 +43,7 @@ export const useAssistantStore = create<AssistantState>()(
       updateAssistant: (id, updates) => {
         set((state) => ({
           assistants: state.assistants.map(assistant => 
-            assistant.id === id ? { ...assistant, ...updates } : assistant
+            assistant.id === id ? { ...assistant, ...updates, updatedAt: new Date() } : assistant
           )
         }));
       },
@@ -72,7 +78,8 @@ export const useAssistantStore = create<AssistantState>()(
                 // Add the folder ID to the knowledge base
                 // Note: This adds just the folder ID, the actual folder
                 // will be fetched from knowledgeBaseStore when needed
-                knowledgeBase: [...knowledgeBase, { id: folderId } as AIFolder]
+                knowledgeBase: [...knowledgeBase, { id: folderId } as AIFolder],
+                updatedAt: new Date()
               };
             }
             return assistant;
@@ -88,7 +95,8 @@ export const useAssistantStore = create<AssistantState>()(
                 ...assistant,
                 knowledgeBase: assistant.knowledgeBase.filter(
                   folder => folder.id !== folderId
-                )
+                ),
+                updatedAt: new Date()
               };
             }
             return assistant;
@@ -102,10 +110,38 @@ export const useAssistantStore = create<AssistantState>()(
           return [];
         }
         return assistant.knowledgeBase.map(folder => folder.id);
+      },
+      
+      addTemplateAssistants: () => {
+        const { assistants } = get();
+        
+        // Only add templates if there are no assistants yet
+        if (assistants.length === 0) {
+          // Add each template assistant
+          templateAssistants.forEach(template => {
+            const now = new Date();
+            get().addAssistant({
+              ...template,
+              createdAt: now,
+              updatedAt: now,
+              isActive: true,
+            } as Omit<AIAssistant, 'id'>);
+          });
+          
+          console.log('Added template assistants');
+        }
       }
     }),
     {
       name: 'assistant-store',
+      onRehydrateStorage: () => (state) => {
+        // Initialize with template assistants when the store is rehydrated
+        if (state) {
+          setTimeout(() => {
+            state.addTemplateAssistants();
+          }, 100);
+        }
+      }
     }
   )
 ); 

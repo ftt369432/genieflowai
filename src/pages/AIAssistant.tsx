@@ -43,6 +43,8 @@ import { MarkdownMessage } from '../components/ai/MarkdownMessage';
 import { ProfessionalModeService } from '../services/legalDoc/professionalModeService';
 import { AIContext } from '../contexts/AIContext';
 import { useNavigate, Link } from 'react-router-dom';
+import { QuickAccessAssistants } from '../components/assistants/QuickAccessAssistants';
+import { useAssistantStore } from '../store/assistantStore';
 
 interface MessageMetadata extends BaseMessageMetadata {
   edited?: boolean;
@@ -605,6 +607,7 @@ export function AIAssistantPage() {
     maxResults: 10
   });
   const navigate = useNavigate();
+  const { assistants } = useAssistantStore();
 
   const [chatMessages, setChatMessages] = useState<ExtendedMessage[]>([]);
   const [input, setInput] = useState('');
@@ -1609,6 +1612,42 @@ export function AIAssistantPage() {
   // Add a new state for the right sidebar
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
 
+  // Add new state for selected template assistant
+  const [selectedTemplateAssistant, setSelectedTemplateAssistant] = useState<AIAssistant | null>(null);
+
+  // Add function to handle selecting a template assistant
+  const handleSelectTemplateAssistant = (assistant: AIAssistant) => {
+    setSelectedTemplateAssistant(assistant);
+    
+    // Clear current messages
+    setChatMessages([]);
+    
+    // Set system prompt from the assistant
+    if (assistant.systemPrompt) {
+      setSystemPrompt(assistant.systemPrompt);
+    }
+    
+    // If the assistant has specific settings, apply them
+    if (assistant.settings) {
+      if (assistant.settings.temperature) {
+        setTemperature(assistant.settings.temperature);
+      }
+      if (assistant.settings.maxTokens) {
+        setMaxTokens(assistant.settings.maxTokens);
+      }
+    }
+    
+    // Create a welcome message
+    setChatMessages([
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: `Hello! I'm ${assistant.name}. ${assistant.description || ''} How can I help you today?`,
+        timestamp: new Date()
+      }
+    ]);
+  };
+
   return (
     <AIErrorBoundary>
       <TooltipProvider>
@@ -1656,31 +1695,58 @@ export function AIAssistantPage() {
                 </div>
                 
                 <div className="flex-1 overflow-y-auto">
-                  {conversations.map(conversation => (
-                    <div 
-                      key={conversation.id}
-                      className={cn(
-                        "flex items-start gap-2 p-3 cursor-pointer hover:bg-muted/80 transition-colors sidebar-item",
-                        currentConversation === conversation.id ? "bg-muted active" : ""
-                      )}
-                    onClick={() => {
-                        if (currentConversation !== conversation.id) {
-                          setCurrentConversation(conversation.id);
-                          setChatMessages(conversation.messages);
-                        }
-                      }}
-                    >
-                      <MessageSquare className="h-4 w-4 mt-1 interactive-icon" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">
-                          {conversation.title || 'New Chat'}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(conversation.createdAt).toLocaleDateString()}
+                  {/* Quick Access Assistants */}
+                  <QuickAccessAssistants
+                    onSelectAssistant={handleSelectTemplateAssistant}
+                    selectedAssistantId={selectedTemplateAssistant?.id}
+                  />
+                  
+                  {/* Conversations section */}
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="p-4 pb-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-medium card-title">Conversations</h3>
+                        <div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={handleNewChat}
+                          >
+                            <Plus className="h-4 w-4 interactive-icon" />
+                            New Chat
+                          </Button>
                         </div>
                       </div>
                     </div>
-                  ))}
+                    
+                    {/* Rest of the left sidebar */}
+                    {conversations.map(conversation => (
+                      <div 
+                        key={conversation.id}
+                        className={cn(
+                          "flex items-start gap-2 p-3 cursor-pointer hover:bg-muted/80 transition-colors sidebar-item",
+                          currentConversation === conversation.id ? "bg-muted active" : ""
+                        )}
+                        onClick={() => {
+                          if (currentConversation !== conversation.id) {
+                            setCurrentConversation(conversation.id);
+                            setChatMessages(conversation.messages);
+                          }
+                        }}
+                      >
+                        <MessageSquare className="h-4 w-4 mt-1 interactive-icon" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">
+                            {conversation.title || 'New Chat'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(conversation.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

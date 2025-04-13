@@ -14,4 +14,10 @@ export { AIProvider, useAI } from './AIContext';
 export { TeamProvider, useTeam } from './TeamContext';
 
 // Export Calendar Context
-export { CalendarProvider, useCalendar } from './CalendarContext'; 
+export { CalendarProvider, useCalendar } from './CalendarContext';
+
+// Export Modal Context
+export { ModalProvider, useModal } from './ModalContext';
+
+// Export Toast Context
+export { ToastProvider, useToast } from './ToastContext'; 

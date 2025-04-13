@@ -1,4 +1,4 @@
-import { AIDocument, Message, SearchResult } from '../types/ai';
+import { AIDocument, Message, SearchResult, AIAssistant } from '../types/ai';
 import { getEmbedding } from './embeddingService';
 import { useAssistantStore } from '../store/assistantStore';
 import { useKnowledgeBaseStore } from '../store/knowledgeBaseStore';
@@ -89,17 +89,26 @@ ${context}`;
 
 /**
  * Chat with documents using a specific assistant's knowledge base
+ * @param assistantIdOrObject - Either the ID of the assistant or the assistant object itself
  */
 export async function chatWithAssistant(
-  assistantId: string,
+  assistantIdOrObject: string | AIAssistant,
   query: string,
   previousMessages: Message[] = [],
   options: DocumentChatOptions = {}
 ) {
   // Get the assistant config
-  const assistant = useAssistantStore.getState().getAssistantById(assistantId);
-  if (!assistant) {
-    throw new Error(`Assistant with ID ${assistantId} not found`);
+  let assistant: AIAssistant | undefined;
+  
+  if (typeof assistantIdOrObject === 'string') {
+    // Get assistant by ID
+    assistant = useAssistantStore.getState().getAssistantById(assistantIdOrObject);
+    if (!assistant) {
+      throw new Error(`Assistant with ID ${assistantIdOrObject} not found`);
+    }
+  } else {
+    // Use the passed assistant object directly
+    assistant = assistantIdOrObject;
   }
   
   // Get all documents from knowledge base store
@@ -117,12 +126,59 @@ export async function chatWithAssistant(
     return docFolderId && folderIds.includes(docFolderId);
   });
   
-  // If no documents are found after filtering
+  // If no documents are found after filtering, use the assistant's system prompt directly
   if (assistantDocuments.length === 0) {
-    return {
-      message: "I don't have any knowledge base documents assigned to me yet. Please add documents to my knowledge base to help me answer your questions better.",
-      relevantDocuments: []
-    };
+    // Mock conversation response for development
+    if (import.meta.env.DEV) {
+      const mockResponse = await simulateAIResponse(query, assistant.systemPrompt || "");
+      return {
+        message: mockResponse,
+        relevantDocuments: []
+      };
+    }
+    
+    // For production, use the API with just the system prompt
+    try {
+      const systemPrompt = assistant.systemPrompt || "You are a helpful AI assistant. Provide accurate, detailed, and thoughtful responses.";
+      
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...previousMessages,
+        { role: 'user', content: query }
+      ];
+      
+      // Make API call to OpenAI
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4',
+          messages,
+          max_tokens: options.maxTokens || 1000,
+          temperature: options.temperature || 0.7,
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from OpenAI');
+      }
+
+      const data = await response.json();
+      
+      return {
+        message: data.choices[0].message.content,
+        relevantDocuments: []
+      };
+    } catch (error) {
+      console.error("Error calling AI API:", error);
+      return {
+        message: "I'm having trouble accessing my knowledge base at the moment. Please try again later or contact support if the issue persists.",
+        relevantDocuments: []
+      };
+    }
   }
   
   // Use the assistant's system prompt if available
@@ -138,6 +194,27 @@ export async function chatWithAssistant(
       systemPrompt
     }
   );
+}
+
+/**
+ * For development only - simulate AI response without calling the API
+ */
+async function simulateAIResponse(query: string, systemPrompt: string): Promise<string> {
+  console.log("Simulating AI response with:", { query, systemPrompt });
+  
+  // Wait for a realistic delay to simulate API call
+  await new Promise(resolve => setTimeout(resolve, 1200));
+  
+  // Return a mock response based on the query
+  if (query.toLowerCase().includes("legal") || query.toLowerCase().includes("law")) {
+    return "As a legal assistant, I can help with that. Legal matters require careful consideration, and while I can provide information, remember that this doesn't constitute legal advice. For your specific situation, consulting with a licensed attorney is recommended.";
+  } else if (query.toLowerCase().includes("hello") || query.toLowerCase().includes("hi")) {
+    return "Hello! I'm your AI assistant. How can I help you today?";
+  } else if (query.toLowerCase().includes("help")) {
+    return "I'm here to assist you with questions, information, and tasks. What specifically would you like help with?";
+  } else {
+    return "I understand your question about \"" + query + "\". Let me provide a helpful response based on my knowledge. If you need more specific information, please let me know and I'll do my best to assist you further.";
+  }
 }
 
 /**
