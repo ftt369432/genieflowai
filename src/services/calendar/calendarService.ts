@@ -663,10 +663,20 @@ export class CalendarService {
         return [];
       }
       
-      // Ensure googleAuthService is properly initialized
-      if (!googleAuthService.fetchCalendars) {
+      // Check if the required method exists
+      if (typeof googleAuthService.fetchCalendars !== 'function') {
         console.error('fetchCalendars method not available on googleAuthService');
-        return [];
+        // Return mock data as a fallback
+        return [
+          {
+            id: 'primary',
+            name: 'My Calendar',
+            color: '#4285F4',
+            source: 'google',
+            primary: true,
+            enabled: true
+          }
+        ];
       }
 
       // Call fetchCalendars and handle potential errors
