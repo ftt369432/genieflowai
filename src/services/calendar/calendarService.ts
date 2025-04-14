@@ -656,12 +656,29 @@ export class CalendarService {
   }
 
   private async fetchGoogleCalendars(): Promise<Calendar[]> {
-    if (!googleAuthService.isSignedIn()) {
-      return [];
-    }
-
     try {
-      const calendars = await googleAuthService.fetchCalendars();
+      // Check if Google Auth Service is initialized and signed in
+      if (!googleAuthService || !googleAuthService.isSignedIn()) {
+        console.log('Google Auth service not initialized or user not signed in');
+        return [];
+      }
+      
+      // Ensure googleAuthService is properly initialized
+      if (!googleAuthService.fetchCalendars) {
+        console.error('fetchCalendars method not available on googleAuthService');
+        return [];
+      }
+
+      // Call fetchCalendars and handle potential errors
+      const calendars = await googleAuthService.fetchCalendars().catch(error => {
+        console.error('Error in googleAuthService.fetchCalendars:', error);
+        return [];
+      });
+      
+      if (!calendars || !Array.isArray(calendars)) {
+        console.error('Invalid response from fetchCalendars, expected array but got:', calendars);
+        return [];
+      }
       
       return calendars.map((calendar: any) => ({
         id: calendar.id,
