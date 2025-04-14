@@ -19,6 +19,20 @@ export interface DirectMessage {
   lastMessageTime?: string;
 }
 
+// New interface for Slack-like channels
+export interface TeamChannel {
+  id: string;
+  name: string;
+  description: string;
+  isPrivate: boolean;
+  createdAt: string;
+  createdBy: TeamMember;
+  members: TeamMember[];
+  messages: TeamMessage[];
+  pinnedMessages?: TeamMessage[];
+  lastActivity?: string;
+}
+
 export interface TeamPage {
   id: string;
   title: string;
@@ -37,6 +51,8 @@ export interface TeamThread {
   participants: TeamMember[];
   lastMessage?: string;
   creator: TeamMember;
+  parentMessageId?: string; // For threads attached to specific messages
+  channelId?: string; // For channel-based threads
 }
 
 export interface TeamMessage {
@@ -56,6 +72,9 @@ export interface TeamMessage {
     users: string[];
   }[];
   isAI?: boolean;
+  threadId?: string; // Reference to a thread if this message started one
+  channelId?: string; // Which channel this message belongs to
+  hasThread?: boolean; // Indicator if this message has replies
 }
 
 export interface Team {
@@ -69,8 +88,10 @@ export interface Team {
   threads: TeamThread[];
   directMessages: DirectMessage[];
   messages: TeamMessage[];
+  channels: TeamChannel[]; // Add channels to the Team interface
 }
 
 // Add type aliases for backwards compatibility
 export type Page = TeamPage;
-export type Thread = TeamThread; 
+export type Thread = TeamThread;
+export type Channel = TeamChannel; 

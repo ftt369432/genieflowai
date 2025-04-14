@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getEnv } from '../../config/env';
 import { EmailAnalysis } from '../email';
+import { Task, TaskStatus, TaskPriority, TaskFilter, TaskStats } from '../../types/tasks';
+import { supabase } from '../supabase';
 
 // Task types
 export interface Task {
@@ -43,12 +45,15 @@ export interface TaskFilter {
  * Service for managing tasks
  */
 export class TaskService {
-  private tasks: Task[] = [];
-  private storageKey = 'genieflow_tasks';
+  private static instance: TaskService;
 
-  constructor() {
-    this.loadTasksFromStorage();
-    console.log(`TaskService initialized with ${this.tasks.length} tasks`);
+  private constructor() {}
+
+  public static getInstance(): TaskService {
+    if (!TaskService.instance) {
+      TaskService.instance = new TaskService();
+    }
+    return TaskService.instance;
   }
 
   /**
@@ -58,7 +63,7 @@ export class TaskService {
     const { useMock } = getEnv();
     
     try {
-      const tasksJson = localStorage.getItem(this.storageKey);
+      const tasksJson = localStorage.getItem('genieflow_tasks');
       if (tasksJson) {
         const parsedTasks = JSON.parse(tasksJson);
         
@@ -94,7 +99,7 @@ export class TaskService {
    */
   private saveTasksToStorage(): void {
     try {
-      localStorage.setItem(this.storageKey, JSON.stringify(this.tasks));
+      localStorage.setItem('genieflow_tasks', JSON.stringify(this.tasks));
     } catch (error) {
       console.error('Failed to save tasks to storage:', error);
     }
@@ -588,7 +593,204 @@ export class TaskService {
     const delay = Math.floor(Math.random() * (max - min + 1) + min);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
+
+  // Create a new task
+  async createTask(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        ...task,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  // Update an existing task
+  async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({
+        ...updates,
+        updatedAt: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  // Delete a task
+  async deleteTask(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
+  // Get a single task by ID
+  async getTask(id: string): Promise<Task> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  // Get all tasks with optional filtering
+  async getTasks(filter?: TaskFilter): Promise<Task[]> {
+    let query = supabase.from('tasks').select('*');
+
+    if (filter) {
+      if (filter.status?.length) {
+        query = query.in('status', filter.status);
+      }
+      if (filter.priority?.length) {
+        query = query.in('priority', filter.priority);
+      }
+      if (filter.dueDate?.start) {
+        query = query.gte('dueDate', filter.dueDate.start.toISOString());
+      }
+      if (filter.dueDate?.end) {
+        query = query.lte('dueDate', filter.dueDate.end.toISOString());
+      }
+      if (filter.assignee?.length) {
+        query = query.in('assignee', filter.assignee);
+      }
+      if (filter.tags?.length) {
+        query = query.contains('tags', filter.tags);
+      }
+      if (filter.search) {
+        query = query.or(`title.ilike.%${filter.search}%,description.ilike.%${filter.search}%`);
+      }
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  }
+
+  // Get task statistics
+  async getTaskStats(): Promise<TaskStats> {
+    const { data: tasks, error } = await supabase
+      .from('tasks')
+      .select('*');
+
+    if (error) throw error;
+
+    const now = new Date();
+    const dueSoon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+
+    return {
+      total: tasks.length,
+      completed: tasks.filter(t => t.status === 'completed').length,
+      inProgress: tasks.filter(t => t.status === 'in-progress').length,
+      blocked: tasks.filter(t => t.status === 'blocked').length,
+      overdue: tasks.filter(t => t.dueDate && new Date(t.dueDate) < now).length,
+      dueSoon: tasks.filter(t => t.dueDate && new Date(t.dueDate) <= dueSoon && new Date(t.dueDate) > now).length,
+      byPriority: {
+        high: tasks.filter(t => t.priority === 'high').length,
+        medium: tasks.filter(t => t.priority === 'medium').length,
+        low: tasks.filter(t => t.priority === 'low').length
+      }
+    };
+  }
+
+  // Create a subtask
+  async createSubTask(parentId: string, task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
+    const parentTask = await this.getTask(parentId);
+    if (!parentTask) throw new Error('Parent task not found');
+
+    const newTask = await this.createTask({
+      ...task,
+      parentTaskId: parentId
+    });
+
+    await this.updateTask(parentId, {
+      subTasks: [...(parentTask.subTasks || []), newTask.id]
+    });
+
+    return newTask;
+  }
+
+  // Update task status
+  async updateTaskStatus(id: string, status: TaskStatus): Promise<Task> {
+    return this.updateTask(id, { status });
+  }
+
+  // Update task priority
+  async updateTaskPriority(id: string, priority: TaskPriority): Promise<Task> {
+    return this.updateTask(id, { priority });
+  }
+
+  // Add tags to a task
+  async addTags(id: string, tags: string[]): Promise<Task> {
+    const task = await this.getTask(id);
+    const updatedTags = [...new Set([...(task.tags || []), ...tags])];
+    return this.updateTask(id, { tags: updatedTags });
+  }
+
+  // Remove tags from a task
+  async removeTags(id: string, tagsToRemove: string[]): Promise<Task> {
+    const task = await this.getTask(id);
+    const updatedTags = (task.tags || []).filter(tag => !tagsToRemove.includes(tag));
+    return this.updateTask(id, { tags: updatedTags });
+  }
+
+  // Assign task to user
+  async assignTask(id: string, assignee: string): Promise<Task> {
+    return this.updateTask(id, { assignee });
+  }
+
+  // Set task due date
+  async setDueDate(id: string, dueDate: Date): Promise<Task> {
+    return this.updateTask(id, { dueDate });
+  }
+
+  // Get tasks by project
+  async getTasksByProject(projectId: string): Promise<Task[]> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('projectId', projectId);
+
+    if (error) throw error;
+    return data;
+  }
+
+  // Get tasks by notebook
+  async getTasksByNotebook(notebookId: string): Promise<Task[]> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('notebookId', notebookId);
+
+    if (error) throw error;
+    return data;
+  }
+
+  // Get tasks by workflow
+  async getTasksByWorkflow(workflowId: string): Promise<Task[]> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('workflowId', workflowId);
+
+    if (error) throw error;
+    return data;
+  }
 }
 
 // Export singleton instance
-export const taskService = new TaskService();
+export const taskService = TaskService.getInstance();

@@ -24,6 +24,7 @@ import { services } from './services/core/initializeServices';
 import { AuthProvider } from './contexts/AuthContext';
 import { ModalProvider } from './contexts/ModalContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { TeamProvider } from './contexts/TeamContext';
 
 // Create a context for services
 export const ServicesContext = React.createContext(services);
@@ -58,14 +59,16 @@ root.render(
                 <AuthProvider>
                   <EmailProvider>
                     <CalendarProvider>
-                      <DndProvider backend={HTML5Backend}>
-                        <ModalProvider>
-                          <ToastProvider>
-                            <App />
-                            <Toaster />
-                          </ToastProvider>
-                        </ModalProvider>
-                      </DndProvider>
+                      <TeamProvider>
+                        <DndProvider backend={HTML5Backend}>
+                          <ModalProvider>
+                            <ToastProvider>
+                              <App />
+                              <Toaster />
+                            </ToastProvider>
+                          </ModalProvider>
+                        </DndProvider>
+                      </TeamProvider>
                     </CalendarProvider>
                   </EmailProvider>
                 </AuthProvider>

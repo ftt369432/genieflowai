@@ -656,12 +656,39 @@ export class CalendarService {
   }
 
   private async fetchGoogleCalendars(): Promise<Calendar[]> {
-    if (!googleAuthService.isSignedIn()) {
-      return [];
-    }
-
     try {
-      const calendars = await googleAuthService.fetchCalendars();
+      // Check if Google Auth Service is initialized and signed in
+      if (!googleAuthService || !googleAuthService.isSignedIn()) {
+        console.log('Google Auth service not initialized or user not signed in');
+        return [];
+      }
+      
+      // Check if the required method exists
+      if (typeof googleAuthService.fetchCalendars !== 'function') {
+        console.error('fetchCalendars method not available on googleAuthService');
+        // Return mock data as a fallback
+        return [
+          {
+            id: 'primary',
+            name: 'My Calendar',
+            color: '#4285F4',
+            source: 'google',
+            primary: true,
+            enabled: true
+          }
+        ];
+      }
+
+      // Call fetchCalendars and handle potential errors
+      const calendars = await googleAuthService.fetchCalendars().catch(error => {
+        console.error('Error in googleAuthService.fetchCalendars:', error);
+        return [];
+      });
+      
+      if (!calendars || !Array.isArray(calendars)) {
+        console.error('Invalid response from fetchCalendars, expected array but got:', calendars);
+        return [];
+      }
       
       return calendars.map((calendar: any) => ({
         id: calendar.id,
@@ -715,17 +742,33 @@ export class CalendarService {
         const events = await googleAuthService.fetchEvents(calendar.id, timeMin, timeMax);
         
         return events.map((event: any) => {
-          // Handle all-day events
+          // Handle all-day events and ensure event.start and event.end exist
+          if (!event || !event.start || !event.end) {
+            console.warn('Invalid event data:', event);
+            return null;
+          }
+          
           const isAllDay = !event.start.dateTime;
           
-          // Parse start and end times
-          const startDate = isAllDay
-            ? new Date(event.start.date)
-            : new Date(event.start.dateTime);
+          // Parse start and end times with fallbacks
+          let startDate: Date;
+          let endDate: Date;
           
-          const endDate = isAllDay
-            ? new Date(event.end.date)
-            : new Date(event.end.dateTime);
+          try {
+            startDate = isAllDay
+              ? new Date(event.start.date)
+              : new Date(event.start.dateTime);
+              
+            endDate = isAllDay
+              ? new Date(event.end.date)
+              : new Date(event.end.dateTime);
+          } catch (error) {
+            console.warn('Error parsing event dates:', error, event);
+            // Fallback to current time if parsing fails
+            startDate = new Date();
+            endDate = new Date();
+            endDate.setHours(endDate.getHours() + 1);
+          }
           
           // For all-day events, Google's end date is exclusive, so subtract one day
           if (isAllDay) {
@@ -733,13 +776,13 @@ export class CalendarService {
           }
           
           return {
-            id: event.id,
+            id: event.id || `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             title: event.summary || 'Untitled Event',
             start: startDate,
             end: endDate,
             allDay: isAllDay,
-            description: event.description,
-            location: event.location,
+            description: event.description || '',
+            location: event.location || '',
             calendarId: calendar.id,
             calendarName: calendar.name,
             color: calendar.color,
@@ -748,9 +791,9 @@ export class CalendarService {
         });
       });
       
-      // Flatten the array of arrays into a single array of events
+      // Flatten the array of arrays into a single array of events and filter out null events
       const results = await Promise.all(allEventsPromises);
-      return results.flat();
+      return results.flat().filter(event => event !== null) as CalendarEvent[];
     } catch (error) {
       console.error('Error fetching Google events:', error);
       return [];

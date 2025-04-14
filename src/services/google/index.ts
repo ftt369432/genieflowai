@@ -1,7 +1,8 @@
 // Export Google API service implementations
-export { googleApiClient } from './GoogleAPIClient';
-export { default as googleAuthService } from '../auth/googleAuth';
-export { googleDriveService } from './GoogleDriveService';
+export { GoogleAPIClient } from './GoogleAPIClient';
+export { GoogleCalendarService } from './GoogleCalendarService';
+export { GoogleDriveService } from './GoogleDriveService';
+export { GoogleAuthService } from './GoogleAuthService';
 
 // Re-export types
 export type { GoogleUserInfo } from './GoogleAPIClient';

@@ -16,6 +16,15 @@ export interface EnvironmentConfig {
   authCallbackUrl: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
+  
+  // Email Testing Configuration
+  VITE_EMAIL_TEST_MODE: boolean;
+  VITE_EMAIL_TEST_ACCOUNT: string;
+  VITE_EMAIL_TEST_PASSWORD: string;
+  VITE_EMAIL_TEST_IMAP_SERVER: string;
+  VITE_EMAIL_TEST_IMAP_PORT: number;
+  VITE_EMAIL_TEST_SMTP_SERVER: string;
+  VITE_EMAIL_TEST_SMTP_PORT: number;
 }
 
 // Cache for the environment config
@@ -65,7 +74,18 @@ export function getEnv(): EnvironmentConfig {
     ],
     authCallbackUrl,
     supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
-    supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+    supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+    
+    // Email Testing Configuration
+    VITE_EMAIL_TEST_MODE: import.meta.env.VITE_EMAIL_TEST_MODE === 'true' || 
+                       import.meta.env.VITE_EMAIL_TEST_MODE === true ||
+                       import.meta.env.VITE_EMAIL_TEST_MODE === '1',
+    VITE_EMAIL_TEST_ACCOUNT: import.meta.env.VITE_EMAIL_TEST_ACCOUNT || '',
+    VITE_EMAIL_TEST_PASSWORD: import.meta.env.VITE_EMAIL_TEST_PASSWORD || '',
+    VITE_EMAIL_TEST_IMAP_SERVER: import.meta.env.VITE_EMAIL_TEST_IMAP_SERVER || '',
+    VITE_EMAIL_TEST_IMAP_PORT: import.meta.env.VITE_EMAIL_TEST_IMAP_PORT ? Number(import.meta.env.VITE_EMAIL_TEST_IMAP_PORT) : 0,
+    VITE_EMAIL_TEST_SMTP_SERVER: import.meta.env.VITE_EMAIL_TEST_SMTP_SERVER || '',
+    VITE_EMAIL_TEST_SMTP_PORT: import.meta.env.VITE_EMAIL_TEST_SMTP_PORT ? Number(import.meta.env.VITE_EMAIL_TEST_SMTP_PORT) : 0
   };
 
   return environmentConfig;

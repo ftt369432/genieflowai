@@ -46,6 +46,7 @@ export interface GenieDriveItemMetadata {
   sourceUrl?: string;          // Optional source URL
   isTemplate?: boolean;        // Whether the item is a template
   customProperties?: Record<string, any>; // Custom metadata
+  source?: string;             // Source of the item
 }
 
 export interface GenieDriveItem {
@@ -160,4 +161,5 @@ export interface GenieDriveService {
   shareItem: (itemId: string, settings: GenieDriveShareSettings) => Promise<string>; // Returns share URL
   getAIAnalysis: (itemId: string) => Promise<GenieDriveAIAnalysis>;
   generateAIAnalysis: (itemId: string) => Promise<GenieDriveAIAnalysis>;
+  importFromGoogleDrive: (googleDriveFileId: string, parentId: string | null) => Promise<GenieDriveFile | null>;
 } 

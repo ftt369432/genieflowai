@@ -22,6 +22,7 @@ import {
 
 import emailService from './emailService';
 import { supabase } from '../../lib/supabase';
+import { useUserStore } from '../../store/userStore';
 
 export class EmailService {
   private static instance: EmailService;
@@ -77,15 +78,38 @@ export class EmailService {
   }
   
   async addGoogleAccount(code?: string): Promise<EmailAccount> {
-    // Create a mock account for now
-    return {
-      id: `google-${Date.now()}`,
-      provider: 'gmail',
-      email: 'user@gmail.com',
-      name: 'Gmail Account',
-      connected: true,
-      lastSynced: new Date()
-    };
+    if (code) {
+      // If we have a code, this is the callback from Google OAuth
+      // Normally, this would exchange the code for tokens, but for now we'll mock it
+      return {
+        id: `google-${Date.now()}`,
+        provider: 'gmail',
+        email: useUserStore.getState().user?.email || 'user@gmail.com',
+        name: useUserStore.getState().user?.fullName || 'Gmail Account',
+        connected: true,
+        lastSynced: new Date()
+      };
+    }
+    
+    // Start OAuth flow - fetch authorization URL from API
+    try {
+      const response = await fetch('/email/google/auth-url');
+      const data = await response.json();
+      
+      if (data.url) {
+        console.log('Opening Google authorization URL:', data.url);
+        // Open the authorization URL in a new window/tab
+        window.location.href = data.url;
+        
+        // This is a bit of a hack - we throw here to stop execution since we're redirecting
+        throw new Error('Redirecting to Google for authorization');
+      } else {
+        throw new Error('Failed to get Google authorization URL');
+      }
+    } catch (error) {
+      console.error('Error initiating Google OAuth:', error);
+      throw error;
+    }
   }
   
   async addIMAPAccount(config: IMAPConfig): Promise<EmailAccount> {
