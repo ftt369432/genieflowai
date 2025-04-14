@@ -1,185 +1,232 @@
-import React, { useState } from 'react';
-import { X, Plus, Tag } from 'lucide-react';
-import type { Task } from '../../types';
-import { Textarea } from "../ui/Textarea";
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Task, TaskStatus, TaskPriority } from '../../types/tasks';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Textarea } from '../ui/Textarea';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '../ui/Form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/Select';
+import { Calendar } from '../ui/Calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
+import { CalendarIcon } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import { format } from 'date-fns';
+
+const taskFormSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional(),
+  status: z.enum(['todo', 'in-progress', 'completed', 'blocked'] as const),
+  priority: z.enum(['high', 'medium', 'low'] as const),
+  dueDate: z.date().optional(),
+  assignee: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  source: z.object({
+    type: z.enum(['notebook', 'email', 'chat', 'manual'] as const),
+    id: z.string(),
+    blockId: z.string().optional(),
+  }).optional(),
+});
+
+type TaskFormValues = z.infer<typeof taskFormSchema>;
 
 interface TaskFormProps {
-  onSubmit: (task: Partial<Task>) => void;
+  task?: Task;
+  onSubmit: (values: TaskFormValues) => Promise<void>;
   onCancel: () => void;
-  initialData?: Partial<Task>;
+  isLoading?: boolean;
 }
 
-export function TaskForm({ onSubmit, onCancel, initialData }: TaskFormProps) {
-  const [task, setTask] = useState<Partial<Task>>({
-    title: initialData?.title || '',
-    description: initialData?.description || '',
-    priority: initialData?.priority || 'medium',
-    dueDate: initialData?.dueDate,
-    tags: initialData?.tags || [],
+export function TaskForm({ task, onSubmit, onCancel, isLoading = false }: TaskFormProps) {
+  const form = useForm<TaskFormValues>({
+    resolver: zodResolver(taskFormSchema),
+    defaultValues: {
+      title: task?.title || '',
+      description: task?.description || '',
+      status: task?.status || 'todo',
+      priority: task?.priority || 'medium',
+      dueDate: task?.dueDate ? new Date(task.dueDate) : undefined,
+      assignee: task?.assignee || '',
+      tags: task?.tags || [],
+      source: task?.source,
+    },
   });
 
-  const [newTag, setNewTag] = useState('');
-
-  const handleAddTag = () => {
-    if (newTag && !task.tags?.includes(newTag)) {
-      setTask({
-        ...task,
-        tags: [...(task.tags || []), newTag],
-      });
-      setNewTag('');
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTask({
-      ...task,
-      tags: task.tags?.filter(tag => tag !== tagToRemove) || [],
-    });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(task);
-  };
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-            {initialData ? 'Edit Task' : 'Create New Task'}
-          </h2>
-          <button
-            onClick={onCancel}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
-          >
-            <X size={20} className="text-gray-500 dark:text-gray-400" />
-          </button>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Title</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter task title" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Enter task description"
+                  className="min-h-[100px]"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Status</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="todo">To Do</SelectItem>
+                    <SelectItem value="in-progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="blocked">Blocked</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="priority"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Priority</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Title
-              </label>
-              <input
-                type="text"
-                value={task.title}
-                onChange={(e) => setTask({ ...task, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Description
-              </label>
-              <textarea
-                value={task.description}
-                onChange={(e) => setTask({ ...task, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                rows={3}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Priority
-              </label>
-              <select
-                value={task.priority}
-                onChange={(e) => setTask({ ...task, priority: e.target.value as Task['priority'] })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Due Date
-              </label>
-              <input
-                type="date"
-                value={task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : ''}
-                onChange={(e) => setTask({
-                  ...task,
-                  dueDate: e.target.value ? new Date(e.target.value) : undefined,
-                })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Tags
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="Add tag"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddTag();
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleAddTag}
-                  className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-                >
-                  <Plus size={20} />
-                </button>
-              </div>
-              {task.tags && task.tags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {task.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center px-2 py-1 rounded-full text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400"
+        <FormField
+          control={form.control}
+          name="dueDate"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Due Date</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        'w-full pl-3 text-left font-normal',
+                        !field.value && 'text-muted-foreground'
+                      )}
                     >
-                      <Tag size={14} className="mr-1" />
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        className="ml-1 hover:text-blue-600 dark:hover:text-blue-300"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+                      {field.value ? (
+                        format(field.value, 'PPP')
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    disabled={(date) =>
+                      date < new Date() || date < new Date('1900-01-01')
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-          <div className="mt-6 flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              {initialData ? 'Save Changes' : 'Create Task'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <FormField
+          control={form.control}
+          name="assignee"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Assignee</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter assignee" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end space-x-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? 'Saving...' : task ? 'Update Task' : 'Create Task'}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }
