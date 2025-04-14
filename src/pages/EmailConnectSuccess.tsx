@@ -13,34 +13,62 @@ const EmailConnectSuccess = () => {
   useEffect(() => {
     const loadAccount = async () => {
       try {
-        if (!accountId) {
+        // Check if we have the accountId in URL params
+        let effectiveAccountId = accountId;
+        
+        if (!effectiveAccountId) {
+          console.log('Account ID not found in URL params, checking if it was provided directly');
+          
+          try {
+            // Try to fetch from the current URL endpoint as a JSON response
+            const response = await fetch(window.location.href);
+            
+            // Check if we got a valid JSON response
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.accountId) {
+                console.log('Got account ID from direct response:', data.accountId);
+                effectiveAccountId = data.accountId;
+                if (data.email) setEmail(data.email);
+              }
+            }
+          } catch (fetchError) {
+            console.log('Error fetching account data directly:', fetchError);
+          }
+        }
+        
+        if (!effectiveAccountId) {
           console.error('Account ID is missing in URL params');
           setError('Account ID is missing. This may be due to an incomplete authentication flow.');
           setLoading(false);
           return;
         }
         
-        const emailService = new EmailService();
-        const accounts = await emailService.getAccounts();
-        
-        if (!accounts || accounts.length === 0) {
-          console.error('No email accounts found');
-          setError('No email accounts were found. Please try connecting again.');
-          setLoading(false);
-          return;
+        // If we don't have the email yet from the direct response, fetch it
+        if (!email) {
+          const emailService = new EmailService();
+          const accounts = await emailService.getAccounts();
+          
+          if (!accounts || accounts.length === 0) {
+            console.error('No email accounts found');
+            setError('No email accounts were found. Please try connecting again.');
+            setLoading(false);
+            return;
+          }
+          
+          console.log('Available accounts:', accounts);
+          const account = accounts.find((acc: { id: string }) => acc.id === effectiveAccountId);
+          
+          if (!account) {
+            console.error(`Account not found with ID: ${effectiveAccountId}`);
+            setError(`Email account with ID ${effectiveAccountId} was not found.`);
+            setLoading(false);
+            return;
+          }
+          
+          setEmail(account.email);
         }
         
-        console.log('Available accounts:', accounts);
-        const account = accounts.find(acc => acc.id === accountId);
-        
-        if (!account) {
-          console.error(`Account not found with ID: ${accountId}`);
-          setError(`Email account with ID ${accountId} was not found.`);
-          setLoading(false);
-          return;
-        }
-        
-        setEmail(account.email);
         setLoading(false);
         
         // Redirect to email page after 3 seconds
@@ -55,7 +83,7 @@ const EmailConnectSuccess = () => {
     };
     
     loadAccount();
-  }, [accountId, navigate]);
+  }, [accountId, navigate, email]);
 
   const handleTryAgain = () => {
     navigate('/email');

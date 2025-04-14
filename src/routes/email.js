@@ -56,7 +56,17 @@ router.get('/email/google/auth-url', (req, res) => {
 /**
  * Handle Google OAuth callback
  */
-router.get('/email/google/callback', async (req, res) => {
+router.get('/email/google/callback', handleGoogleOAuthCallback);
+
+/**
+ * Handle Google OAuth callback - alternative path for direct redirects
+ */
+router.get('/email/connect/success', handleGoogleOAuthCallback);
+
+/**
+ * Handler function for Google OAuth callbacks
+ */
+async function handleGoogleOAuthCallback(req, res) {
   const { code } = req.query;
   
   console.log('Google OAuth callback received with code');
@@ -92,28 +102,51 @@ router.get('/email/google/callback', async (req, res) => {
     
     // Get the origin from the request if available, otherwise use default
     const origin = req.headers.origin || process.env.FRONTEND_URL;
-    // Support any port in 5173, 5174, 5175, 5195 range
-    const frontendUrl = origin && (origin.includes('5173') || origin.includes('5174') || origin.includes('5175') || origin.includes('5195')) 
+    // Support any port in 3000-3003 range as well as existing ports
+    const frontendUrl = origin && (
+      origin.includes('3000') || 
+      origin.includes('3001') || 
+      origin.includes('3002') || 
+      origin.includes('3003') || 
+      origin.includes('5173') || 
+      origin.includes('5174') || 
+      origin.includes('5175') || 
+      origin.includes('5195')
+    ) 
       ? origin 
       : process.env.FRONTEND_URL;
     
     console.log('Redirecting to:', `${frontendUrl}/email/connect/success?accountId=${accountId}`);
     
-    // Redirect to frontend success page
-    res.redirect(`${frontendUrl}/email/connect/success?accountId=${accountId}`);
+    // If we're already at the success page, don't redirect again
+    if (req.path === '/email/connect/success') {
+      res.json({ accountId, email: userInfo.data.email });
+    } else {
+      // Redirect to frontend success page
+      res.redirect(`${frontendUrl}/email/connect/success?accountId=${accountId}`);
+    }
   } catch (error) {
     console.error('Google OAuth error:', error);
     // Get the origin from the request if available, otherwise use default
     const origin = req.headers.origin || process.env.FRONTEND_URL;
-    // Support any port in 5173, 5174, 5175, 5195 range
-    const frontendUrl = origin && (origin.includes('5173') || origin.includes('5174') || origin.includes('5175') || origin.includes('5195')) 
+    // Support any port in 3000-3003 range as well as existing ports
+    const frontendUrl = origin && (
+      origin.includes('3000') || 
+      origin.includes('3001') || 
+      origin.includes('3002') || 
+      origin.includes('3003') || 
+      origin.includes('5173') || 
+      origin.includes('5174') || 
+      origin.includes('5175') || 
+      origin.includes('5195')
+    ) 
       ? origin 
       : process.env.FRONTEND_URL;
     
     console.log('Redirecting to error page:', `${frontendUrl}/email/connect/error`);
     res.redirect(`${frontendUrl}/email/connect/error?message=${encodeURIComponent(error.message)}`);
   }
-});
+}
 
 /**
  * Connect IMAP account
