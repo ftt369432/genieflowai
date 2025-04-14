@@ -7,7 +7,7 @@ const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDItejnhSm8zRoEW9aLP7dJwhWWtNE8-w8",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "genieflowlaw.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "genieflowlaw",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "genieflowlaw.appspot.com",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "genieflowlaw.firebasestorage.app",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "460991833008",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:460991833008:web:1b36e15d4dd5f04c09ec75",
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-LGMXCWTY2Z"
