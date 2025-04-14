@@ -44,7 +44,10 @@
         https://*.googleapis.com
         https://*.google-analytics.com
         https://*.analytics.google.com
-        wss://*.firebaseio.com;
+        wss://*.firebaseio.com
+        https://firebase.googleapis.com
+        https://firebaseinstallations.googleapis.com
+        https://www.googletagmanager.com;
       frame-src 'self' https://*.google.com;
       media-src 'self' https: http:;
       object-src 'none';
