@@ -836,6 +836,108 @@ class GenieDriveServiceImpl implements GenieDriveService {
   }
 
   /**
+   * Import a file from Google Drive
+   */
+  async importFromGoogleDrive(googleDriveFileId: string, parentId: string | null = null): Promise<GenieDriveFile | null> {
+    // Wait for initialization
+    if (!this.initialized) await this.initialize();
+
+    try {
+      // Dynamically import GoogleDriveService to avoid circular dependencies
+      const { googleDriveService } = await import('../google/GoogleDriveService');
+      
+      // Get file details from Google Drive
+      const googleFile = await googleDriveService.getFile(googleDriveFileId);
+      if (!googleFile) {
+        throw new Error(`Google Drive file ${googleDriveFileId} not found`);
+      }
+      
+      // Download file content
+      const content = await googleDriveService.downloadFile(googleDriveFileId);
+      
+      // Create a File object from the blob
+      const file = new File([content], googleFile.name, { type: googleFile.mimeType });
+      
+      // Get the user ID
+      const userId = this.getCurrentUserId();
+      const fileId = uuidv4();
+      const now = new Date().toISOString();
+      
+      // Determine file type
+      const fileType = this.getFileType(googleFile.name);
+      
+      // Extract text content for document types
+      let extractedText = '';
+      if (['document', 'pdf', 'spreadsheet', 'presentation', 'code'].includes(fileType)) {
+        try {
+          extractedText = await documentProcessingService.extractText(file);
+        } catch (error) {
+          console.error('Failed to extract text:', error);
+          extractedText = `Failed to extract text from ${googleFile.name}`;
+        }
+      }
+      
+      // Create file object with Google Drive source tracking
+      const newFile: GenieDriveFile = {
+        id: fileId,
+        name: googleFile.name,
+        type: fileType,
+        parentId,
+        path: await this.getItemPath(parentId),
+        extension: this.getFileExtension(googleFile.name),
+        version: 1,
+        permissions: {
+          canView: [userId],
+          canEdit: [userId],
+          canDelete: [userId],
+          isPublic: false
+        },
+        metadata: {
+          creator: userId,
+          createdAt: now,
+          lastModifiedBy: userId,
+          lastModifiedAt: now,
+          size: parseInt(googleFile.size || '0'),
+          mimeType: googleFile.mimeType,
+          starred: false,
+          tags: ['imported', 'google-drive'],
+          sourceUrl: googleFile.webViewLink,
+          customProperties: {
+            importSource: 'google-drive',
+            googleDriveId: googleDriveFileId,
+            importedAt: now
+          }
+        },
+        content: extractedText || undefined,
+        downloadUrl: URL.createObjectURL(file),
+        previewUrl: fileType === 'image' ? URL.createObjectURL(file) : undefined,
+        webViewUrl: googleFile.webViewLink
+      };
+      
+      // Add to mock data
+      this.mockData.set(fileId, newFile);
+      
+      // Update parent folder's child count if applicable
+      if (parentId) {
+        const parentFolder = this.mockData.get(parentId) as GenieDriveFolder;
+        if (parentFolder && parentFolder.type === 'folder') {
+          parentFolder.childrenCount += 1;
+          this.mockData.set(parentId, parentFolder);
+        }
+      }
+      
+      // Update storage usage
+      this.mockStorage.usedSpace += newFile.metadata.size;
+      this.mockStorage.remainingSpace -= newFile.metadata.size;
+      
+      return newFile;
+    } catch (error) {
+      console.error(`Error importing file from Google Drive:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Generate mock data for testing
    */
   private async generateMockData(): Promise<void> {

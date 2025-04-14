@@ -205,6 +205,84 @@ export class GoogleAuthService {
       throw new GoogleAuthError('Failed to sign out');
     }
   }
+
+  /**
+   * Fetch calendars from Google Calendar API
+   */
+  public async fetchCalendars(): Promise<any[]> {
+    const { useMock } = getEnv();
+    
+    if (useMock) {
+      // Return mock calendar data
+      return [
+        {
+          id: 'primary',
+          summary: 'My Calendar',
+          backgroundColor: '#4285F4',
+          primary: true
+        },
+        {
+          id: 'work-calendar',
+          summary: 'Work Calendar',
+          backgroundColor: '#0F9D58',
+          primary: false
+        }
+      ];
+    }
+    
+    try {
+      // Use the GoogleAPIClient to make the request
+      const response = await this.googleApiClient.request<{items?: any[]}>('/calendar/v3/users/me/calendarList', {
+        method: 'GET'
+      });
+      
+      return response?.items || [];
+    } catch (error) {
+      console.error('Error fetching calendars:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch events from Google Calendar API
+   */
+  public async fetchEvents(calendarId: string, timeMin: string, timeMax: string): Promise<any[]> {
+    const { useMock } = getEnv();
+    
+    if (useMock) {
+      // Return mock events data
+      return [
+        {
+          id: 'event1',
+          summary: 'Team Meeting',
+          description: 'Weekly team sync',
+          start: { dateTime: new Date(Date.now() + 3600000).toISOString() },
+          end: { dateTime: new Date(Date.now() + 7200000).toISOString() },
+          location: 'Conference Room A'
+        },
+        {
+          id: 'event2',
+          summary: 'Project Deadline',
+          description: 'Submit final deliverables',
+          start: { date: new Date(Date.now() + 86400000).toISOString().split('T')[0] },
+          end: { date: new Date(Date.now() + 86400000).toISOString().split('T')[0] }
+        }
+      ];
+    }
+    
+    try {
+      // Use the GoogleAPIClient to make the request
+      const url = `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true`;
+      const response = await this.googleApiClient.request<{items?: any[]}>(url, {
+        method: 'GET'
+      });
+      
+      return response?.items || [];
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      return [];
+    }
+  }
 }
 
 // Export the singleton instance
