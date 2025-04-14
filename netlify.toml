@@ -15,10 +15,35 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googletagmanager.com https://*.firebase.googleapis.com https://*.google.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; media-src 'self' data: blob:; connect-src 'self' https://*.genieflowai.com https://*.supabase.co https://*.googleapis.com https://*.google.com https://*.firebaseio.com https://*.firebaseapp.com https://*.firebaseinstallations.googleapis.com https://*.firebase.googleapis.com https://*.firebaselogging.googleapis.com https://*.googletagmanager.com https://*.identitytoolkit.googleapis.com https://*.securetoken.googleapis.com https://*.gmail.googleapis.com https://*.mail.google.com https://*.accounts.google.com; font-src 'self' data:; frame-src 'self' blob: https://*.google.com https://*.firebaseapp.com; frame-ancestors 'none'; form-action 'self' https://*.google.com; object-src 'none';"
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    Content-Security-Policy = """
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://www.google-analytics.com https://www.googletagmanager.com;
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      img-src 'self' data: https: http:;
+      font-src 'self' https://fonts.gstatic.com;
+      connect-src 'self' 
+        https://api.genieflowai.com 
+        https://*.supabase.co 
+        https://generativelanguage.googleapis.com 
+        https://www.googleapis.com 
+        https://oauth2.googleapis.com 
+        https://firebaseinstallations.googleapis.com
+        https://*.firebase.googleapis.com 
+        https://*.firebaseio.com 
+        https://identitytoolkit.googleapis.com 
+        https://securetoken.googleapis.com 
+        wss://*.firebaseio.com;
+      frame-src 'self' https://*.google.com;
+      media-src 'self' https: http:;
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+      frame-ancestors 'none';
+      upgrade-insecure-requests;
+    """
 
 # Environment variables should be set in Netlify UI, not here
 [context.production.environment]
