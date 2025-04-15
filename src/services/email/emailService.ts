@@ -5,50 +5,31 @@
  */
 
 import { getEnv } from '../../config/env';
-import { GoogleAPIClient } from '../google/GoogleAPIClient';
-import googleAuthService from '../auth/googleAuth';
-import { EmailAccount, EmailMessage, EmailOptions } from './types';
+import { googleApiClient } from '../google/GoogleAPIClient';
+import { EmailAccount, EmailMessage, EmailOptions, EmailResponse } from './types';
 
-// Types for email data
-export interface EmailMessage {
-  id: string;
-  threadId: string;
-  subject: string;
-  from: string;
-  to: string;
-  date: string;
-  body: string;
-  snippet: string;
-  labels: string[];
-  attachments: boolean;
-  isRead: boolean;
-  isStarred: boolean;
-  isImportant: boolean;
+// Email service response with typed EmailMessage
+interface EmailServiceResponse {
+  messages: EmailMessage[];
+  nextPageToken?: string | null;
+  resultSizeEstimate: number;
 }
 
-// Email fetch options
-export interface EmailOptions {
+// Email fetch options (augmenting the one from types if needed)
+interface EmailFetchOptions {
   maxResults?: number;
   labelIds?: string[];
   q?: string;
   pageToken?: string;
 }
 
-// Email service response
-export interface EmailResponse {
-  messages: EmailMessage[];
-  nextPageToken?: string | null;
-  resultSizeEstimate: number;
-}
-
 export class EmailService {
   private static instance: EmailService;
-  private googleClient: GoogleAPIClient;
-  private maxResults = 20;
   private initialized = false;
+  private maxResults = 20;
   
   private constructor() {
-    this.googleClient = GoogleAPIClient.getInstance();
+    // Initialize without keeping a reference to GoogleAPIClient
   }
   
   static getInstance(): EmailService {
@@ -67,7 +48,7 @@ export class EmailService {
     const { useMock } = getEnv();
     
     if (!useMock) {
-      await this.googleClient.initialize();
+      await googleApiClient.initialize();
     }
     
     this.initialized = true;
@@ -77,13 +58,13 @@ export class EmailService {
    * Check if user is signed in
    */
   isSignedIn(): boolean {
-    return googleAuthService.isSignedIn();
+    return googleApiClient.isSignedIn();
   }
   
   /**
    * Get emails with pagination
    */
-  async getEmails(options: EmailOptions = {}): Promise<EmailResponse> {
+  async getEmails(options: EmailFetchOptions = {}): Promise<EmailServiceResponse> {
     const { useMock } = getEnv();
     
     console.log('EmailService: Fetching emails with options:', options);
@@ -114,7 +95,7 @@ export class EmailService {
       });
       
       // Get message list
-      const response = await this.googleClient.request<{
+      const response = await googleApiClient.request<{
         messages: { id: string; threadId: string }[];
         nextPageToken?: string;
         resultSizeEstimate: number;
@@ -184,7 +165,7 @@ export class EmailService {
   private async getEmailDetails(id: string): Promise<EmailMessage | null> {
     try {
       // Fetch the full message
-      const message = await this.googleClient.request<any>({
+      const message = await googleApiClient.request<any>({
         path: `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`,
         params: { format: 'full' }
       });
@@ -237,10 +218,9 @@ export class EmailService {
         body,
         snippet: message.snippet || '',
         labels,
-        attachments: hasAttachments,
-        isRead: !labels.includes('UNREAD'),
-        isStarred: labels.includes('STARRED'),
-        isImportant: labels.includes('IMPORTANT')
+        attachments: hasAttachments ? [] : undefined,
+        read: !labels.includes('UNREAD'),
+        starred: labels.includes('STARRED')
       };
     } catch (error) {
       console.error(`Failed to fetch email details for ${id}:`, error);
@@ -290,7 +270,7 @@ export class EmailService {
   /**
    * Get mock emails for development
    */
-  private getMockEmails(options: EmailOptions = {}): EmailResponse {
+  private getMockEmails(options: EmailFetchOptions = {}): EmailServiceResponse {
     const { maxResults = this.maxResults } = options;
     
     const mockEmails: EmailMessage[] = Array.from({ length: maxResults }).map((_, i) => ({
@@ -303,10 +283,8 @@ export class EmailService {
       body: `<p>This is the body of mock email ${i}.</p><p>It contains multiple paragraphs.</p>`,
       snippet: `This is the snippet of mock email ${i}...`,
       labels: ['INBOX', i % 2 === 0 ? 'UNREAD' : ''],
-      attachments: i % 3 === 0,
-      isRead: i % 2 !== 0,
-      isStarred: i % 5 === 0,
-      isImportant: i % 4 === 0
+      read: i % 2 !== 0,
+      starred: i % 5 === 0
     }));
     
     return {
@@ -332,10 +310,8 @@ export class EmailService {
       body: `<p>This is the body of mock email ${index}.</p><p>It contains multiple paragraphs.</p>`,
       snippet: `This is the snippet of mock email ${index}...`,
       labels: ['INBOX', index % 2 === 0 ? 'UNREAD' : ''],
-      attachments: index % 3 === 0,
-      isRead: index % 2 !== 0,
-      isStarred: index % 5 === 0,
-      isImportant: index % 4 === 0
+      read: index % 2 !== 0,
+      starred: index % 5 === 0
     };
   }
 
@@ -346,7 +322,7 @@ export class EmailService {
       return [{
         id: 'mock-account-1',
         email: 'mock@example.com',
-        provider: 'google',
+        provider: 'gmail',
         name: 'Mock Account'
       }];
     }
@@ -357,11 +333,13 @@ export class EmailService {
 
     // Real implementation for getting accounts
     try {
-      const response = await this.googleClient.request<any>('/gmail/v1/users/me/profile');
+      const response = await googleApiClient.request<any>({
+        path: 'https://gmail.googleapis.com/gmail/v1/users/me/profile'
+      });
       return [{
         id: response.emailAddress,
         email: response.emailAddress,
-        provider: 'google',
+        provider: 'gmail',
         name: response.emailAddress.split('@')[0]
       }];
     } catch (error) {

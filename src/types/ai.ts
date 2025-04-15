@@ -7,6 +7,8 @@
 export interface AIDocument {
   id: string;
   content: string;
+  type?: string;  // File type like 'pdf', 'image', etc.
+  title?: string; // Document title
   metadata: {
     source: string;
     title?: string;
