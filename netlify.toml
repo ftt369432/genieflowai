@@ -47,4 +47,24 @@
 
 [build.environment]
   NODE_VERSION = "18"
-  NPM_VERSION = "9" 
+  NPM_VERSION = "9"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# API redirects to Netlify Functions
+[[redirects]]
+  from = "/api/email/*"
+  to = "/.netlify/functions/email/api/email/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/feedback"
+  to = "/.netlify/functions/feedback/api/feedback"
+  status = 200
+
+[[redirects]]
+  from = "/api/train/*"
+  to = "/.netlify/functions/train/api/train/:splat"
+  status = 200 
