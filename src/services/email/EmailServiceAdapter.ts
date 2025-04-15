@@ -13,16 +13,56 @@ import {
   EmailQuery, 
   IMAPConfig,
   EmailFilter,
-  EmailPreferences
+  EmailPreferences,
+  EmailMessage as TypesEmailMessage
 } from './types';
 
 import { 
-  EmailMessage 
+  EmailMessage as ServiceEmailMessage,
+  EmailResponse
 } from './emailService';
 
 import emailService from './emailService';
 import { supabase } from '../../lib/supabase';
 import { useUserStore } from '../../store/userStore';
+import { GoogleAuthService } from '../../services/auth/googleAuth';
+
+// Type conversion helper - converts from emailService.ts EmailMessage to types.ts EmailMessage
+const convertEmailMessageType = (msg: ServiceEmailMessage): TypesEmailMessage => {
+  return {
+    id: msg.id,
+    threadId: msg.threadId,
+    subject: msg.subject,
+    from: msg.from,
+    to: Array.isArray(msg.to) ? msg.to.join(', ') : msg.to || '',
+    date: msg.date,
+    body: msg.body,
+    snippet: msg.snippet,
+    labels: msg.labels,
+    read: msg.isRead,
+    starred: msg.isStarred,
+    attachments: Array.isArray(msg.attachments) ? msg.attachments : []
+  };
+};
+
+// Reverse conversion - converts from types.ts EmailMessage to emailService.ts EmailMessage
+const convertToServiceEmailMessage = (msg: Partial<TypesEmailMessage>): Partial<ServiceEmailMessage> => {
+  return {
+    id: msg.id,
+    threadId: msg.threadId,
+    subject: msg.subject,
+    from: msg.from,
+    to: msg.to,
+    date: msg.date,
+    body: msg.body,
+    snippet: msg.snippet,
+    labels: msg.labels,
+    isRead: msg.read,
+    isStarred: msg.starred,
+    isImportant: msg.labels?.includes('IMPORTANT') || false,
+    attachments: msg.attachments ? true : false
+  };
+};
 
 export class EmailService {
   private static instance: EmailService;
@@ -85,28 +125,32 @@ export class EmailService {
         id: `google-${Date.now()}`,
         provider: 'gmail',
         email: useUserStore.getState().user?.email || 'user@gmail.com',
-        name: useUserStore.getState().user?.fullName || 'Gmail Account',
+        name: useUserStore.getState().user?.name || 'Gmail Account',
         connected: true,
         lastSynced: new Date()
       };
     }
     
-    // Start OAuth flow - fetch authorization URL from API
     try {
-      const response = await fetch('/email/google/auth-url');
-      const data = await response.json();
+      // Use googleAuthService for authentication
+      const googleAuthService = GoogleAuthService.getInstance();
+      await googleAuthService.signIn();
       
-      if (data.url) {
-        console.log('Opening Google authorization URL:', data.url);
-        // Open the authorization URL in a new window/tab
-        window.location.href = data.url;
-        
-        // This is a bit of a hack - we throw here to stop execution since we're redirecting
-        throw new Error('Redirecting to Google for authorization');
-      } else {
-        throw new Error('Failed to get Google authorization URL');
-      }
+      // The above will redirect to Google's auth page, so we won't reach here
+      // This is just a fallback
+      return {
+        id: `google-${Date.now()}`,
+        provider: 'gmail',
+        email: useUserStore.getState().user?.email || 'user@gmail.com',
+        name: useUserStore.getState().user?.name || 'Gmail Account',
+        connected: true,
+        lastSynced: new Date()
+      };
     } catch (error) {
+      if (error instanceof Error && error.message.includes('Redirecting to OAuth provider')) {
+        // This is expected - the OAuth flow is redirecting
+        throw error;
+      }
       console.error('Error initiating Google OAuth:', error);
       throw error;
     }
@@ -118,7 +162,7 @@ export class EmailService {
       id: `imap-${Date.now()}`,
       provider: 'imap',
       email: config.email,
-      name: config.name || config.email,
+      name: config.email, // Using email as name since name doesn't exist on IMAPConfig
       connected: true,
       lastSynced: new Date()
     };
@@ -134,11 +178,11 @@ export class EmailService {
     // Return mock folders
     return {
       folders: [
-        { id: 'inbox', name: 'Inbox', unreadCount: 10 },
-        { id: 'sent', name: 'Sent', unreadCount: 0 },
-        { id: 'drafts', name: 'Drafts', unreadCount: 0 },
-        { id: 'trash', name: 'Trash', unreadCount: 0 },
-        { id: 'spam', name: 'Spam', unreadCount: 5 }
+        { id: 'inbox', name: 'Inbox', type: 'system', unreadCount: 10, totalCount: 25 },
+        { id: 'sent', name: 'Sent', type: 'system', unreadCount: 0, totalCount: 15 },
+        { id: 'drafts', name: 'Drafts', type: 'system', unreadCount: 0, totalCount: 3 },
+        { id: 'trash', name: 'Trash', type: 'system', unreadCount: 0, totalCount: 8 },
+        { id: 'spam', name: 'Spam', type: 'system', unreadCount: 5, totalCount: 12 }
       ]
     };
   }
@@ -147,24 +191,30 @@ export class EmailService {
     // Return mock labels
     return {
       labels: [
-        { id: 'important', name: 'Important', color: 'red' },
-        { id: 'work', name: 'Work', color: 'blue' },
-        { id: 'personal', name: 'Personal', color: 'green' }
+        { id: 'important', name: 'Important', type: 'system', color: { backgroundColor: 'red' } },
+        { id: 'work', name: 'Work', type: 'system', color: { backgroundColor: 'blue' } },
+        { id: 'personal', name: 'Personal', type: 'system', color: { backgroundColor: 'green' } }
       ]
     };
   }
   
   // Message methods
-  async getMessages(accountId: string, query: EmailQuery): Promise<{ messages: EmailMessage[] }> {
+  async getMessages(accountId: string, query: EmailQuery): Promise<{ messages: TypesEmailMessage[] }> {
     // Use our new emailService to get real messages
     try {
       const result = await emailService.getEmails({
-        maxResults: query.limit || 20,
-        labelIds: query.folders || ['INBOX'],
-        q: query.query
+        maxResults: query.pageSize || 20,
+        labelIds: query.folderId ? [query.folderId] : ['INBOX'],
+        q: query.search
       });
       
-      return { messages: result.messages };
+      // Convert the message type - use a regular function to avoid type errors with map
+      const convertedMessages: TypesEmailMessage[] = [];
+      for (const message of result.messages) {
+        convertedMessages.push(convertEmailMessageType(message));
+      }
+      
+      return { messages: convertedMessages };
     } catch (error) {
       console.error('Error getting messages:', error);
       // Return empty array on error
@@ -172,12 +222,17 @@ export class EmailService {
     }
   }
   
-  async getMessage(accountId: string, messageId: string): Promise<{ message: EmailMessage | null }> {
+  async getMessage(accountId: string, messageId: string): Promise<{ message: TypesEmailMessage | null }> {
+    // Use our new emailService to get the message
     try {
       const message = await emailService.getEmail(messageId);
-      return { message };
+      
+      // Convert the message type if it exists
+      const convertedMessage = message ? convertEmailMessageType(message) : null;
+      
+      return { message: convertedMessage };
     } catch (error) {
-      console.error(`Error getting message ${messageId}:`, error);
+      console.error('Error getting message:', error);
       return { message: null };
     }
   }
@@ -207,29 +262,28 @@ export class EmailService {
     console.log(`Deleting message ${messageId}`);
   }
   
-  async sendMessage(accountId: string, message: Partial<EmailMessage>): Promise<void> {
+  async sendMessage(accountId: string, message: Partial<TypesEmailMessage>): Promise<void> {
     console.log(`Sending message from account ${accountId}:`, message);
   }
   
-  async saveDraft(accountId: string, draft: Partial<EmailMessage>): Promise<{ message: EmailMessage }> {
+  async saveDraft(accountId: string, draft: Partial<TypesEmailMessage>): Promise<{ message: TypesEmailMessage }> {
     console.log(`Saving draft in account ${accountId}:`, draft);
     
-    // Return a mock message
+    // Create a mock message
     return {
       message: {
         id: `draft-${Date.now()}`,
         threadId: `thread-${Date.now()}`,
         subject: draft.subject || '(No Subject)',
-        from: 'user@example.com',
+        from: draft.from || 'user@example.com',
         to: draft.to || '',
         date: new Date().toISOString(),
         body: draft.body || '',
         snippet: draft.snippet || '',
         labels: ['DRAFT'],
-        attachments: false,
-        isRead: true,
-        isStarred: false,
-        isImportant: false
+        read: true,
+        starred: false,
+        attachments: []
       }
     };
   }
