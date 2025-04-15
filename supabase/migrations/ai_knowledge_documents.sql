@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS documents (
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   embedding VECTOR(1536),
-  type TEXT NOT NULL DEFAULT 'document', -- document, pdf, text, etc.
-  size INT DEFAULT 0, -- File size in bytes
+  type TEXT NOT NULL DEF
+  - File size in bytes
   file_url TEXT,  -- URL for file storage
   tags TEXT[] DEFAULT '{}',
   metadata JSONB DEFAULT '{}'::JSONB,

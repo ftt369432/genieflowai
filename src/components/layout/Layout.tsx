@@ -45,8 +45,3 @@ export function Layout({ children }: LayoutProps) {
     </div>
   );
 } 
-        </div>
-      </div>
-    </div>
-  );
-} 
