@@ -250,55 +250,22 @@ export class GoogleAuthService {
     const { useMock } = getEnv();
     
     if (useMock) {
-      // Return mock events data with proper structure to prevent parsing errors
-      const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const nextWeek = new Date(today);
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      
+      // Return mock events data
       return [
         {
           id: 'event1',
           summary: 'Team Meeting',
           description: 'Weekly team sync',
-          start: { 
-            dateTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), today.getHours() + 1).toISOString(),
-            date: null
-          },
-          end: { 
-            dateTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), today.getHours() + 2).toISOString(),
-            date: null
-          },
+          start: { dateTime: new Date(Date.now() + 3600000).toISOString() },
+          end: { dateTime: new Date(Date.now() + 7200000).toISOString() },
           location: 'Conference Room A'
         },
         {
           id: 'event2',
           summary: 'Project Deadline',
           description: 'Submit final deliverables',
-          start: { 
-            date: tomorrow.toISOString().split('T')[0],
-            dateTime: null
-          },
-          end: { 
-            date: tomorrow.toISOString().split('T')[0],
-            dateTime: null
-          },
-          location: 'Office'
-        },
-        {
-          id: 'event3',
-          summary: 'Product Launch',
-          description: 'Launch of new product version',
-          start: { 
-            dateTime: nextWeek.toISOString(),
-            date: null
-          },
-          end: { 
-            dateTime: new Date(nextWeek.getTime() + 3600000).toISOString(),
-            date: null
-          },
-          location: 'Main Conference Hall'
+          start: { date: new Date(Date.now() + 86400000).toISOString().split('T')[0] },
+          end: { date: new Date(Date.now() + 86400000).toISOString().split('T')[0] }
         }
       ];
     }

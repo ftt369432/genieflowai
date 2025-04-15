@@ -1,12 +1,19 @@
-import { useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../store';
 import { useNotifications } from './useNotifications';
 import { supabase } from '../lib/supabase';
-import googleAuthService from '../services/auth/googleAuth';
+import { googleApiClient } from '../services/google/GoogleAPIClient';
 import { getEnv } from '../config/env';
 import { useUserStore } from '../stores/userStore';
 import { useSupabase } from '../providers/SupabaseProvider';
+
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
+  avatar?: string;
+}
 
 export function useAuth() {
   const { isAuthenticated, setAuthenticated } = useGlobalStore();
@@ -15,121 +22,153 @@ export function useAuth() {
   const { useMock } = getEnv();
   const clearUser = useUserStore(state => state.clearUser);
   const { clearSession } = useSupabase();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Check authentication status on mount
+  // Initialize authentication state
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setAuthenticated(!!session);
-    };
-    checkAuth();
-  }, [setAuthenticated]);
-
-  const login = useCallback(async (credentials: { email: string; password: string }) => {
-    try {
-      if (useMock) {
-        console.log('Using mock authentication');
-        setAuthenticated(true);
-        showSuccess('Successfully logged in (mock mode)');
-        navigate('/');
-        return;
+    // Get the current session
+    const initAuth = async () => {
+      try {
+        setLoading(true);
+        
+        // Get current session from Supabase
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting auth session:', error);
+          return;
+        }
+        
+        if (session?.user) {
+          // Initialize Google API client
+          await googleApiClient.initialize();
+          
+          // If Google auth is connected, get user info from Google
+          if (googleApiClient.isSignedIn()) {
+            try {
+              const userInfo = await googleApiClient.getUserInfo();
+              setUser({
+                id: session.user.id,
+                email: userInfo.email || session.user.email || '',
+                name: userInfo.name,
+                avatar: userInfo.picture
+              });
+            } catch (error) {
+              console.error('Error getting Google user info:', error);
+              // Fall back to Supabase user data
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.full_name
+              });
+            }
+          } else {
+            // Use Supabase user data
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.full_name
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      // Implement your login logic here
-      setAuthenticated(true);
-      showSuccess('Successfully logged in');
-      navigate('/');
+    initAuth();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          // Initialize Google API client
+          await googleApiClient.initialize();
+          
+          if (googleApiClient.isSignedIn()) {
+            try {
+              const userInfo = await googleApiClient.getUserInfo();
+              setUser({
+                id: session.user.id,
+                email: userInfo.email || session.user.email || '',
+                name: userInfo.name,
+                avatar: userInfo.picture
+              });
+            } catch (error) {
+              console.error('Error getting Google user info:', error);
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.full_name
+              });
+            }
+          } else {
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.full_name
+            });
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Sign in with Google using Supabase Auth
+  const signInWithGoogle = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly',
+          redirectTo: window.location.origin + '/auth/callback'
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
     } catch (error) {
-      showError('Failed to log in');
+      console.error('Google sign-in error:', error);
       throw error;
     }
-  }, [setAuthenticated, showSuccess, showError, navigate, useMock]);
+  };
 
-  const logout = useCallback(async () => {
+  // Sign out
+  const signOut = async () => {
     try {
-      console.log("Logout initiated");
-      
-      if (useMock) {
-        console.log('Using mock logout');
-        
-        // Clear all user stores
-        setAuthenticated(false);
-        clearUser();
-        clearSession();
-        
-        // Clear Supabase session
-        try {
-          localStorage.removeItem('supabase.auth.token');
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('sb-bpczmzsozjlqxercmnyu-auth-token');
-          sessionStorage.removeItem('supabase.auth.token');
-        } catch (e) {
-          console.error('Error clearing local storage:', e);
-        }
-        
-        showSuccess('Successfully logged out (mock mode)');
-        navigate('/login', { replace: true });
-        return;
-      }
-
-      // First sign out from Google Auth Service
-      try {
-        await googleAuthService.signOut();
-        console.log("Google Auth Service sign out completed");
-      } catch (googleError) {
-        console.error("Error signing out from Google Auth Service:", googleError);
-        // Continue with Supabase logout even if Google logout fails
+      // Sign out from Google services
+      if (googleApiClient.isSignedIn()) {
+        await googleApiClient.signOut();
       }
       
-      // Then sign out from Supabase
-      try {
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-          console.error("Supabase sign out error:", error);
-          throw error;
-        }
-        console.log("Supabase sign out completed");
-      } catch (supabaseError) {
-        console.error("Error signing out from Supabase:", supabaseError);
-        // Continue with local cleanup even if Supabase logout fails
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        throw error;
       }
       
-      // Always update local state regardless of service errors
-      console.log("Updating local authentication state");
-      setAuthenticated(false);
-      clearUser();
-      clearSession();
-      
-      // Clear any local storage tokens
-      try {
-        localStorage.removeItem('supabase.auth.token');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('sb-bpczmzsozjlqxercmnyu-auth-token');
-        sessionStorage.removeItem('supabase.auth.token');
-      } catch (e) {
-        console.error('Error clearing local storage:', e);
-      }
-      
-      showSuccess('Successfully logged out');
-      
-      // Always navigate to login page
-      console.log("Navigating to login page");
-      navigate('/login', { replace: true });
+      setUser(null);
     } catch (error) {
-      console.error('Error during logout:', error);
-      showError('Failed to log out completely, but session terminated');
-      
-      // Force logout even on error
-      setAuthenticated(false);
-      clearUser();
-      clearSession();
-      navigate('/login', { replace: true });
+      console.error('Sign out error:', error);
+      throw error;
     }
-  }, [setAuthenticated, clearUser, clearSession, showSuccess, showError, navigate, useMock]);
+  };
 
   return {
-    isAuthenticated,
-    login,
-    logout
+    user,
+    loading,
+    signInWithGoogle,
+    signOut,
+    isAuthenticated: !!user
   };
 }
