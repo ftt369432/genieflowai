@@ -87,3 +87,15 @@ token.json
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Environment files with secrets
+.env
+.env.local
+.env.live
+.env.mock
+.env.server
+.env.*.local
+
+# But allow example files
+!.env.example
+!.env.server.example
