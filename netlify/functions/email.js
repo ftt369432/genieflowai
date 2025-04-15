@@ -2,7 +2,6 @@ import express from 'express';
 import serverless from 'serverless-http';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { google } from 'googleapis';
 import nodemailer from 'nodemailer';
@@ -12,10 +11,6 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Initialize environment variables
 dotenv.config();
-
-// Get current file's directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Create Express app
 const app = express();

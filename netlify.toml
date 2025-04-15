@@ -52,6 +52,12 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+  external_node_modules = ["serverless-http", "express", "cors", "dotenv", "nodemailer", "imap", "mailparser", "googleapis"]
+
+# Configure all functions to use ESM format
+[functions."*"]
+  node_bundler = "esbuild"
+  format = "esm"
 
 # API redirects to Netlify Functions
 [[redirects]]
