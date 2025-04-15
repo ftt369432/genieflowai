@@ -31,19 +31,31 @@ console.log('- Redirect URI:', process.env.GOOGLE_REDIRECT_URI);
 const emailAccounts = [];
 
 /**
- * Generate Google OAuth URL - This API route is used by the server-side flow
- * The front-end should use Supabase Auth for client-side OAuth flow
+ * Generate Google OAuth URL for email access
  */
-router.get('/email/google/auth-url', (req, res) => {
-  const scopes = [
-    'https://mail.google.com/',
-    'https://www.googleapis.com/auth/gmail.modify',
-    'https://www.googleapis.com/auth/gmail.compose',
-    'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/userinfo.profile'
-  ];
-
+router.get('/email/google/auth', (req, res) => {
+  const { VITE_GOOGLE_CLIENT_ID, VITE_GOOGLE_CLIENT_SECRET } = process.env;
+  
+  if (!VITE_GOOGLE_CLIENT_ID || !VITE_GOOGLE_CLIENT_SECRET) {
+    return res.status(500).json({ error: 'Google OAuth credentials not configured' });
+  }
+  
+  // Get the origin to determine the correct redirect URI
+  const origin = req.headers.origin || process.env.FRONTEND_URL;
+  const redirectUri = `${origin}/email/google/callback`;
+  
+  // Import required scopes from our centralized config
+  const { GMAIL_SCOPES } = require('../config/googleAuth');
+  
+  // Set up the OAuth client
+  const oauth2Client = new google.auth.OAuth2(
+    VITE_GOOGLE_CLIENT_ID,
+    VITE_GOOGLE_CLIENT_SECRET,
+    redirectUri
+  );
+  
+  // Generate auth URL with appropriate scopes
+  const scopes = GMAIL_SCOPES;
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
@@ -71,13 +83,32 @@ async function handleGoogleOAuthCallback(req, res) {
   const { code } = req.query;
   
   console.log('Google OAuth callback received with code');
+
+  // Import GoogleAPIClient to handle token management
+  const { GoogleAPIClient } = require('../services/google/GoogleAPIClient');
+  const googleClient = GoogleAPIClient.getInstance();
   
   try {
     console.log('Exchanging code for tokens...');
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
     
-    // Get user info to identify the Gmail account
+    // Set up temporary OAuth client for code exchange
+    const { VITE_GOOGLE_CLIENT_ID, VITE_GOOGLE_CLIENT_SECRET } = process.env;
+    const origin = req.headers.origin || process.env.FRONTEND_URL;
+    const redirectUri = `${origin}/email/google/callback`;
+    
+    const oauth2Client = new google.auth.OAuth2(
+      VITE_GOOGLE_CLIENT_ID,
+      VITE_GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
+    
+    // Exchange code for tokens
+    const { tokens } = await oauth2Client.getToken(code);
+    
+    // Store the access token in GoogleAPIClient for future API requests
+    googleClient.setAccessToken(tokens.access_token);
+    
+    // Get user info using the token
     console.log('Getting user info...');
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfo = await oauth2.userinfo.get();
@@ -116,17 +147,7 @@ async function handleGoogleOAuthCallback(req, res) {
       console.log('Added new email account:', userInfo.data.email);
     }
     
-    // Store the tokens in cookies for frontend access
-    // In production, use secure, httpOnly cookies and proper session management
-    if (process.env.NODE_ENV !== 'production') {
-      res.cookie('gmail_access_token', tokens.access_token, { maxAge: 3600000 });
-      res.cookie('gmail_refresh_token', tokens.refresh_token, { maxAge: 86400000 * 30 });
-      res.cookie('gmail_email', userInfo.data.email, { maxAge: 86400000 * 30 });
-    }
-    
     // Get the origin from the request if available, otherwise use default
-    const origin = req.headers.origin || process.env.FRONTEND_URL;
-    // Support any port in 3000-3003 range as well as existing ports
     const frontendUrl = origin && (
       origin.includes('3000') || 
       origin.includes('3001') || 

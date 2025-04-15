@@ -25,7 +25,8 @@ import {
 import emailService from './emailService';
 import { supabase } from '../../lib/supabase';
 import { useUserStore } from '../../store/userStore';
-import { GoogleAuthService } from '../../services/auth/googleAuth';
+// Import GoogleAPIClient instead of GoogleAuthService for consistent OAuth handling
+import { GoogleAPIClient } from "../google/GoogleAPIClient";
 
 // Type conversion helper - converts from emailService.ts EmailMessage to types.ts EmailMessage
 const convertEmailMessageType = (msg: ServiceEmailMessage): TypesEmailMessage => {
@@ -34,14 +35,14 @@ const convertEmailMessageType = (msg: ServiceEmailMessage): TypesEmailMessage =>
     threadId: msg.threadId,
     subject: msg.subject,
     from: msg.from,
-    to: Array.isArray(msg.to) ? msg.to.join(', ') : msg.to || '',
+    to: typeof msg.to === 'string' ? msg.to : Array.isArray(msg.to) ? msg.to.join(', ') : '',
     date: msg.date,
     body: msg.body,
     snippet: msg.snippet,
-    labels: msg.labels,
-    read: msg.isRead,
-    starred: msg.isStarred,
-    attachments: Array.isArray(msg.attachments) ? msg.attachments : []
+    labels: msg.labels || [],
+    read: msg.isRead || false,
+    starred: msg.isStarred || false,
+    attachments: Array.isArray(msg.attachments) ? msg.attachments : (msg.attachments ? [true] : [])
   };
 };
 
@@ -52,22 +53,25 @@ const convertToServiceEmailMessage = (msg: Partial<TypesEmailMessage>): Partial<
     threadId: msg.threadId,
     subject: msg.subject,
     from: msg.from,
-    to: msg.to,
+    to: msg.to || '',
     date: msg.date,
     body: msg.body,
     snippet: msg.snippet,
-    labels: msg.labels,
-    isRead: msg.read,
-    isStarred: msg.starred,
+    labels: msg.labels || [],
+    isRead: msg.read || false,
+    isStarred: msg.starred || false,
     isImportant: msg.labels?.includes('IMPORTANT') || false,
-    attachments: msg.attachments ? true : false
+    attachments: msg.attachments && msg.attachments.length > 0
   };
 };
 
 export class EmailService {
   private static instance: EmailService;
+  private googleClient: GoogleAPIClient;
   
-  private constructor() {}
+  private constructor() {
+    this.googleClient = GoogleAPIClient.getInstance();
+  }
   
   static getInstance(): EmailService {
     if (!EmailService.instance) {
@@ -80,6 +84,7 @@ export class EmailService {
    * Initialize the email service
    */
   async initialize(): Promise<void> {
+    await this.googleClient.initialize();
     return emailService.initialize();
   }
   
@@ -94,8 +99,8 @@ export class EmailService {
             id: 'gmail-account',
             provider: 'gmail',
             email: session.user.email,
-            name: session.user.user_metadata?.full_name || 'Gmail Account',
-            connected: true,
+            name: session.user.user_metadata?.full_name || session.user.email,
+            connected: this.googleClient.isSignedIn(),
             lastSynced: new Date()
           }
         ];
@@ -118,40 +123,53 @@ export class EmailService {
   }
   
   async addGoogleAccount(code?: string): Promise<EmailAccount> {
-    if (code) {
-      // If we have a code, this is the callback from Google OAuth
-      // Normally, this would exchange the code for tokens, but for now we'll mock it
-      return {
-        id: `google-${Date.now()}`,
-        provider: 'gmail',
-        email: useUserStore.getState().user?.email || 'user@gmail.com',
-        name: useUserStore.getState().user?.name || 'Gmail Account',
-        connected: true,
-        lastSynced: new Date()
-      };
-    }
-    
     try {
-      // Use googleAuthService for authentication
-      const googleAuthService = GoogleAuthService.getInstance();
-      await googleAuthService.signIn();
+      // Initialize the Google API client if not already done
+      await this.googleClient.initialize();
       
-      // The above will redirect to Google's auth page, so we won't reach here
-      // This is just a fallback
-      return {
-        id: `google-${Date.now()}`,
-        provider: 'gmail',
-        email: useUserStore.getState().user?.email || 'user@gmail.com',
-        name: useUserStore.getState().user?.name || 'Gmail Account',
-        connected: true,
-        lastSynced: new Date()
-      };
+      // If we have a token already, use it
+      if (this.googleClient.isSignedIn()) {
+        const userInfo = await this.googleClient.getUserInfo();
+        
+        return {
+          id: `google-${Date.now()}`,
+          provider: 'gmail',
+          email: userInfo.email,
+          name: userInfo.name,
+          connected: true,
+          lastSynced: new Date()
+        };
+      }
+      
+      // If we don't have a code, initiate the OAuth flow via Supabase
+      if (!code) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin + '/email/connect/success',
+            scopes: 'email profile https://mail.google.com/ https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.send'
+          }
+        });
+        
+        if (error) {
+          console.error('Error initiating Google OAuth:', error);
+          throw new Error(`Failed to connect Gmail: ${error.message}`);
+        }
+        
+        // The OAuth flow will redirect to the callback URL
+        throw new Error('Redirecting to Google for authentication...');
+      }
+      
+      // If we have a code but not executing in browser context, this is a backend call
+      throw new Error('Code exchange should be handled by the backend OAuth callback');
     } catch (error) {
-      if (error instanceof Error && error.message.includes('Redirecting to OAuth provider')) {
+      if (error instanceof Error && 
+          (error.message.includes('Redirecting to Google') || 
+           error.message.includes('authentication'))) {
         // This is expected - the OAuth flow is redirecting
         throw error;
       }
-      console.error('Error initiating Google OAuth:', error);
+      console.error('Error adding Google account:', error);
       throw error;
     }
   }
@@ -162,7 +180,7 @@ export class EmailService {
       id: `imap-${Date.now()}`,
       provider: 'imap',
       email: config.email,
-      name: config.email, // Using email as name since name doesn't exist on IMAPConfig
+      name: config.email, // Using email as name since config doesn't have a name field
       connected: true,
       lastSynced: new Date()
     };
@@ -192,8 +210,8 @@ export class EmailService {
     return {
       labels: [
         { id: 'important', name: 'Important', type: 'system', color: { backgroundColor: 'red' } },
-        { id: 'work', name: 'Work', type: 'system', color: { backgroundColor: 'blue' } },
-        { id: 'personal', name: 'Personal', type: 'system', color: { backgroundColor: 'green' } }
+        { id: 'work', name: 'Work', type: 'user', color: { backgroundColor: 'blue' } },
+        { id: 'personal', name: 'Personal', type: 'user', color: { backgroundColor: 'green' } }
       ]
     };
   }

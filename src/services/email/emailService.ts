@@ -6,7 +6,6 @@
 
 import { getEnv } from '../../config/env';
 import { GoogleAPIClient } from '../google/GoogleAPIClient';
-import googleAuthService from '../auth/googleAuth';
 import { EmailAccount, EmailMessage, EmailOptions } from './types';
 
 // Types for email data
@@ -77,7 +76,7 @@ export class EmailService {
    * Check if user is signed in
    */
   isSignedIn(): boolean {
-    return googleAuthService.isSignedIn();
+    return this.googleClient.isSignedIn();
   }
   
   /**
