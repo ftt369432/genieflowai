@@ -31,7 +31,8 @@ console.log('- Redirect URI:', process.env.GOOGLE_REDIRECT_URI);
 const emailAccounts = [];
 
 /**
- * Generate Google OAuth URL
+ * Generate Google OAuth URL - This API route is used by the server-side flow
+ * The front-end should use Supabase Auth for client-side OAuth flow
  */
 router.get('/email/google/auth-url', (req, res) => {
   const scopes = [
@@ -97,8 +98,31 @@ async function handleGoogleOAuthCallback(req, res) {
       createdAt: new Date()
     };
     
-    emailAccounts.push(newAccount);
-    console.log('Added new email account:', userInfo.data.email);
+    // Check if this email already exists in accounts and update it instead
+    const existingIndex = emailAccounts.findIndex(acc => acc.email === userInfo.data.email);
+    if (existingIndex >= 0) {
+      // Update existing account with new tokens
+      emailAccounts[existingIndex] = {
+        ...emailAccounts[existingIndex],
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        connected: true,
+        lastSynced: new Date()
+      };
+      console.log('Updated existing email account:', userInfo.data.email);
+    } else {
+      // Add new account
+      emailAccounts.push(newAccount);
+      console.log('Added new email account:', userInfo.data.email);
+    }
+    
+    // Store the tokens in cookies for frontend access
+    // In production, use secure, httpOnly cookies and proper session management
+    if (process.env.NODE_ENV !== 'production') {
+      res.cookie('gmail_access_token', tokens.access_token, { maxAge: 3600000 });
+      res.cookie('gmail_refresh_token', tokens.refresh_token, { maxAge: 86400000 * 30 });
+      res.cookie('gmail_email', userInfo.data.email, { maxAge: 86400000 * 30 });
+    }
     
     // Get the origin from the request if available, otherwise use default
     const origin = req.headers.origin || process.env.FRONTEND_URL;

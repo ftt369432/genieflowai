@@ -1,3 +1,11 @@
+/**
+ * WARNING: This file uses React Native libraries which are not compatible with web applications.
+ * It should be refactored to use the GoogleAPIClient or removed if not needed.
+ * 
+ * TODO: Remove or refactor this file to use the proper web OAuth flow via GoogleAPIClient
+ * or the Supabase auth integration in googleAuth.ts.
+ */
+
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { google } from 'googleapis';
 import { GOOGLE_CLIENT_ID, GOOGLE_API_KEY } from '../config/config';

@@ -162,7 +162,7 @@ export class GoogleAuthService {
         provider: 'google',
         options: {
           redirectTo: this.getCallbackUrl(),
-          scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly'
+          scopes: 'email profile https://mail.google.com/ https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.send'
         }
       });
 

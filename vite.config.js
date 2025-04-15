@@ -54,6 +54,7 @@ export default defineConfig({
           https://*.supabase.co 
           https://generativelanguage.googleapis.com 
           https://www.googleapis.com 
+          https://gmail.googleapis.com
           https://oauth2.googleapis.com 
           https://firebaseinstallations.googleapis.com
           https://*.firebase.googleapis.com 

@@ -229,23 +229,31 @@ export class GoogleAPIClient {
     }
 
     try {
-      const response = await fetch(`https://www.googleapis.com${endpoint}`, {
+      // Use either googleapis.com or gmail.googleapis.com based on the endpoint
+      const baseUrl = endpoint.includes('/gmail/') 
+        ? 'https://gmail.googleapis.com'
+        : 'https://www.googleapis.com';
+      
+      const response = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
         headers: {
           ...options.headers,
           Authorization: `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
       });
 
       if (response.status === 401) {
         // Token expired, try to refresh and retry the request
+        console.log('Token expired, refreshing...');
         await this.refreshToken();
         return this.request(endpoint, options);
       }
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('API error:', error);
         throw new Error(JSON.stringify(error));
       }
 
