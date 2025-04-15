@@ -1,6 +1,8 @@
 import type { PersonalityProfile } from './personality';
 
-export interface GeniePersonality extends PersonalityProfile {
+// Define GeniePersonality as a standalone interface rather than extending PersonalityProfile
+export interface GeniePersonality {
+  name: string;
   traits: {
     playfulness: number; // 0-1
     wisdom: number; // 0-1
