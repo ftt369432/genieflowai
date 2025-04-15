@@ -1,32 +1,48 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import googleAuthService from '../../services/auth/googleAuth';
+import { useSupabase } from '../../providers/SupabaseProvider';
+import { useUserStore } from '../../stores/userStore';
 
 export function GoogleAuthCallback() {
   const navigate = useNavigate();
   const [status, setStatus] = useState('Processing authentication...');
   const [error, setError] = useState<string | null>(null);
+  const { supabase } = useSupabase();
+  const { setUser } = useUserStore();
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        setStatus('Initializing Google Auth service...');
-        await googleAuthService.initialize();
+        setStatus('Processing authentication...');
         
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-        const authError = urlParams.get('error');
+        // Supabase will automatically handle the auth callback
+        // We just need to get the session and update our stores
+        const { data, error: sessionError } = await supabase.auth.getSession();
         
-        if (authError) {
-          throw new Error(`Google authentication error: ${authError}`);
-        }
-
-        if (!code) {
-          throw new Error('No authorization code found in URL');
+        if (sessionError) {
+          throw new Error(`Session error: ${sessionError.message}`);
         }
         
-        setStatus('Processing authorization code...');
-        await googleAuthService.handleAuthCode(code);
+        if (!data.session) {
+          throw new Error('No session found after authentication');
+        }
+        
+        // Get user info from the session
+        const { user } = data.session;
+        
+        if (!user) {
+          throw new Error('User data not found in session');
+        }
+        
+        // Update user store with authenticated user information
+        setUser({
+          id: user.id,
+          email: user.email || '',
+          fullName: user.user_metadata?.full_name || '',
+          avatar: user.user_metadata?.avatar_url || '',
+          verified: !!user.email_confirmed_at,
+        });
+        
         setStatus('Authentication successful! Redirecting...');
         
         // Wait a moment before redirecting so user can see success message
@@ -47,7 +63,7 @@ export function GoogleAuthCallback() {
     };
 
     handleCallback();
-  }, [navigate]);
+  }, [navigate, supabase, setUser]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
