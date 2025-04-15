@@ -44,10 +44,11 @@ export function getEnv(): EnvironmentConfig {
     ? 'http://localhost:3000'
     : 'https://genieflowai.netlify.app';
 
-  // Set up the auth callback URL
-  const authCallbackUrl = isDevelopment
-    ? `${baseUrl}/auth/callback`
-    : 'https://genieflowai.netlify.app/auth/callback';
+  // Set up the auth callback URL - use the environment variable if available, otherwise use default
+  const authCallbackUrl = import.meta.env.VITE_AUTH_CALLBACK_URL || 
+    (isDevelopment
+      ? `${baseUrl}/auth/callback`
+      : 'https://genieflowai.netlify.app/auth/callback');
 
   // Create the environment config
   environmentConfig = {

@@ -37,6 +37,7 @@ export interface UserProfile {
   subscription: UserSubscription | null;
   // Add connected accounts
   integrations?: IntegrationAccount[];
+  verified?: boolean;
 }
 
 // State interface
