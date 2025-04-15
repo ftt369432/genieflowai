@@ -21,7 +21,9 @@ const EmailConnectSuccess = () => {
           
           try {
             // Try to fetch from the current URL endpoint as a JSON response
-            const response = await fetch(window.location.href);
+            const response = await fetch(window.location.href, {
+              headers: { 'Accept': 'application/json' }
+            });
             
             // Check if we got a valid JSON response
             if (response.ok) {
@@ -39,7 +41,7 @@ const EmailConnectSuccess = () => {
         
         if (!effectiveAccountId) {
           console.error('Account ID is missing in URL params');
-          setError('Account ID is missing. This may be due to an incomplete authentication flow.');
+          setError('Unable to find email account information. This might be due to an incomplete authentication flow or expired session. Please try connecting your email again.');
           setLoading(false);
           return;
         }

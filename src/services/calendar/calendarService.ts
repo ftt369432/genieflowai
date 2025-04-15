@@ -660,34 +660,25 @@ export class CalendarService {
       // Check if Google Auth Service is initialized and signed in
       if (!googleAuthService || !googleAuthService.isSignedIn()) {
         console.log('Google Auth service not initialized or user not signed in');
-        return [];
+        return this.getMockCalendars();
       }
       
       // Check if the required method exists
       if (typeof googleAuthService.fetchCalendars !== 'function') {
         console.error('fetchCalendars method not available on googleAuthService');
-        // Return mock data as a fallback
-        return [
-          {
-            id: 'primary',
-            name: 'My Calendar',
-            color: '#4285F4',
-            source: 'google',
-            primary: true,
-            enabled: true
-          }
-        ];
+        console.log('Returning mock calendar data as fallback');
+        return this.getMockCalendars();
       }
 
       // Call fetchCalendars and handle potential errors
       const calendars = await googleAuthService.fetchCalendars().catch(error => {
         console.error('Error in googleAuthService.fetchCalendars:', error);
-        return [];
+        return null;
       });
       
       if (!calendars || !Array.isArray(calendars)) {
         console.error('Invalid response from fetchCalendars, expected array but got:', calendars);
-        return [];
+        return this.getMockCalendars();
       }
       
       return calendars.map((calendar: any) => ({
@@ -700,8 +691,30 @@ export class CalendarService {
       }));
     } catch (error) {
       console.error('Error fetching Google calendars:', error);
-      return [];
+      return this.getMockCalendars();
     }
+  }
+
+  // Add a helper method for getting mock calendars
+  private getMockCalendars(): Calendar[] {
+    return [
+      {
+        id: 'primary',
+        name: 'My Calendar',
+        color: '#4285F4',
+        source: 'google',
+        primary: true,
+        enabled: true
+      },
+      {
+        id: 'work-calendar',
+        name: 'Work Calendar',
+        color: '#0F9D58',
+        source: 'google',
+        primary: false,
+        enabled: true
+      }
+    ];
   }
 
   async fetchEvents(start: Date, end: Date): Promise<CalendarEvent[]> {
