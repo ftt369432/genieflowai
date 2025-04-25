@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, NavLink } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import { useSidebarStore } from '../../store/sidebarStore';
 import { AutoCollapseToggle } from './AutoCollapseToggle';
@@ -35,7 +35,20 @@ import {
   FolderOpen,
   Table,
   Gavel,
-  Stethoscope
+  Stethoscope,
+  User,
+  Settings,
+  Network,
+  GraduationCap,
+  Briefcase,
+  Cpu,
+  ClipboardList,
+  Calendar,
+  PanelLeft,
+  BarChart,
+  Server,
+  Activity,
+  GitBranch
 } from 'lucide-react';
 import { useAssistantStore } from '../../store/assistantStore';
 
@@ -360,6 +373,16 @@ export function Sidebar({ isCollapsed: propIsCollapsed, onToggle }: SidebarProps
     collapsed ? "w-[70px]" : "w-64"
   );
 
+  const navLinks = [
+    { to: '/', icon: <Home size={20} />, label: 'Dashboard' },
+    { to: '/assistant', icon: <MessageSquare size={20} />, label: 'AI Assistant' },
+    { to: '/agents', icon: <Cpu size={20} />, label: 'Agents' },
+    { to: '/swarm', icon: <Network size={20} />, label: 'Swarm' },
+    { to: '/legal-swarm', icon: <Briefcase size={20} />, label: 'Legal Swarm' },
+    { to: '/profile', icon: <User size={20} />, label: 'Profile' },
+    { to: '/settings', icon: <Settings size={20} />, label: 'Settings' },
+  ];
+
   return (
     <div
       ref={sidebarRef}
@@ -370,12 +393,12 @@ export function Sidebar({ isCollapsed: propIsCollapsed, onToggle }: SidebarProps
         <div className="flex items-center justify-between w-full">
           {!collapsed && (
             <h1 className="text-lg font-semibold flex items-center gap-2">
-              <Zap className="h-5 w-5 text-primary" />
+              <GraduationCap className="h-5 w-5 text-primary" />
               GenieFlow AI
             </h1>
           )}
           {collapsed && (
-            <Zap className="h-5 w-5 mx-auto text-primary" />
+            <GraduationCap className="h-5 w-5 mx-auto text-primary" />
           )}
           <button
             onClick={handleToggleSidebar}
@@ -417,6 +440,15 @@ export function Sidebar({ isCollapsed: propIsCollapsed, onToggle }: SidebarProps
       <div className="mt-auto pt-2 border-t border-border/60">
         <div className={collapsed ? "px-2 py-3" : ""}>
           <AutoCollapseToggle compact={collapsed} />
+        </div>
+      </div>
+
+      <div className="p-4 border-t">
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">
+            <p>GenieFlowAI v1.0.0</p>
+            <p>© 2025 GenieFlow Inc.</p>
+          </div>
         </div>
       </div>
     </div>
