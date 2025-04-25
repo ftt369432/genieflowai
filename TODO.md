@@ -93,3 +93,58 @@
   - [ ] Client-side caching
   - [ ] Mobile optimizations
   - [ ] Advanced animations 
+
+## Swarm System Implementation
+
+- [x] **Agent Swarm Feature**
+  - [x] Complete swarm store (swarmStore.ts) with CRUD operations
+  - [x] Develop component architecture for swarm functionality
+    - [x] Create SwarmCard component
+    - [x] Create SwarmList component
+    - [x] Create SwarmDetail component
+    - [x] Update SwarmPage to use new components
+  - [x] Implement swarm status management (active, inactive, paused)
+  - [x] Add agent selection and role assignment in swarms
+  - [x] Connect swarm components with agent store
+
+- [ ] **Agent Swarm Enhancements**
+  - [ ] Add dynamic swarm metrics
+  - [ ] Implement swarm communication interface
+  - [ ] Add swarm task execution pipeline
+  - [ ] Create swarm log viewer
+  - [ ] Add agent-to-agent messaging within swarms
+
+- [x] **Legal Case Swarm System**
+  - [x] Create specialized legal swarm template
+    - [x] Define specialized roles (Case Coordinator, Legal Researcher, etc.)
+    - [x] Implement role capability requirements
+  - [x] Add legal-specific agent capabilities
+    - [x] Add legal-research capability
+    - [x] Add case-management capability
+    - [x] Add medical-record-analysis capability
+    - [x] Add hearing-preparation capability
+    - [x] Add document-filing capability
+  - [x] Create Legal Swarm Processor
+    - [x] Implement regex pattern parsing for hearing notes
+    - [x] Extract key information (applicant name, hearing status, etc.)
+    - [x] Create action item detection
+  - [x] Implement automatic agent assignment
+    - [x] Create logic to match agent capabilities to case requirements
+    - [x] Build automatic role assignment system
+  - [x] Create Legal Case Input Component
+    - [x] Build UI for case information input
+    - [x] Implement paste detection
+    - [x] Add swarm creation prompt
+  - [x] Create dedicated legal swarm page
+    - [x] Build /legal-swarm route
+    - [x] Implement swarm creation interface
+
+- [ ] **Legal Case Swarm Enhancements**
+  - [ ] Add template library for different case types
+  - [ ] Improve parsing accuracy with ML techniques
+  - [ ] Implement legal document generation
+  - [ ] Create case timeline visualization
+  - [ ] Add integration with legal research databases
+  - [ ] Implement hearing reminder system
+  - [ ] Create legal deadline calculator
+  - [ ] Build document filing workflow management 
