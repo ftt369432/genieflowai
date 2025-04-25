@@ -40,6 +40,7 @@ import { AssistantsPage } from './pages/AssistantsPage';
 import DocumentsPage from './pages/DocumentsPage';
 import { AssistantChat } from './components/assistants/AssistantChat';
 import { useAssistantStore } from './store/assistantStore';
+import LegalSwarmPage from './pages/LegalSwarmPage';
 
 // ProtectedRoute component that redirects to login if user is not authenticated
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -421,6 +422,16 @@ function App() {
         element={
           <ProtectedRoute>
             <AssistantsPage />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Legal Swarm route */}
+      <Route 
+        path="/legal-swarm" 
+        element={
+          <ProtectedRoute>
+            <LegalSwarmPage />
           </ProtectedRoute>
         } 
       />

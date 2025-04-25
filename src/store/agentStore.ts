@@ -1,392 +1,267 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { 
-  Agent, 
-  AgentAction, 
-  AgentFeedback, 
-  AgentStatus, 
-  AutonomyLevel,
-  AgentType,
-  AgentCapability 
-} from '../types/agent';
 import { nanoid } from 'nanoid';
+import { LegalAgentCapability } from '../types/legal';
 
-// Define a sample agent for testing
-const defaultAgent: Agent = {
-  id: '1',
-  name: 'Default AI Assistant',
-  type: 'assistant',
-  description: 'A general purpose AI assistant',
-  status: 'active',
-  autonomyLevel: 'supervised',
-  capabilities: ['natural-language', 'task-management'],
-  config: {
-    id: '1',
-    name: 'Default AI Assistant',
-    type: 'assistant',
-    model: 'gpt-4',
-    temperature: 0.7,
-    maxTokens: 2000,
-    systemPrompt: 'You are a helpful AI assistant.',
-    capabilities: ['natural-language', 'task-management'],
-    autonomyLevel: 'supervised'
-  },
-  metrics: {
-    performance: 85,
-    tasks: {
-      completed: 10,
-      total: 12
-    },
-    responseTime: 1.2,
-    successRate: 0.9,
-    lastUpdated: new Date(),
-    accuracy: 0.85,
-    uptime: 99.9
-  },
-  lastActive: new Date(),
-  performance: 85,
-  tasks: {
-    completed: 10,
-    total: 12
-  }
-};
+export type AgentCapability =
+  | 'text-generation'
+  | 'image-generation'
+  | 'code-generation'
+  | 'data-analysis'
+  | 'summarization'
+  | 'translation'
+  | 'knowledge-base'
+  | 'voice-interface'
+  | 'search'
+  | 'legal-research'
+  | 'case-management'
+  | 'medical-record-analysis'
+  | 'hearing-preparation'
+  | 'document-filing'
+  | 'client-communication'
+  | 'settlement-negotiation'
+  | 'court-appearance-preparation';
 
-interface AgentState {
-  agents: Agent[];
-  actions: AgentAction[];
-  feedback: AgentFeedback[];
-  activeAgents: string[];
-  isLoading: boolean;
-  error: string | null;
-  selectedAgentId: string | undefined;
-  
-  // Basic CRUD
-  setAgents: (agents: Agent[]) => void;
-  addAgent: (agent: Agent) => void;
-  updateAgent: (id: string, updates: Partial<Agent>) => void;
-  removeAgent: (id: string) => void;
-  
-  // Agent Management
-  createAgent: (name: string, type: AgentType, capabilities: AgentCapability[]) => void;
-  deleteAgent: (id: string) => void;
-  
-  // Agent Actions
-  startAction: (agentId: string, type: string, input: any) => Promise<string>;
-  completeAction: (actionId: string, output?: any) => Promise<void>;
-  failAction: (actionId: string, error: string) => Promise<void>;
-  
-  // Feedback
-  submitFeedback: (feedback: Omit<AgentFeedback, 'id' | 'timestamp'>) => Promise<void>;
-  
-  // Agent Status
-  activateAgent: (id: string) => void;
-  deactivateAgent: (id: string) => void;
-  updateAgentStatus: (id: string, status: AgentStatus) => void;
-  updateAutonomyLevel: (id: string, level: AutonomyLevel) => void;
+export type AgentModel = 
+  | 'gpt-4'
+  | 'gpt-3.5-turbo'
+  | 'gemini-pro'
+  | 'claude-3-opus'
+  | 'claude-3-sonnet'
+  | 'llama-3-70b'
+  | 'mistral-large'
+  | 'custom';
 
-  // Agent Operations
-  executeAction: (agentId: string, actionType: string, input: any) => Promise<any>;
-  trainAgent: (agentId: string) => Promise<void>;
-
-  // New methods
-  selectAgent: (id: string | undefined) => void;
-  getAgent: (id: string) => Agent | undefined;
+export interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  avatar?: string;
+  model: AgentModel;
+  capabilities: AgentCapability[];
+  systemPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
+  createdAt: Date;
+  updatedAt?: Date;
+  metadata?: Record<string, any>;
 }
 
-const DEFAULT_AGENTS: Agent[] = [
-  {
-    id: 'research-agent',
-    name: 'Research Assistant',
-    type: 'research',
-    description: 'Helps with research and information gathering',
-    status: 'active',
-    autonomyLevel: 'semi-autonomous',
-    capabilities: ['web-search', 'document-analysis', 'natural-language'],
-    config: {
-      id: 'research-agent',
-      name: 'Research Assistant',
-      type: 'research',
-      model: 'gpt-4',
-      temperature: 0.7,
-      maxTokens: 2000,
-      systemPrompt: 'You are a research assistant focused on gathering and analyzing information.',
-      capabilities: ['web-search', 'document-analysis', 'natural-language'],
-      autonomyLevel: 'semi-autonomous'
-    },
-    metrics: {
-      performance: 0.95,
-      tasks: {
-        completed: 0,
-        total: 0
-      },
-      responseTime: 1200,
-      successRate: 0.95,
-      lastUpdated: new Date(),
-      accuracy: 0.92,
-      uptime: 100
-    },
-    lastActive: new Date(),
-    performance: 0.95,
-    tasks: {
-      completed: 0,
-      total: 0
-    }
-  },
-  {
-    id: 'coding-agent',
-    name: 'Code Assistant',
-    type: 'development',
-    description: 'Helps with coding and development tasks',
-    status: 'idle',
-    autonomyLevel: 'supervised',
-    capabilities: ['code-generation', 'code-review', 'debugging'],
-    config: {
-      id: 'coding-agent',
-      name: 'Code Assistant',
-      type: 'development',
-      model: 'gpt-4',
-      temperature: 0.3,
-      maxTokens: 2000,
-      systemPrompt: 'You are a coding assistant focused on helping with development tasks.',
-      capabilities: ['code-generation', 'code-review', 'debugging'],
-      autonomyLevel: 'supervised'
-    },
-    metrics: {
-      performance: 0.88,
-      tasks: {
-        completed: 0,
-        total: 0
-      },
-      responseTime: 800,
-      successRate: 0.9,
-      lastUpdated: new Date(),
-      accuracy: 0.95,
-      uptime: 100
-    },
-    lastActive: new Date(),
-    performance: 0.88,
-    tasks: {
-      completed: 0,
-      total: 0
-    }
-  }
-];
+interface AgentStore {
+  agents: Agent[];
+  selectedAgentId: string | null;
+  
+  // CRUD operations
+  createAgent: (agent: Omit<Agent, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateAgent: (id: string, updates: Partial<Omit<Agent, 'id' | 'createdAt'>>) => void;
+  deleteAgent: (id: string) => void;
+  getAgentById: (id: string) => Agent | undefined;
+  
+  // Selection
+  selectAgent: (id: string | null) => void;
+  
+  // Capability management
+  addCapability: (id: string, capability: AgentCapability) => void;
+  removeCapability: (id: string, capability: AgentCapability) => void;
+  hasCapability: (id: string, capability: AgentCapability) => boolean;
+  
+  // Filtering
+  getAgentsByCapability: (capability: AgentCapability) => Agent[];
+  getAgentsByCapabilities: (capabilities: AgentCapability[]) => Agent[];
+}
 
-export const useAgentStore = create<AgentState>()(
+export const useAgentStore = create<AgentStore>()(
   persist(
     (set, get) => ({
-      agents: DEFAULT_AGENTS,
-      actions: [],
-      feedback: [],
-      activeAgents: ['research-agent', 'coding-agent'],
-      isLoading: false,
-      error: null,
-      selectedAgentId: undefined,
-
-      setAgents: (agents) => set({ agents }),
+      agents: [
+        // Default agents with legal capabilities
+        {
+          id: 'legal-coordinator',
+          name: 'Legal Coordinator',
+          description: 'Specialized in managing legal cases and coordinating between different agents',
+          avatar: '👨‍⚖️',
+          model: 'claude-3-opus',
+          capabilities: [
+            'case-management',
+            'client-communication',
+            'knowledge-base',
+            'summarization'
+          ],
+          systemPrompt: 'You are a specialized legal case coordinator. Your role is to manage legal cases, coordinate between different agents, and ensure all tasks are completed efficiently.',
+          temperature: 0.3,
+          maxTokens: 2000,
+          createdAt: new Date(),
+        },
+        {
+          id: 'legal-researcher',
+          name: 'Legal Researcher',
+          description: 'Specialized in legal research and case law analysis',
+          avatar: '📚',
+          model: 'claude-3-sonnet',
+          capabilities: [
+            'legal-research',
+            'search',
+            'summarization',
+            'knowledge-base'
+          ],
+          systemPrompt: 'You are a specialized legal researcher. Your role is to conduct in-depth legal research, analyze case law, and provide comprehensive legal insights.',
+          temperature: 0.2,
+          maxTokens: 4000,
+          createdAt: new Date(),
+        },
+        {
+          id: 'medical-analyst',
+          name: 'Medical Evidence Analyst',
+          description: 'Specialized in analyzing medical records and evidence for legal cases',
+          avatar: '🩺',
+          model: 'gpt-4',
+          capabilities: [
+            'medical-record-analysis',
+            'summarization',
+            'data-analysis'
+          ],
+          systemPrompt: 'You are a specialized medical evidence analyst for legal cases. Your role is to analyze medical records, identify key medical evidence, and provide insights for legal proceedings.',
+          temperature: 0.2,
+          maxTokens: 3000,
+          createdAt: new Date(),
+        },
+        {
+          id: 'hearing-prep',
+          name: 'Hearing Specialist',
+          description: 'Specialized in preparing for legal hearings and court appearances',
+          avatar: '🏛️',
+          model: 'gemini-pro',
+          capabilities: [
+            'hearing-preparation',
+            'court-appearance-preparation',
+            'text-generation'
+          ],
+          systemPrompt: 'You are a specialized hearing preparation specialist. Your role is to prepare for legal hearings, draft questions for witnesses, and develop hearing strategies.',
+          temperature: 0.4,
+          maxTokens: 2500,
+          createdAt: new Date(),
+        },
+        {
+          id: 'document-manager',
+          name: 'Document Manager',
+          description: 'Specialized in managing legal documents and filings',
+          avatar: '📄',
+          model: 'claude-3-sonnet',
+          capabilities: [
+            'document-filing',
+            'text-generation',
+            'summarization'
+          ],
+          systemPrompt: 'You are a specialized legal document manager. Your role is to prepare legal documents, manage filings, and ensure all documentation is properly organized.',
+          temperature: 0.3,
+          maxTokens: 2000,
+          createdAt: new Date(),
+        },
+        {
+          id: 'negotiator',
+          name: 'Settlement Negotiator',
+          description: 'Specialized in settlement negotiations and strategy',
+          avatar: '🤝',
+          model: 'claude-3-opus',
+          capabilities: [
+            'settlement-negotiation',
+            'client-communication',
+            'text-generation'
+          ],
+          systemPrompt: 'You are a specialized settlement negotiator. Your role is to develop settlement strategies, analyze offers, and negotiate favorable outcomes.',
+          temperature: 0.5,
+          maxTokens: 3000,
+          createdAt: new Date(),
+        }
+      ],
+      selectedAgentId: null,
       
-      addAgent: (agent) => set((state) => ({ agents: [...state.agents, agent] })),
+      createAgent: (agent) => {
+        const id = nanoid();
+        set((state) => ({
+          agents: [
+            ...state.agents,
+            {
+              ...agent,
+              id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        }));
+        return id;
+      },
       
-      updateAgent: (id, updates) => 
+      updateAgent: (id, updates) => {
         set((state) => ({
           agents: state.agents.map((agent) =>
-            agent.id === id ? { ...agent, ...updates } : agent
+            agent.id === id
+              ? { ...agent, ...updates, updatedAt: new Date() }
+              : agent
           ),
-        })),
-      
-      removeAgent: (id) =>
-        set((state) => ({
-          agents: state.agents.filter((agent) => agent.id !== id),
-          activeAgents: state.activeAgents.filter((agentId) => agentId !== id),
-        })),
-
-      createAgent: (name, type, capabilities) => {
-        const newAgent: Agent = {
-          id: nanoid(),
-          name,
-          type,
-          description: `AI assistant for ${type} tasks`,
-          status: 'idle',
-          autonomyLevel: 'supervised',
-          capabilities,
-          config: {
-            id: nanoid(),
-            name,
-            type,
-            model: 'gpt-4',
-            temperature: 0.7,
-            maxTokens: 2000,
-            systemPrompt: `You are an AI assistant focused on ${type} tasks.`,
-            capabilities,
-            autonomyLevel: 'supervised'
-          },
-          metrics: {
-            performance: 1,
-            tasks: {
-              completed: 0,
-              total: 0
-            },
-            responseTime: 0,
-            successRate: 1,
-            lastUpdated: new Date(),
-            accuracy: 1,
-            uptime: 100
-          },
-          lastActive: new Date(),
-          performance: 1,
-          tasks: {
-            completed: 0,
-            total: 0
-          }
-        };
-        
-        set((state) => ({ agents: [...state.agents, newAgent] }));
+        }));
       },
-
+      
       deleteAgent: (id) => {
         set((state) => ({
           agents: state.agents.filter((agent) => agent.id !== id),
-          activeAgents: state.activeAgents.filter((agentId) => agentId !== id),
-          selectedAgentId: state.selectedAgentId === id ? undefined : state.selectedAgentId
+          selectedAgentId: state.selectedAgentId === id ? null : state.selectedAgentId,
         }));
       },
-
-      startAction: async (agentId, type, input) => {
-        const actionId = crypto.randomUUID();
-        const action: AgentAction = {
-          id: actionId,
-          agentId,
-          type,
-          input,
-          startedAt: new Date(),
-          status: 'pending',
-        };
-        
-        set((state) => ({ actions: [...state.actions, action] }));
-        return actionId;
+      
+      getAgentById: (id) => {
+        return get().agents.find((agent) => agent.id === id);
       },
-
-      completeAction: async (actionId, output) => {
-        set((state) => ({
-          actions: state.actions.map((action) =>
-            action.id === actionId
-              ? { ...action, status: 'completed', output, completedAt: new Date() }
-              : action
-          ),
-        }));
-      },
-
-      failAction: async (actionId, error) => {
-        set((state) => ({
-          actions: state.actions.map((action) =>
-            action.id === actionId
-              ? { ...action, status: 'failed', error, completedAt: new Date() }
-              : action
-          ),
-        }));
-      },
-
-      submitFeedback: async (feedback) => {
-        const newFeedback: AgentFeedback = {
-          ...feedback,
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-        };
-        set((state) => ({ feedback: [...state.feedback, newFeedback] }));
-      },
-
-      activateAgent: (id) => {
-        set((state) => ({
-          agents: state.agents.map((agent) =>
-            agent.id === id ? { ...agent, status: 'active' } : agent
-          ),
-          activeAgents: [...state.activeAgents, id],
-        }));
-      },
-
-      deactivateAgent: (id) => {
-        set((state) => ({
-          agents: state.agents.map((agent) =>
-            agent.id === id ? { ...agent, status: 'inactive' } : agent
-          ),
-          activeAgents: state.activeAgents.filter((agentId) => agentId !== id),
-        }));
-      },
-
-      updateAgentStatus: (id, status) => {
-        set((state) => ({
-          agents: state.agents.map((agent) =>
-            agent.id === id ? { ...agent, status } : agent
-          ),
-        }));
-      },
-
-      updateAutonomyLevel: (id, level) => {
-        set((state) => ({
-          agents: state.agents.map((agent) =>
-            agent.id === id ? { ...agent, autonomyLevel: level } : agent
-          ),
-        }));
-      },
-
-      executeAction: async (agentId, actionType, input) => {
-        const actionId = await get().startAction(agentId, actionType, input);
-        try {
-          // Implement actual action execution logic here
-          // For now, just return a dummy response
-          await get().completeAction(actionId, { result: 'Action executed successfully' });
-          return { success: true, actionId };
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          await get().failAction(actionId, errorMessage);
-          throw error;
-        }
-      },
-
-      trainAgent: async (agentId) => {
-        set((state) => ({
-          agents: state.agents.map((agent) =>
-            agent.id === agentId ? { ...agent, status: 'training' } : agent
-          ),
-        }));
-        
-        try {
-          // Simulate training process
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          set((state) => ({
-            agents: state.agents.map((agent) =>
-              agent.id === agentId ? { 
-                ...agent, 
-                status: 'active',
-                metrics: {
-                  ...agent.metrics,
-                  accuracy: Math.min(agent.metrics.accuracy + 0.05, 1),
-                  performance: Math.min(agent.metrics.performance + 5, 100)
-                }
-              } : agent
-            ),
-          }));
-        } catch (error) {
-          set((state) => ({
-            agents: state.agents.map((agent) =>
-              agent.id === agentId ? { ...agent, status: 'error' } : agent
-            ),
-          }));
-          throw error;
-        }
-      },
-
+      
       selectAgent: (id) => {
         set({ selectedAgentId: id });
       },
-
-      getAgent: (id) => {
-        return get().agents.find(agent => agent.id === id);
-      }
+      
+      addCapability: (id, capability) => {
+        set((state) => ({
+          agents: state.agents.map((agent) =>
+            agent.id === id && !agent.capabilities.includes(capability)
+              ? {
+                  ...agent,
+                  capabilities: [...agent.capabilities, capability],
+                  updatedAt: new Date(),
+                }
+              : agent
+          ),
+        }));
+      },
+      
+      removeCapability: (id, capability) => {
+        set((state) => ({
+          agents: state.agents.map((agent) =>
+            agent.id === id
+              ? {
+                  ...agent,
+                  capabilities: agent.capabilities.filter((c) => c !== capability),
+                  updatedAt: new Date(),
+                }
+              : agent
+          ),
+        }));
+      },
+      
+      hasCapability: (id, capability) => {
+        const agent = get().getAgentById(id);
+        return agent ? agent.capabilities.includes(capability) : false;
+      },
+      
+      getAgentsByCapability: (capability) => {
+        return get().agents.filter((agent) => agent.capabilities.includes(capability));
+      },
+      
+      getAgentsByCapabilities: (capabilities) => {
+        return get().agents.filter((agent) =>
+          capabilities.every((capability) => agent.capabilities.includes(capability))
+        );
+      },
     }),
     {
-      name: 'agent-store',
+      name: 'agent-storage',
     }
   )
 ); 
