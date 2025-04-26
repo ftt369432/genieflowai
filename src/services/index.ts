@@ -1,31 +1,16 @@
 // Auth Services
-export * from './auth/authService';
+export * from './auth';
+export { default as auth } from './auth';
 
-// AI Services
-export * from './ai/aiService';
-export * from './agentService';
-export * from './agentCapabilityService';
-export * from './agentContextService';
-export * from './AgentCreationService';
-export * from './agentErrorHandler';
-export * from './agentEventService';
-export * from './agentLoggingService';
-export * from './agentMetricsService';
-export * from './agentQueueService';
-export * from './agentRateLimiter';
-export * from './agentStateService';
-export * from './agentTimeoutService';
-export * from './agentTrainingService';
-export * from './agentValidationService';
-export * from './aiChatService';
-export * from './aiConfig';
-export * from './documentChatService';
-export * from './embeddingService';
-export * from './gemini';
-export * from './GenieAssistant';
-export * from './GenieMagicService';
-export * from './openai';
-export * from './AIAssistantService';
+// Core services
+export { aiService, taskService, calendarService, workflowOrchestrator, aiAssistantService } from './core/initializeServices';
+export { AgentCreationService } from './AgentCreationService';
+export { AIAssistantService } from './AIAssistantService';
+
+// AI services - consolidated
+export { geminiSimplifiedService } from './gemini-simplified';
+export { AIServiceFactory } from './ai/aiServiceFactory';
+export { BaseAIService } from './ai/baseAIService';
 
 // Email Services
 export * from './email';
@@ -47,4 +32,13 @@ export * from './searchService';
 export * from './userService';
 export * from './VoiceControl';
 export * from './WorkflowLearner';
-export * from './WorkflowOrchestrator'; 
+export * from './WorkflowOrchestrator';
+
+// Keep specialized AI utilities
+export { chatWithDocuments, chatWithAssistant } from './documentChatService';
+export { getEmbedding, searchDocuments } from './embeddingService';
+
+// Application services
+export { searchWeb } from './searchService';
+export { MorningRoutineService } from './MorningRoutineService';
+export { VoiceControl } from './VoiceControl'; 

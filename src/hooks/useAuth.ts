@@ -1,174 +1,174 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useGlobalStore } from '../store';
-import { useNotifications } from './useNotifications';
-import { supabase } from '../lib/supabase';
-import { googleApiClient } from '../services/google/GoogleAPIClient';
-import { getEnv } from '../config/env';
+import { useState, useCallback } from 'react';
 import { useUserStore } from '../stores/userStore';
 import { useSupabase } from '../providers/SupabaseProvider';
+import auth, { 
+  LoginCredentials, 
+  RegisterData, 
+  AuthResponse, 
+  AuthError,
+  AUTH_ERROR_CODES 
+} from '../services/auth';
 
-export interface User {
-  id: string;
-  email: string;
-  name?: string;
-  avatar?: string;
-}
+/**
+ * Authentication hook that provides a unified interface for all auth functions
+ * Uses the consolidated auth service and connects it with user store
+ */
+export const useAuth = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Access user store for state management
+  const { 
+    setUser, 
+    clearUser, 
+    isAuthenticated, 
+    user, 
+    setAuthToken,
+    updateProfile,
+    syncWithGoogleProfile 
+  } = useUserStore();
+  
+  // Access Supabase provider
+  const { setMockUser, clearSession } = useSupabase();
 
-export function useAuth() {
-  const { isAuthenticated, setAuthenticated } = useGlobalStore();
-  const { showSuccess, showError } = useNotifications();
-  const navigate = useNavigate();
-  const { useMock } = getEnv();
-  const clearUser = useUserStore(state => state.clearUser);
-  const { clearSession } = useSupabase();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Initialize authentication state
-  useEffect(() => {
-    // Get the current session
-    const initAuth = async () => {
-      try {
-        setLoading(true);
-        
-        // Get current session from Supabase
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting auth session:', error);
-          return;
-        }
-        
-        if (session?.user) {
-          // Initialize Google API client
-          await googleApiClient.initialize();
-          
-          // If Google auth is connected, get user info from Google
-          if (googleApiClient.isSignedIn()) {
-            try {
-              const userInfo = await googleApiClient.getUserInfo();
-              setUser({
-                id: session.user.id,
-                email: userInfo.email || session.user.email || '',
-                name: userInfo.name,
-                avatar: userInfo.picture
-              });
-            } catch (error) {
-              console.error('Error getting Google user info:', error);
-              // Fall back to Supabase user data
-              setUser({
-                id: session.user.id,
-                email: session.user.email || '',
-                name: session.user.user_metadata?.full_name
-              });
-            }
-          } else {
-            // Use Supabase user data
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.full_name
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-      } finally {
+  /**
+   * Login with email and password
+   */
+  const login = useCallback(async (credentials: LoginCredentials): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await auth.login(credentials);
+      
+      if (response.error) {
+        setError(response.error.message);
         setLoading(false);
-      }
-    };
-
-    initAuth();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          // Initialize Google API client
-          await googleApiClient.initialize();
-          
-          if (googleApiClient.isSignedIn()) {
-            try {
-              const userInfo = await googleApiClient.getUserInfo();
-              setUser({
-                id: session.user.id,
-                email: userInfo.email || session.user.email || '',
-                name: userInfo.name,
-                avatar: userInfo.picture
-              });
-            } catch (error) {
-              console.error('Error getting Google user info:', error);
-              setUser({
-                id: session.user.id,
-                email: session.user.email || '',
-                name: session.user.user_metadata?.full_name
-              });
-            }
-          } else {
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.full_name
-            });
-          }
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-        }
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // Sign in with Google using Supabase Auth
-  const signInWithGoogle = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly',
-          redirectTo: window.location.origin + '/auth/callback'
-        }
-      });
-
-      if (error) {
-        throw error;
-      }
-    } catch (error) {
-      console.error('Google sign-in error:', error);
-      throw error;
-    }
-  };
-
-  // Sign out
-  const signOut = async () => {
-    try {
-      // Sign out from Google services
-      if (googleApiClient.isSignedIn()) {
-        await googleApiClient.signOut();
+        return false;
       }
       
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        throw error;
+      if (response.user) {
+        // Get user profile data
+        const userData = {
+          id: response.user.id,
+          email: response.user.email || credentials.email,
+          fullName: response.user.user_metadata?.full_name || credentials.email.split('@')[0],
+          avatar: response.user.user_metadata?.avatar_url
+        };
+        
+        // Set authentication state
+        setUser({
+          ...userData,
+          subscription: null // Will be loaded separately
+        });
+        
+        setLoading(false);
+        return true;
       }
       
-      setUser(null);
-    } catch (error) {
-      console.error('Sign out error:', error);
-      throw error;
+      setLoading(false);
+      return false;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      setError(errorMessage);
+      setLoading(false);
+      return false;
     }
-  };
+  }, [setUser, setError]);
+
+  /**
+   * Register a new user
+   */
+  const register = useCallback(async (data: RegisterData): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await auth.register(data);
+      
+      if (response.error) {
+        setError(response.error.message);
+        setLoading(false);
+        return false;
+      }
+      
+      // Automatically log in after registration
+      if (response.user) {
+        // Success - user is registered, but may need to confirm email
+        setLoading(false);
+        return true;
+      }
+      
+      setLoading(false);
+      return false;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      setError(errorMessage);
+      setLoading(false);
+      return false;
+    }
+  }, [setError]);
+
+  /**
+   * Logout current user
+   */
+  const logout = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    
+    try {
+      await auth.logout();
+      clearUser();
+      clearSession();
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [clearUser, clearSession]);
+
+  /**
+   * Login with Google
+   */
+  const loginWithGoogle = useCallback(async (): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Initiate Google sign in
+      await auth.google.signIn();
+      
+      // Sync with Google profile (if successful)
+      await syncWithGoogleProfile();
+      
+      setLoading(false);
+      return true;
+    } catch (err) {
+      // Ignore errors related to redirection
+      if (err instanceof Error && err.message.includes('Redirecting')) {
+        // This is normal - we're being redirected to Google auth
+        setLoading(false);
+        return false;
+      }
+      
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      setError(errorMessage);
+      setLoading(false);
+      return false;
+    }
+  }, [syncWithGoogleProfile]);
 
   return {
     user,
     loading,
-    signInWithGoogle,
-    signOut,
-    isAuthenticated: !!user
+    error,
+    isAuthenticated,
+    login,
+    loginWithGoogle,
+    register,
+    logout,
+    updateProfile,
+    auth // Expose the entire auth service for advanced usage
   };
-}
+};
+
+export default useAuth;
