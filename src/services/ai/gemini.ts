@@ -1,22 +1,21 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { BaseAIService } from './baseAIService';
-import type { Message, AIModel } from '../../types/ai';
+import { AIService } from './aiServiceFactory';
+import type { Message } from '../../types/ai';
 import { getEnv } from '../../config/env';
-import { ResponseWithSources, Source } from '../AIService';
-import { Task } from '../../types/task';
-import { Event } from '../../types/calendar';
 
-export class GeminiService extends BaseAIService {
+export class GeminiService implements AIService {
   private client: GoogleGenerativeAI;
   private defaultModel: string;
 
   constructor() {
     try {
       console.log('Initializing GeminiService...');
-      super('google');
-      console.log('BaseAIService initialized successfully');
       
-      const apiKey = this.getApiKey('google');
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error('Gemini API key not found in environment variables');
+      }
+      
       console.log('Got API key successfully');
       
       this.client = new GoogleGenerativeAI(apiKey);
@@ -24,12 +23,6 @@ export class GeminiService extends BaseAIService {
       
       // Get the configured Gemini model from environment, or fallback to gemini-2.0-flash
       const env = getEnv();
-      console.log('Environment config:', { 
-        model: env.model, 
-        aiProvider: env.aiProvider,
-        hasGeminiApiKey: env.hasGeminiApiKey
-      });
-      
       this.defaultModel = env.model || 'gemini-2.0-flash';
       
       console.log(`Initialized Gemini service with model: ${this.defaultModel}`);
@@ -39,108 +32,82 @@ export class GeminiService extends BaseAIService {
     }
   }
 
-  async sendMessage(message: Message): Promise<Message> {
+  /**
+   * Generate text from a prompt
+   */
+  async generateText(prompt: string): Promise<string> {
     try {
       const model = this.client.getGenerativeModel({ 
         model: this.defaultModel
-      });
-      
-      const result = await model.generateContent(message.content);
-      const response = await result.response;
-      const responseText = response.text();
-      
-      // Return a message object
-      return {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: responseText,
-        timestamp: new Date(),
-        metadata: {
-          model: this.defaultModel,
-          provider: 'google'
-        }
-      };
-    } catch (error) {
-      console.error('Error in Gemini sendMessage:', error);
-      throw error;
-    }
-  }
-
-  async generateResponse(messages: Message[]): Promise<string> {
-    try {
-      // Take the last message from the array
-      const lastMessage = messages[messages.length - 1];
-      const model = this.client.getGenerativeModel({ 
-        model: this.defaultModel
-      });
-      
-      const result = await model.generateContent(lastMessage.content);
-      const response = await result.response;
-      return response.text();
-    } catch (error) {
-      console.error('Error in Gemini generateResponse:', error);
-      return this.handleError(error, 'Gemini');
-    }
-  }
-
-  async getCompletion(prompt: string, options?: {
-    maxTokens?: number;
-    temperature?: number;
-    stopSequences?: string[];
-  }): Promise<string> {
-    try {
-      const model = this.client.getGenerativeModel({ 
-        model: this.defaultModel,
-        generationConfig: {
-          maxOutputTokens: options?.maxTokens,
-          temperature: options?.temperature || 0.7,
-          stopSequences: options?.stopSequences
-        }
       });
       
       const result = await model.generateContent(prompt);
       const response = await result.response;
       return response.text();
     } catch (error) {
-      return this.handleError(error, 'Gemini');
+      console.error('Error in Gemini generateText:', error);
+      return this.handleError(error);
     }
   }
 
-  async getEmbedding(text: string): Promise<number[]> {
+  /**
+   * Generate a chat response from a series of messages
+   */
+  async generateChatResponse(messages: any[]): Promise<string> {
     try {
-      // The GoogleGenerativeAI embedding API might be different
-      // For now, we'll return a mock embedding
-      console.warn('Gemini embedding is not fully implemented - returning mock data');
+      // Format messages in a way Gemini can understand
+      const formattedContent = this.formatMessagesForGemini(messages);
       
-      // Generate a deterministic mock embedding based on the input text
-      const mockEmbedding = new Array(128).fill(0).map((_, i) => {
-        // Use a simple hash of the text + position to get a consistent value
-        const hashCode = (text.charCodeAt(Math.min(i, text.length - 1)) + i) / 255;
-        return Math.sin(hashCode) * 0.5 + 0.5; // Value between 0 and 1
+      const model = this.client.getGenerativeModel({ 
+        model: this.defaultModel
       });
       
-      return mockEmbedding;
+      const result = await model.generateContent(formattedContent);
+      const response = await result.response;
+      return response.text();
     } catch (error) {
-      return this.handleError(error, 'Gemini Embedding');
+      console.error('Error in Gemini generateChatResponse:', error);
+      return this.handleError(error);
     }
   }
 
-  async testConnection(): Promise<boolean> {
+  /**
+   * Create embeddings from text
+   */
+  async createEmbedding(text: string): Promise<number[]> {
     try {
-      const testMessage: Message = {
-        id: '1',
-        role: 'user',
-        content: 'Hello, this is a test message',
-        timestamp: new Date()
-      };
-      
-      await this.sendMessage(testMessage);
-      return true;
+      // Use the embedding model
+      const model = this.client.getGenerativeModel({
+        model: 'embedding-001',
+      });
+  
+      const result = await model.embedContent(text);
+      const embedding = result.embedding.values;
+      return embedding;
     } catch (error) {
-      console.error('Connection test failed:', error);
-      return false;
+      console.error('Error in Gemini createEmbedding:', error);
+      return this.handleError(error);
     }
   }
-}
 
-export const geminiService = new GeminiService(); 
+  /**
+   * Format messages for Gemini
+   */
+  private formatMessagesForGemini(messages: any[]): string {
+    // For simple implementation, just convert to a conversation format
+    return messages.map(msg => {
+      const role = typeof msg === 'string' ? 'user' : (msg.role || 'user');
+      const content = typeof msg === 'string' ? msg : (msg.content || '');
+      return `${role === 'user' ? 'Human' : 'Assistant'}: ${content}`;
+    }).join('\n\n') + '\n\nAssistant:';
+  }
+
+  /**
+   * Handle errors
+   */
+  private handleError(error: any): string {
+    const errorMessage = error?.message || 'Unknown error';
+    console.error('Gemini service error:', errorMessage);
+    return `I encountered an error processing your request. Please try again later. (Error: ${errorMessage})`;
+  }
+} 

@@ -1,36 +1,39 @@
 import React from 'react';
-import { Prism as PrismHighlighter } from 'react-syntax-highlighter';
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import Prism from 'react-syntax-highlighter/dist/cjs/prism';
 
 interface SyntaxHighlighterProps {
-  code: string;
   language?: string;
+  children: string;
   showLineNumbers?: boolean;
-  wrapLines?: boolean;
+  className?: string;
 }
 
 export function SyntaxHighlighter({
-  code,
   language = 'javascript',
+  children,
   showLineNumbers = true,
-  wrapLines = true
+  className,
 }: SyntaxHighlighterProps) {
+  // Extract language from className if provided (e.g. "language-typescript")
+  if (className && className.startsWith('language-')) {
+    language = className.replace('language-', '');
+  }
+  
   return (
-    <PrismHighlighter
-      language={language}
-      style={oneLight}
-      showLineNumbers={showLineNumbers}
-      wrapLines={wrapLines}
-      customStyle={{
-        margin: 0,
-        padding: '1rem',
-        borderRadius: 0,
-        fontSize: '0.875rem',
-        height: '100%',
-        overflow: 'auto'
-      }}
-    >
-      {code}
-    </PrismHighlighter>
+    <div className="overflow-hidden rounded-md border">
+      <Prism
+        language={language}
+        style={oneLight}
+        showLineNumbers={showLineNumbers}
+        customStyle={{
+          margin: 0,
+          fontSize: '0.9rem',
+          lineHeight: '1.5',
+        }}
+      >
+        {children.trim()}
+      </Prism>
+    </div>
   );
 } 
