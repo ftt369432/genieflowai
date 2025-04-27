@@ -34,6 +34,9 @@ export function AIAssistant({ mode = 'chat' }: AIAssistantProps) {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    console.log('Submitting message:', input);
+    console.log('Current mode:', mode);
+
     const userMessage: Message = {
       id: Date.now().toString(),
       content: input,
@@ -46,17 +49,30 @@ export function AIAssistant({ mode = 'chat' }: AIAssistantProps) {
     setIsLoading(true);
 
     try {
+      console.log('Calling sendMessage...');
       const response = await sendMessage(input, mode);
+      console.log('Response received:', response);
+      
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response,
         role: 'assistant',
         timestamp: new Date()
       };
+      
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
-      // Handle error appropriately
+      
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `Error: ${error instanceof Error ? error.message : 'An unknown error occurred'}`,
+        role: 'assistant',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }

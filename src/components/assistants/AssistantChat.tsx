@@ -1,189 +1,378 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AIAssistant, Message } from '../../types/ai';
+import { useAssistantStore } from '../../store/assistantStore';
+import { useKnowledgeBaseStore } from '../../store/knowledgeBaseStore';
+import { AIAssistant } from '../../types/ai';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Card } from '../ui/Card';
-import { Send, ArrowLeft, Book, Loader2 } from 'lucide-react';
-import { chatWithAssistant } from '../../services/documentChatService';
+import { Textarea } from '../ui/Textarea';
+import { Send, Sparkles, Bot, User, ChevronDown } from 'lucide-react';
+import { AIService } from '../../services/ai/aiService';
+import { useAIService } from '../../services/ai/aiServiceWrapper';
+import { searchDocuments } from '../../services/embeddingService';
+import { nanoid } from 'nanoid';
+import { useSupabase } from '../../providers/SupabaseProvider';
+
+// Enhanced Message interface
+interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: Date;
+  error?: boolean;
+}
 
 interface AssistantChatProps {
   assistant: AIAssistant;
-  onBack?: () => void;
 }
 
-export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function AssistantChat({ assistant }: AssistantChatProps) {
   const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sources, setSources] = useState<any[]>([]);
-  const messageEndRef = useRef<HTMLDivElement>(null);
-  
-  // Initial message from the assistant
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const aiService = useAIService();
+  const { getAssistantFolders } = useAssistantStore();
+  const { documents } = useKnowledgeBaseStore();
+
+  // Scroll to bottom on new messages
   useEffect(() => {
-    setMessages([
-      {
-        id: 'welcome',
-        role: 'assistant',
-        content: `Hello! I'm ${assistant.name}. ${assistant.description || ''} How can I help you today?`,
-        timestamp: new Date()
-      }
-    ]);
-  }, [assistant]);
-  
-  // Scroll to bottom of chat when messages change
-  useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollToBottom();
   }, [messages]);
-  
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-    
-    // Add user message to chat
+
+  // Focus input on load
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, []);
+
+  // Reset messages when assistant changes
+  useEffect(() => {
+    setMessages([]);
+  }, [assistant.id]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (input.trim() === '' || isLoading) return;
+
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: nanoid(),
       role: 'user',
-      content: input,
+      content: input.trim(),
       timestamp: new Date()
     };
-    
+
+    // Update messages with user input
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
-    
+
     try {
-      // Get response from the assistant using the chatWithAssistant service
-      const result = await chatWithAssistant(
-        assistant,
-        input,
-        messages.filter(m => m.id !== 'welcome') // Filter out welcome message from context
-      );
+      // Create a placeholder for the assistant's response
+      const assistantMessageId = nanoid();
+      setStreamingMessageId(assistantMessageId);
       
-      // Add assistant's response to the chat
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: assistantMessageId,
         role: 'assistant',
-        content: result.message,
+        content: '',
         timestamp: new Date()
       };
       
+      // Add the initial empty message that will be streamed to
       setMessages(prev => [...prev, assistantMessage]);
+      setIsStreaming(true);
+
+      // Get relevant context from knowledge base
+      const folderIds = getAssistantFolders(assistant.id);
+      const relevantDocuments = folderIds.length > 0
+        ? (await searchRelevantDocuments(userMessage.content, folderIds))
+        : [];
       
-      // Update document sources
-      if (result.relevantDocuments && result.relevantDocuments.length > 0) {
-        setSources(result.relevantDocuments);
-      }
+      // Prepare the messages for the AI service - include current user message
+      // Use a copy of the messages array before adding the empty assistant message
+      const currentMessages = [...messages, userMessage];
+      const historyMessages = formatMessagesForAPI(currentMessages, relevantDocuments);
+      
+      // Log messages to debug
+      console.log('Sending messages to AI:', historyMessages);
+      
+      // Stream the response
+      let responseText = '';
+      await aiService.streamChatCompletion(
+        historyMessages,
+        {
+          temperature: assistant.settings?.temperature || 0.7,
+          maxTokens: assistant.settings?.maxTokens || 2000,
+          frequencyPenalty: assistant.settings?.frequencyPenalty || 0,
+          presencePenalty: assistant.settings?.presencePenalty || 0
+        },
+        (chunk) => {
+          responseText += chunk;
+          
+          // Update the streaming message with each chunk
+          setMessages(prev => {
+            const updatedMessages = [...prev];
+            const assistantMessageIndex = updatedMessages.findIndex(
+              msg => msg.id === assistantMessageId
+            );
+            
+            if (assistantMessageIndex !== -1) {
+              updatedMessages[assistantMessageIndex] = {
+                ...updatedMessages[assistantMessageIndex],
+                content: responseText
+              };
+            }
+            
+            return updatedMessages;
+          });
+        }
+      );
+      
+      // Final update once streaming is complete
+      setMessages(prev => {
+        const updatedMessages = [...prev];
+        const assistantMessageIndex = updatedMessages.findIndex(
+          msg => msg.id === assistantMessageId
+        );
+        
+        if (assistantMessageIndex !== -1) {
+          updatedMessages[assistantMessageIndex] = {
+            ...updatedMessages[assistantMessageIndex],
+            content: responseText
+          };
+        }
+        
+        return updatedMessages;
+      });
+      
     } catch (error) {
-      console.error('Error getting assistant response:', error);
-      // Add error message to chat
+      console.error('Error generating response:', error);
+      
+      // Add error message
       setMessages(prev => [
         ...prev,
         {
-          id: (Date.now() + 1).toString(),
+          id: nanoid(),
           role: 'assistant',
-          content: 'Sorry, I encountered an error while processing your request.',
-          timestamp: new Date()
+          content: 'I encountered an error while generating a response. Please try again.',
+          timestamp: new Date(),
+          error: true
         }
       ]);
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
+      setStreamingMessageId(null);
     }
   };
-  
+
+  // Format messages for the AI API
+  const formatMessagesForAPI = (messageHistory: Message[], relevantDocs: string[]) => {
+    const apiMessages = [];
+    
+    // Add system prompt with context from relevant documents
+    let systemPrompt = assistant.systemPrompt || 'You are a helpful AI assistant.';
+    
+    if (relevantDocs.length > 0) {
+      systemPrompt += '\n\nRelevant information from knowledge base:\n' + 
+                      relevantDocs.join('\n\n');
+    }
+    
+    apiMessages.push({
+      role: 'system',
+      content: systemPrompt
+    });
+    
+    // Add conversation history
+    messageHistory.forEach(message => {
+      if (message.role === 'user' || message.role === 'assistant') {
+        apiMessages.push({
+          role: message.role,
+          content: message.content
+        });
+      }
+    });
+    
+    // Make sure we have at least one user message
+    if (!apiMessages.some(msg => msg.role === 'user')) {
+      // Add a default user message if none exists
+      apiMessages.push({
+        role: 'user',
+        content: 'Hello, I need some help.'
+      });
+    }
+    
+    console.log('API Messages:', apiMessages);
+    
+    return apiMessages;
+  };
+
+  // Search for relevant documents in the knowledge base
+  const searchRelevantDocuments = async (query: string, folderIds: string[]): Promise<string[]> => {
+    try {
+      // Filter documents by folder IDs
+      const folderDocuments = documents.filter(doc => 
+        doc.folderId && folderIds.includes(doc.folderId)
+      );
+      
+      if (folderDocuments.length === 0) return [];
+      
+      // Search for relevant documents
+      const results = await searchDocuments(query, folderDocuments, 3);
+      
+      // Format results for context
+      return results.map(result => {
+        const doc = result.document;
+        return `DOCUMENT: ${doc.title}\nCONTENT: ${doc.content}\nSIMILARITY: ${result.similarity.toFixed(2)}`;
+      });
+    } catch (error) {
+      console.error('Error searching documents:', error);
+      return [];
+    }
+  };
+
+  // Format message content with line breaks
+  const formatMessageContent = (content: string) => {
+    return content.split('\n').map((line, i) => (
+      <React.Fragment key={i}>
+        {line}
+        <br />
+      </React.Fragment>
+    ));
+  };
+
   return (
-    <div className="flex h-full">
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="border-b p-4 flex items-center gap-3">
-          {onBack && (
-            <Button variant="ghost" size="sm" onClick={onBack} className="h-8 w-8 p-0">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          )}
-          <h2 className="text-xl font-semibold">{assistant.name}</h2>
-          {assistant.description && (
-            <p className="text-muted-foreground text-sm">{assistant.description}</p>
-          )}
-        </div>
-        
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map(message => (
+    <div className="flex flex-col h-full pb-5">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500">
+            <Bot size={48} className="mb-4 opacity-50" />
+            <h3 className="text-xl font-semibold mb-2">Start a conversation</h3>
+            <p className="text-sm text-center max-w-md mb-6">
+              {assistant.description || "I'm ready to assist you. Send a message to begin."}
+            </p>
+            
+            {/* Conversation starters */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full max-w-md">
+              {[
+                "Tell me about my legal rights in this situation...",
+                "Review this contract clause for potential issues...",
+                "Help me draft a response to this legal matter...",
+                "What are the key considerations for this case?",
+              ].map((starter, i) => (
+                <button
+                  key={i}
+                  className="p-2 text-sm text-left border rounded-lg hover:bg-muted transition-colors"
+                  onClick={() => {
+                    setInput(starter);
+                    if (inputRef.current) {
+                      inputRef.current.focus();
+                    }
+                  }}
+                >
+                  {starter}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          messages.map((message) => (
             <div
               key={message.id}
-              className={`flex ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
+              className={`flex items-start gap-3 rounded-lg p-4 ${
+                message.role === 'user'
+                  ? 'bg-primary text-primary-foreground ml-12'
+                  : 'bg-muted mr-12'
+              } ${message.error ? 'border border-red-500' : ''}`}
             >
-              <div
-                className={`max-w-[80%] rounded-lg p-3 ${
-                  message.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
-                }`}
-              >
-                <p className="whitespace-pre-wrap">{message.content}</p>
-                <div className="text-xs opacity-70 mt-1">
-                  {message.timestamp.toLocaleTimeString()}
+              <div className="flex-shrink-0 mt-1">
+                {message.role === 'user' ? (
+                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
+                    <User size={16} className="text-white" />
+                  </div>
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                    <Bot size={16} className="text-gray-700 dark:text-gray-200" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex justify-between items-center">
+                  <div className="font-medium">
+                    {message.role === 'user' ? 'You' : assistant.name}
+                  </div>
+                  <div className="text-xs opacity-70">
+                    {message.timestamp.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </div>
+                <div className={`${streamingMessageId === message.id ? 'streaming-message' : ''}`}>
+                  {formatMessageContent(message.content)}
+                  {streamingMessageId === message.id && (
+                    <span className="cursor-blink">▋</span>
+                  )}
                 </div>
               </div>
             </div>
-          ))}
-          
-          {/* Show typing indicator when loading */}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-muted rounded-lg p-3 flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Thinking...</span>
-              </div>
-            </div>
-          )}
-          
-          {/* Invisible element to scroll to */}
-          <div ref={messageEndRef} />
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="p-4 border-t">
+        <div className="flex items-end gap-2">
+          <Textarea
+            ref={inputRef}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Type your message..."
+            className="flex-1 min-h-[60px] max-h-36 resize-none"
+            disabled={isLoading}
+          />
+          <Button
+            type="submit"
+            size="icon"
+            onClick={handleSendMessage}
+            disabled={input.trim() === '' || isLoading}
+            className="h-10 w-10"
+          >
+            {isLoading ? (
+              <div className="h-5 w-5 border-2 border-white border-opacity-50 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Send size={18} />
+            )}
+          </Button>
         </div>
         
-        {/* Input form */}
-        <form onSubmit={handleSubmit} className="border-t p-4">
-          <div className="flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={`Ask ${assistant.name} something...`}
-              disabled={isLoading}
-              className="flex-1"
-            />
-            <Button type="submit" disabled={isLoading || !input.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-        </form>
+        <div className="mt-2 text-xs text-center text-muted-foreground flex items-center justify-center">
+          <Sparkles size={12} className="mr-1" />
+          {assistant.capabilities?.join(', ') || 'General purpose assistant'}
+        </div>
       </div>
       
-      {/* Sources panel */}
-      {sources.length > 0 && (
-        <div className="w-80 border-l overflow-y-auto p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Book className="h-4 w-4" />
-            <h3 className="font-medium">Sources</h3>
-          </div>
-          
-          <div className="space-y-3">
-            {sources.map(({ document, similarity }) => (
-              <Card key={document.id} className="p-3">
-                <h4 className="font-medium text-sm">{document.metadata?.title || 'Untitled'}</h4>
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-3">
-                  {document.content.substring(0, 150)}...
-                </p>
-                <div className="mt-2 text-xs">
-                  Relevance: {Math.round(similarity * 100)}%
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="cursor-blink-container">
+        {/* Custom CSS classes are defined in globals.css */}
+      </div>
     </div>
   );
 } 
