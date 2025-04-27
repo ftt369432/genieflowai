@@ -3,7 +3,7 @@
  * backward compatibility with code that imports from this path.
  */
 
-import googleAuthService from './auth/googleAuth';
+import googleAuthService, { GoogleAuthService } from './auth/googleAuth';
 
 export default googleAuthService;
 
@@ -11,7 +11,7 @@ export default googleAuthService;
  * Convenience function to get the Google auth instance 
  */
 export const getGoogleAuthInstance = (): any => {
-  return googleAuthService.getInstance();
+  return GoogleAuthService.getInstance();
 };
 
 /**

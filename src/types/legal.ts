@@ -64,3 +64,45 @@ export interface AIMessage {
     [key: string]: unknown;
   };
 }
+
+/**
+ * Hearing information extracted from legal text
+ */
+export interface LegalHearingInfo {
+  applicantName: string;
+  respondentName: string;
+  hearingDate: string | null;
+  caseNumber: string;
+  hearingStatus: string;
+  claimType: string;
+  keyIssues: string[];
+  representationStatus: string;
+}
+
+/**
+ * Result of processing legal text input
+ */
+export interface LegalCaseInputResult {
+  detectedLegalContent: boolean;
+  contentType?: string;
+  confidence?: number;
+  extractedInfo?: LegalHearingInfo;
+  originalText: string;
+}
+
+/**
+ * Legal Swarm Template
+ */
+export interface LegalSwarmTemplate {
+  id: string;
+  name: string;
+  description: string;
+  caseType: string;
+  roles: {
+    role: string;
+    requiredCapabilities: string[];
+    description: string;
+    responsibilities: string[];
+  }[];
+  defaultInstructions: string;
+}
