@@ -49,6 +49,7 @@
         https://firebaseinstallations.googleapis.com
         https://www.googletagmanager.com;
       frame-src 'self' https://*.google.com;
+      frame-ancestors 'self';
       media-src 'self' https: http:;
       object-src 'none';
       base-uri 'self';
