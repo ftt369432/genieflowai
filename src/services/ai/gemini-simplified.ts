@@ -1,6 +1,4 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AIService } from './types';
-import { AIMessage, AIResponse } from '../../types/ai';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -13,7 +11,7 @@ console.log('Gemini API Key (first 8 chars):', API_KEY ? `${API_KEY.substring(0,
 
 const genAI = new GoogleGenerativeAI(API_KEY || '');
 
-export class GeminiService implements AIService {
+export class GeminiSimplifiedService {
   private model: string;
   private temperature: number;
   private maxTokens: number;
@@ -58,44 +56,4 @@ export class GeminiService implements AIService {
       throw new Error('Unknown error occurred while generating completion');
     }
   }
-
-  async chat(messages: AIMessage[]): Promise<AIResponse> {
-    try {
-      if (!API_KEY) {
-        throw new Error('Gemini API key is not configured');
-      }
-
-      const model = genAI.getGenerativeModel({ model: this.model });
-      
-      const result = await model.generateContent({
-        contents: messages.map(msg => ({
-          role: msg.role,
-          parts: [{ text: msg.content }]
-        })),
-        generationConfig: {
-          temperature: this.temperature,
-          maxOutputTokens: this.maxTokens,
-        },
-      });
-
-      const response = await result.response;
-      return {
-        content: response.text(),
-        role: 'assistant',
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('Error in chat:', error);
-      if (error instanceof Error) {
-        if (error.message.includes('API key')) {
-          throw new Error('Invalid API key. Please check your Gemini API key.');
-        }
-        throw error;
-      }
-      throw new Error('Unknown error occurred while chatting');
-    }
-  }
-}
-
-// Export a singleton instance
-export const geminiService = new GeminiService(); 
+} 

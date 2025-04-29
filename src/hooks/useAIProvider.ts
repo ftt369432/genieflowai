@@ -1,46 +1,29 @@
-import { useCallback, useState } from 'react';
-import type { AIModel } from '../types/ai';
-import { geminiSimplifiedService } from '../services/gemini-simplified';
-import { getEnv } from '../config/env';
-
-// Define default model for Gemini
-const defaultGeminiModel: AIModel = {
-  id: 'gemini-1.5-flash',
-  name: 'Gemini 1.5 Flash',
-  provider: 'google',
-  capabilities: ['chat', 'text-generation'],
-  contextSize: 32000
-};
+import { useCallback } from 'react';
+import { geminiService } from '../services/ai/gemini';
+import { AIMessage } from '../types/ai';
 
 export function useAIProvider() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Always use Google Gemini as the provider
-  const defaultProvider = 'google';
-  
-  const sendMessage = useCallback(async (content: string, modelId?: string): Promise<string> => {
-    setIsLoading(true);
-    setError(null);
-    
+  const getCompletion = useCallback(async (prompt: string): Promise<string> => {
     try {
-      // Use our simplified Gemini service to ensure compatibility
-      const response = await geminiSimplifiedService.getCompletion(content, {
-        model: modelId || defaultGeminiModel.id
-      });
-      return response;
+      return await geminiService.getCompletion(prompt);
     } catch (error) {
-      console.error('Error in useAIProvider:', error);
-      setError(error instanceof Error ? error.message : 'Unknown error occurred');
+      console.error('Error in getCompletion:', error);
       throw error;
-    } finally {
-      setIsLoading(false);
+    }
+  }, []);
+
+  const chat = useCallback(async (messages: AIMessage[]): Promise<string> => {
+    try {
+      const response = await geminiService.chat(messages);
+      return response.content;
+    } catch (error) {
+      console.error('Error in chat:', error);
+      throw error;
     }
   }, []);
 
   return {
-    sendMessage,
-    isLoading,
-    error
+    getCompletion,
+    chat
   };
 } 

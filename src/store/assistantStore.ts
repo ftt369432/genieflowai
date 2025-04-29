@@ -6,6 +6,13 @@ import { templateAssistants } from '../data/templateAssistants';
 
 interface AssistantState {
   assistants: AIAssistant[];
+  selectedAssistant: AIAssistant | null;
+  isLoading: boolean;
+  error: string | null;
+  setAssistants: (assistants: AIAssistant[]) => void;
+  setSelectedAssistant: (assistant: AIAssistant | null) => void;
+  setLoading: (isLoading: boolean) => void;
+  setError: (error: string | null) => void;
   
   // CRUD operations
   addAssistant: (assistant: Omit<AIAssistant, 'id'>) => AIAssistant;
@@ -26,6 +33,13 @@ export const useAssistantStore = create<AssistantState>()(
   persist(
     (set, get) => ({
       assistants: [],
+      selectedAssistant: null,
+      isLoading: false,
+      error: null,
+      setAssistants: (assistants) => set({ assistants }),
+      setSelectedAssistant: (assistant) => set({ selectedAssistant: assistant }),
+      setLoading: (isLoading) => set({ isLoading }),
+      setError: (error) => set({ error }),
       
       addAssistant: (assistantData) => {
         const assistant: AIAssistant = {

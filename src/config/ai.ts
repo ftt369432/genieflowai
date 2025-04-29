@@ -1,4 +1,13 @@
 import { Brain, Scale, Stethoscope, Sparkles, Bot, Lightbulb, Code, Workflow, FileText, Image, Files } from 'lucide-react';
+import { AIConfig } from '../types/ai';
+
+// Define available models
+export const availableModels = [
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Latest)', provider: 'google' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Advanced)', provider: 'google' },
+  // Add other free/low-cost models here if available
+  // { id: 'some-other-free-model', name: 'Other Free Model', provider: 'provider-name' },
+];
 
 export interface AIConfig {
   model: string;
@@ -82,7 +91,7 @@ Thinking Mode Process:
 - Suggest additional considerations or next steps
 `;
 
-export const aiModePresets = {
+export const aiModePresets: Record<string, Partial<AIConfig> & { id: string; name: string; description: string; style: string }> = {
   professional: {
     id: 'professional',
     name: 'Professional Elite',
@@ -169,19 +178,96 @@ Response Length: Provide comprehensive responses without artificial length restr
     },
     streamingEnabled: true
   },
+  precise: {
+    id: 'precise',
+    name: 'Precise & Factual',
+    description: 'Focuses on accuracy and conciseness.',
+    systemPrompt: 'You are a highly accurate AI assistant. Prioritize facts and provide concise answers. Avoid speculation.',
+    temperature: 0.2,
+    style: 'text-blue-600',
+    formatStyle: 'structured',
+    streamingEnabled: true,
+    thinkingMode: true,
+    maxTokens: 4096,
+  },
+  balanced: {
+    id: 'balanced',
+    name: 'Balanced',
+    description: 'A mix of creativity and accuracy.',
+    systemPrompt: 'You are a helpful and balanced AI assistant. Provide comprehensive answers while maintaining accuracy.',
+    temperature: 0.7,
+    style: 'text-green-600',
+    formatStyle: 'standard',
+    streamingEnabled: true,
+    thinkingMode: false,
+    maxTokens: 4096,
+  },
+  creative: {
+    id: 'creative',
+    name: 'Creative & Exploratory',
+    description: 'Generates imaginative and diverse ideas.',
+    systemPrompt: 'You are a creative AI assistant. Explore possibilities, generate diverse ideas, and think outside the box.',
+    temperature: 1.0,
+    style: 'text-purple-600',
+    formatStyle: 'streamlined',
+    streamingEnabled: false,
+    thinkingMode: false,
+    maxTokens: 8192,
+  },
+  legal: {
+    id: 'legal',
+    name: 'Legal Analysis',
+    description: 'Specialized for legal document review and analysis.',
+    systemPrompt: 'You are an AI legal assistant. Analyze legal documents, identify key clauses, summarize arguments, and check for inconsistencies. Always state that you are an AI and not a substitute for a human lawyer.',
+    temperature: 0.3,
+    style: 'text-gray-700',
+    formatStyle: 'structured',
+    streamingEnabled: true,
+    thinkingMode: true,
+    maxTokens: 16384,
+  },
+  medical: {
+    id: 'medical',
+    name: 'Medical Information',
+    description: 'Provides information on medical topics.',
+    systemPrompt: 'You are an AI medical information assistant. Provide clear explanations of medical concepts, symptoms, and treatments based on established knowledge. Always state that you are an AI and not a substitute for professional medical advice.',
+    temperature: 0.4,
+    style: 'text-red-600',
+    formatStyle: 'standard',
+    streamingEnabled: true,
+    thinkingMode: true,
+    maxTokens: 8192,
+  }
 };
 
+// Default AI configuration
 export const defaultAIConfig: AIConfig = {
-  model: 'gpt-4-turbo-preview',
-  temperature: 0.7,
-  maxTokens: 16384,
-  mode: 'professional',
-  systemPrompt: aiModePresets.professional.systemPrompt,
+  mode: 'balanced', // Default mode
+  systemPrompt: 'You are a helpful AI assistant.',
+  formatStyle: 'standard',
+  streamingEnabled: true,
   thinkingMode: false,
-  formatStyle: 'streamlined',
-  documentProcessing: {
-    enabled: true,
-    supportedTypes: aiModePresets.professional.documentProcessing.supportedTypes
-  },
-  streamingEnabled: true
-}; 
+  temperature: 0.7,
+  maxTokens: 4096,
+  model: import.meta.env.VITE_AI_MODEL || availableModels[0].id, // Default to the first available model
+};
+
+// Function to get the current AI configuration
+export const getAIConfig = (): AIConfig => {
+  const savedSettings = localStorage.getItem('genieflow_ai_settings');
+  if (savedSettings) {
+    try {
+      // Merge saved settings with defaults to ensure all keys are present
+      const parsedSettings = JSON.parse(savedSettings);
+      // Ensure a valid model is selected, fallback to default if not
+      const selectedModel = availableModels.find(m => m.id === parsedSettings.model);
+      if (!selectedModel) {
+        parsedSettings.model = defaultAIConfig.model;
+      }
+      return { ...defaultAIConfig, ...parsedSettings };
+    } catch (e) {
+      console.error('Failed to parse saved AI settings, using default:', e);
+    }
+  }
+  return { ...defaultAIConfig };
+};

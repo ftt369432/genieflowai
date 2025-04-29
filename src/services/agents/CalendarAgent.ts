@@ -34,7 +34,14 @@ export class CalendarAgent extends BaseAgent {
       status: config?.status || 'active',
       preferences: config?.preferences || {}
     });
-    this.calendarService = new CalendarService();
+    this.calendarService = new CalendarService({});
+  }
+
+  /**
+   * Required implementation of abstract method from BaseAgent
+   */
+  async performAction(action: AgentAction): Promise<AgentActionResult> {
+    return this.executeAction(action);
   }
 
   /**
@@ -148,7 +155,6 @@ export class CalendarAgent extends BaseAgent {
    * Suggest optimal meeting times based on parameters
    */
   private async suggestMeetingTimes(params: any): Promise<any> {
-    // Mock implementation
     console.log('Suggesting meeting times with params:', params);
     return {
       suggestedTimes: [
@@ -308,30 +314,6 @@ export class CalendarAgent extends BaseAgent {
 
       return {
         output: { meeting },
-        duration: Date.now() - startTime
-      };
-    } catch (error) {
-      return {
-        output: null,
-        duration: Date.now() - startTime,
-        error: this.formatError(error)
-      };
-    }
-  }
-
-  private async suggestMeetingTimes(
-    participants: string[],
-    duration: number,
-    preferences?: any
-  ): Promise<ActionResult> {
-    const startTime = Date.now();
-
-    try {
-      const availableSlots = await this.findAvailableSlots(participants, duration);
-      const rankedSlots = await this.rankTimeSlots(availableSlots, preferences);
-
-      return {
-        output: { suggestedTimes: rankedSlots },
         duration: Date.now() - startTime
       };
     } catch (error) {

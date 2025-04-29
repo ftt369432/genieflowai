@@ -26,10 +26,10 @@ export function AgentsPageComponent() {
   const metrics = {
     totalAgents: agents.length,
     activeAgents: agents.filter(a => a.status === 'active').length,
-    averagePerformance: agents.length > 0 
-      ? Math.round(agents.reduce((acc, curr) => acc + curr.metrics.performance, 0) / agents.length)
+    averagePerformance: agents.length > 0
+      ? Math.round(agents.reduce((acc, curr) => acc + (curr.metrics?.performance || 0), 0) / agents.length)
       : 0,
-    totalTasks: agents.reduce((acc, curr) => acc + curr.metrics.tasks.total, 0)
+    totalTasks: agents.reduce((acc, curr) => acc + (curr.metrics?.tasks?.total || 0), 0)
   };
 
   // Handle selecting an agent to view details

@@ -20,10 +20,10 @@ export function ActiveAgentsPanel({ onSelectAgent }: ActiveAgentsPanelProps) {
   const metrics = {
     totalActive: activeAgents.filter(a => a.status === 'active').length,
     averagePerformance: activeAgents.length > 0 
-      ? Math.round(activeAgents.reduce((acc, curr) => acc + curr.metrics.performance, 0) / activeAgents.length)
+      ? Math.round(activeAgents.reduce((acc, curr) => acc + (curr?.metrics?.performance ?? 0), 0) / activeAgents.length)
       : 0,
     totalUptime: activeAgents.length > 0 
-      ? `${Math.round(activeAgents.reduce((acc, curr) => acc + curr.metrics.uptime, 0) / activeAgents.length)}%`
+      ? `${Math.round(activeAgents.reduce((acc, curr) => acc + (curr?.metrics?.uptime ?? 0), 0) / activeAgents.length)}%`
       : 'N/A'
   };
 
@@ -162,4 +162,4 @@ function AgentStatusCard({ agent, onSelect, onActivate, onDeactivate }: AgentSta
       </div>
     </div>
   );
-} 
+}

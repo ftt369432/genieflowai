@@ -705,22 +705,14 @@ export class CalendarService {
   }
 
   async fetchEvents(start: Date, end: Date): Promise<CalendarEvent[]> {
-    // Make sure we have the latest calendars
-    if (this.calendars.length === 0) {
-      await this.fetchCalendars();
+    try {
+      // Fetch Google events if authenticated
+      const googleEvents = await this.fetchGoogleEvents(this.calendars, start, end);
+      return googleEvents;
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      return [];
     }
-
-    // Only fetch events from enabled calendars
-    const enabledCalendars = this.calendars.filter(cal => cal.enabled);
-    
-    // Fetch events from Google Calendar
-    const googleEvents = await this.fetchGoogleEvents(
-      enabledCalendars.filter(cal => cal.source === 'google'),
-      start,
-      end
-    );
-    
-    return [...googleEvents];
   }
 
   private async fetchGoogleEvents(
@@ -728,64 +720,43 @@ export class CalendarService {
     start: Date, 
     end: Date
   ): Promise<CalendarEvent[]> {
-    if (!googleAuthService.isSignedIn() || calendars.length === 0) {
-      return [];
-    }
-
     try {
-      // Convert dates to ISO strings for Google API
-      const timeMin = start.toISOString();
-      const timeMax = end.toISOString();
+      // Filter only enabled Google calendars
+      const googleCalendars = calendars.filter(cal => cal.source === 'google' && cal.enabled);
       
-      // Fetch events for each enabled Google calendar
-      const allEventsPromises = calendars.map(async (calendar) => {
-        const events = await googleAuthService.fetchEvents(calendar.id, timeMin, timeMax);
-        
-        return events.map((event: any) => {
-          // Handle all-day events
-          const isAllDay = !event.start.dateTime;
-          
-          // Parse start and end times
-          const startDate = isAllDay
-            ? new Date(event.start.date)
-            : new Date(event.start.dateTime);
-          
-          const endDate = isAllDay
-            ? new Date(event.end.date)
-            : new Date(event.end.dateTime);
-          
-          // For all-day events, Google's end date is exclusive, so subtract one day
-          if (isAllDay) {
-            endDate.setDate(endDate.getDate() - 1);
+      if (googleCalendars.length === 0) {
+        return [];
+      }
+      
+      const auth = await googleAuthService.isSignedIn();
+      if (!auth) {
+        console.warn('Not authenticated with Google, skipping events fetch');
+        return [];
+      }
+      
+      // Map to promises
+      const results = await Promise.all(
+        googleCalendars.map(async (calendar) => {
+          try {
+            const events = await googleAuthService.fetchEvents(
+              calendar.id,
+              start.toISOString(),
+              end.toISOString()
+            );
+            
+            return events.map(event => this.convertGoogleEventToCalendarEvent(event, calendar));
+          } catch (error) {
+            console.error(`Error fetching events for calendar ${calendar.name}:`, error);
+            return [];
           }
-          
-          return {
-            id: event.id,
-            title: event.summary || 'Untitled Event',
-            start: startDate,
-            end: endDate,
-            allDay: isAllDay,
-            description: event.description,
-            location: event.location,
-            calendarId: calendar.id,
-            calendarName: calendar.name,
-            color: calendar.color,
-            source: 'google' as const
-          };
-        });
-      });
+        })
+      );
       
-      // Flatten the array of arrays into a single array of events
-      const results = await Promise.all(allEventsPromises);
       return results.flat();
     } catch (error) {
       console.error('Error fetching Google events:', error);
       return [];
     }
-  }
-  
-  getCalendars(): Calendar[] {
-    return this.calendars;
   }
   
   updateCalendarEnabled(calendarId: string, enabled: boolean): void {

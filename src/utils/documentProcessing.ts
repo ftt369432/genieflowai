@@ -50,4 +50,15 @@ export const splitIntoChunks = (content: string, chunkSize: number): string[] =>
 export const generateEmbedding = async (content: string): Promise<number[]> => {
   // Add embedding generation logic
   return new Array(384).fill(0); // Return a placeholder embedding vector
+};
+
+export const processFile = async (file: File): Promise<any> => {
+  const content = await readFileContent(file);
+  
+  return {
+    id: crypto.randomUUID(),
+    name: file.name,
+    content,
+    metadata: await extractDocumentMetadata(file)
+  };
 }; 

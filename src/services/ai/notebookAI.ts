@@ -1,6 +1,10 @@
 import { Notebook, NotebookAIResponse, NotebookBlock } from '../../types/notebook';
 import { AIMessage } from '../../types/legal';
-import { generateLegalResponse } from './legalAssistant';
+// Import the class, not an instance
+import { GeminiSimplifiedService } from './gemini-simplified'; 
+
+// Create an instance of the service
+const geminiSimplifiedService = new GeminiSimplifiedService();
 
 export async function generateNotebookResponse(
   notebook: Notebook,
@@ -38,8 +42,9 @@ export async function generateNotebookResponse(
     }
   ];
 
-  // Get AI response
-  const response = await generateLegalResponse(messages);
+  // Get AI response using the instantiated service
+  const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
+  const response = await geminiSimplifiedService.getCompletion(prompt);
 
   // Parse the response to extract structured data
   const aiResponse: NotebookAIResponse = {
@@ -98,8 +103,9 @@ export async function analyzeNotebook(notebook: Notebook): Promise<Notebook> {
     }
   ];
 
-  // Get AI analysis
-  const response = await generateLegalResponse(messages);
+  // Get AI analysis using the instantiated service
+  const analysisPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
+  const response = await geminiSimplifiedService.getCompletion(analysisPrompt);
 
   // Parse the JSON response
   try {
@@ -412,4 +418,4 @@ function extractSuggestedActions(content: string) {
   }
   
   return [];
-} 
+}

@@ -13,7 +13,7 @@ import { Switch } from './ui/Switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/Tabs';
 import { Textarea } from './ui/Textarea';
 import { Input } from './ui/Input';
-import { aiModePresets, defaultAIConfig, AIConfig } from '../config/ai';
+import { aiModePresets, defaultAIConfig, AIConfig, availableModels } from '../config/ai';
 import { Sparkles, Lightbulb, MessageSquare, Save, Plus, Wand2, Trash2, Copy, PenSquare, CheckCircle } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator 
 } from './ui/DropdownMenu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/Select';
 import { cn } from '../lib/utils';
 
 // Sample AI assistance function - this would be replaced with your actual implementation
@@ -56,14 +57,25 @@ export function AISettings({ open, onOpenChange, currentConfig, onSave }: AISett
   // Initialize from localStorage if available, otherwise use currentConfig
   const [config, setConfig] = useState<AIConfig>(() => {
     const savedSettings = localStorage.getItem(AI_SETTINGS_STORAGE_KEY);
+    let initialConfig = { ...defaultAIConfig, ...currentConfig }; // Start with defaults merged with current
     if (savedSettings) {
       try {
-        return JSON.parse(savedSettings);
+        const parsedSettings = JSON.parse(savedSettings);
+        // Ensure a valid model is selected, fallback to default if not
+        const selectedModel = availableModels.find(m => m.id === parsedSettings.model);
+        if (!selectedModel) {
+          parsedSettings.model = defaultAIConfig.model;
+        }
+        initialConfig = { ...initialConfig, ...parsedSettings }; // Merge saved settings
       } catch (e) {
         console.error('Failed to parse saved AI settings:', e);
       }
     }
-    return { ...currentConfig };
+    // Ensure the final initialConfig has a valid model
+    if (!availableModels.some(m => m.id === initialConfig.model)) {
+        initialConfig.model = defaultAIConfig.model;
+    }
+    return initialConfig;
   });
 
   // State for prompt management
@@ -104,8 +116,13 @@ export function AISettings({ open, onOpenChange, currentConfig, onSave }: AISett
   }, [savedPrompts]);
 
   const handleSave = () => {
-    localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(config));
-    onSave(config);
+    // Ensure the saved config has a valid model before saving
+    const finalConfig = { ...config };
+    if (!availableModels.some(m => m.id === finalConfig.model)) {
+        finalConfig.model = defaultAIConfig.model; // Fallback to default if somehow invalid
+    }
+    localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(finalConfig));
+    onSave(finalConfig);
     onOpenChange(false);
   };
 
@@ -522,6 +539,29 @@ export function AISettings({ open, onOpenChange, currentConfig, onSave }: AISett
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Advanced Settings</h3>
               
+              {/* Model Selection Dropdown - Added */}
+              <div className="space-y-2">
+                <Label htmlFor="ai-model">AI Model</Label>
+                <Select 
+                  value={config.model} 
+                  onValueChange={(value) => setConfig({...config, model: value})}
+                >
+                  <SelectTrigger id="ai-model">
+                    <SelectValue placeholder="Select AI Model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map(model => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Choose the underlying AI model for generation.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="system-prompt">System Prompt</Label>
                 <div className="flex justify-end mb-1">
@@ -617,4 +657,4 @@ export function AISettings({ open, onOpenChange, currentConfig, onSave }: AISett
       </DialogContent>
     </Dialog>
   );
-} 
+}

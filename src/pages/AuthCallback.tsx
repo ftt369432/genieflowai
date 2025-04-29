@@ -85,7 +85,14 @@ export function AuthCallback() {
                 
                 // Navigate to dashboard
                 setTimeout(() => {
-                  navigate('/dashboard', { replace: true });
+                  const dashboardUrl = getDashboardUrl();
+                  if (dashboardUrl.startsWith('http')) {
+                    // Force full URL redirect for development
+                    window.location.href = dashboardUrl;
+                  } else {
+                    // Normal navigation for production
+                    navigate(dashboardUrl, { replace: true });
+                  }
                 }, 1000);
                 return;
               } catch (userInfoError) {
@@ -112,7 +119,14 @@ export function AuthCallback() {
                 
                 // Navigate to dashboard
                 setTimeout(() => {
-                  navigate('/dashboard', { replace: true });
+                  const dashboardUrl = getDashboardUrl();
+                  if (dashboardUrl.startsWith('http')) {
+                    // Force full URL redirect for development
+                    window.location.href = dashboardUrl;
+                  } else {
+                    // Normal navigation for production
+                    navigate(dashboardUrl, { replace: true });
+                  }
                 }, 1000);
                 return;
               }
@@ -168,7 +182,14 @@ export function AuthCallback() {
           
           // Navigate to dashboard
           setTimeout(() => {
-            navigate('/dashboard', { replace: true });
+            const dashboardUrl = getDashboardUrl();
+            if (dashboardUrl.startsWith('http')) {
+              // Force full URL redirect for development
+              window.location.href = dashboardUrl;
+            } else {
+              // Normal navigation for production
+              navigate(dashboardUrl, { replace: true });
+            }
           }, 1000);
           return;
         }
@@ -247,7 +268,14 @@ export function AuthCallback() {
         
         // Navigate to dashboard
         setTimeout(() => {
-          navigate('/dashboard', { replace: true });
+          const dashboardUrl = getDashboardUrl();
+          if (dashboardUrl.startsWith('http')) {
+            // Force full URL redirect for development
+            window.location.href = dashboardUrl;
+          } else {
+            // Normal navigation for production
+            navigate(dashboardUrl, { replace: true });
+          }
         }, 1000);
       } catch (error) {
         console.error('Error during auth callback:', error);
@@ -282,4 +310,20 @@ export function AuthCallback() {
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please wait while we complete your authentication</p>
     </div>
   );
-} 
+}
+
+// Add this logging to see what's happening
+const getDashboardUrl = () => {
+  // In development, always use localhost
+  if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+    // Get the current origin which includes the correct port
+    const currentOrigin = window.location.origin;
+    const url = `${currentOrigin}/dashboard`;
+    console.log('Redirecting to local development dashboard:', url);
+    return url;
+  }
+  
+  // In production, use the normal navigation
+  console.log('Using normal navigation to dashboard');
+  return '/dashboard';
+}; 

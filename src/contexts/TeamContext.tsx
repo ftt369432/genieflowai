@@ -33,22 +33,36 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshTeams = async () => {
     if (!user) return;
+    
+    if (loading) return;
+    
     try {
       setLoading(true);
+      setError(null);
+      
       const userTeams = await TeamService.getTeams(user.id);
       setTeams(userTeams);
+      
       if (!activeTeam && userTeams.length > 0) {
         setActiveTeam(userTeams[0]);
       }
     } catch (err) {
+      console.error('Failed to fetch teams:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch teams'));
+      
+      setTeams([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    refreshTeams();
+    if (user) {
+      refreshTeams();
+    } else {
+      setTeams([]);
+      setActiveTeam(null);
+    }
   }, [user]);
 
   const createTeam = async (teamData: Partial<Team>) => {
@@ -115,7 +129,7 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (team.id === teamId) {
           return {
             ...team,
-            members: team.members.filter(member => member.user_id !== userId)
+            members: team.members.filter(member => member.id !== userId)
           };
         }
         return team;
@@ -186,7 +200,7 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const newThread = await TeamService.createThread(pageId, threadData);
       setTeams(prev => prev.map(team => {
-        if (team.threads.some(thread => thread.page_id === pageId)) {
+        if (team.threads.some(thread => thread.id === pageId)) {
           return {
             ...team,
             threads: [...team.threads, newThread]
@@ -208,7 +222,7 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (team.id === teamId) {
           return {
             ...team,
-            direct_messages: [...team.direct_messages, newMessage]
+            directMessages: [...team.directMessages, newMessage]
           };
         }
         return team;

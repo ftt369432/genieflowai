@@ -124,21 +124,44 @@ export function useAuth() {
   }, []);
 
   // Sign in with Google using Supabase Auth
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (options?: { onSuccess?: () => void; onError?: (error: any) => void }) => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      let redirectUrl: string;
+
+      // Always prioritize the environment variable if set
+      if (import.meta.env.VITE_AUTH_CALLBACK_URL) {
+        redirectUrl = import.meta.env.VITE_AUTH_CALLBACK_URL;
+        console.log('Using redirect URL from VITE_AUTH_CALLBACK_URL:', redirectUrl);
+      } 
+      // Fallback to current origin if environment variable is not set
+      else {
+        redirectUrl = `${window.location.origin}/auth/callback`;
+        console.warn('VITE_AUTH_CALLBACK_URL not set, falling back to:', redirectUrl);
+      }
+      
+      console.log('Using redirect URL:', redirectUrl);
+      
+      const result = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly',
-          redirectTo: window.location.origin + '/auth/callback'
-        }
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
       });
 
-      if (error) {
-        throw error;
+      if (result.error) {
+        console.error('Google sign-in error:', result.error);
+        options?.onError?.(result.error);
+        throw result.error;
       }
+
+      options?.onSuccess?.();
     } catch (error) {
       console.error('Google sign-in error:', error);
+      showError?.('Sign in with Google failed. Please try again.');
       throw error;
     }
   };

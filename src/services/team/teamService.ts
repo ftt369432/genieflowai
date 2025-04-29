@@ -13,10 +13,15 @@ export class TeamService {
         .select('id')
         .limit(1);
       
-      // If there's an error about the relation not existing, return mock data
-      if (checkError && (checkError.code === '42P01' || checkError.message.includes('does not exist'))) {
+      // If there's an error about the relation not existing or recursion, return mock data
+      if (checkError && (
+          checkError.code === '42P01' || 
+          checkError.code === '42P17' || // Handle infinite recursion in policy
+          checkError.message.includes('does not exist') ||
+          checkError.message.includes('infinite recursion')
+      )) {
         if (!this.hasLoggedMissingTableError) {
-          console.warn('Team tables do not exist in the database yet. Using mock data instead.', checkError);
+          console.warn('Team tables issue in the database. Using mock data instead.', checkError);
           this.hasLoggedMissingTableError = true;
         }
         return this.getMockTeam();
@@ -31,10 +36,15 @@ export class TeamService {
           .eq('user_id', userId);
 
         if (membershipError) {
-          // If the error is specifically about the table not existing, return mock data
-          if (membershipError.code === '42P01' || membershipError.message.includes('does not exist')) {
+          // If the error is specifically about the table not existing or recursion, return mock data
+          if (
+            membershipError.code === '42P01' || 
+            membershipError.code === '42P17' || 
+            membershipError.message.includes('does not exist') ||
+            membershipError.message.includes('infinite recursion')
+          ) {
             if (!this.hasLoggedMissingTableError) {
-              console.warn('Team members table does not exist yet. Using mock data instead.');
+              console.warn('Team members table issue. Using mock data instead.', membershipError);
               this.hasLoggedMissingTableError = true;
             }
             return this.getMockTeam();
@@ -57,7 +67,14 @@ export class TeamService {
           .select('*')
           .in('id', teamIds);
 
-        if (teamsError) throw teamsError;
+        if (teamsError) {
+          // Check for specific error types
+          if (teamsError.code === '42P17' || teamsError.message.includes('infinite recursion')) {
+            console.warn('Recursion issue with teams table. Using mock data instead.');
+            return this.getMockTeam();
+          }
+          throw teamsError;
+        }
 
         if (!teams || teams.length === 0) {
           return this.getMockTeam();
@@ -66,13 +83,32 @@ export class TeamService {
         // For each team, fetch the members separately
         const teamsWithMembers = await Promise.all(
           teams.map(async (team) => {
-            const { data: members, error: membersError } = await supabase
-              .from('team_members')
-              .select('*')
-              .eq('team_id', team.id);
+            try {
+              const { data: members, error: membersError } = await supabase
+                .from('team_members')
+                .select('*')
+                .eq('team_id', team.id);
 
-            if (membersError) {
-              console.warn(`Error fetching members for team ${team.id}:`, membersError);
+              if (membersError) {
+                console.warn(`Error fetching members for team ${team.id}:`, membersError);
+                return {
+                  ...team,
+                  members: [],
+                  pages: [],
+                  threads: [],
+                  direct_messages: []
+                };
+              }
+
+              return {
+                ...team,
+                members: members || [],
+                pages: [],
+                threads: [],
+                direct_messages: []
+              };
+            } catch (memberErr) {
+              console.warn(`Exception fetching members for team ${team.id}:`, memberErr);
               return {
                 ...team,
                 members: [],
@@ -81,14 +117,6 @@ export class TeamService {
                 direct_messages: []
               };
             }
-
-            return {
-              ...team,
-              members: members || [],
-              pages: [],
-              threads: [],
-              direct_messages: []
-            };
           })
         );
 

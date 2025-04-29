@@ -17,6 +17,10 @@ export interface EnvironmentConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
   
+  // AI Configuration
+  geminiApiKey: string;
+  aiModel: string;
+  
   // Email Testing Configuration
   VITE_EMAIL_TEST_MODE: boolean;
   VITE_EMAIL_TEST_ACCOUNT: string;
@@ -75,6 +79,10 @@ export function getEnv(): EnvironmentConfig {
     authCallbackUrl,
     supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
     supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+    
+    // AI Configuration
+    geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
+    aiModel: import.meta.env.VITE_AI_MODEL || 'gemini-2.0-flash',
     
     // Email Testing Configuration
     VITE_EMAIL_TEST_MODE: import.meta.env.VITE_EMAIL_TEST_MODE === 'true' || 

@@ -7,6 +7,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Eye, Check } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useState } from 'react';
+import { CodeBlock } from '../ui/CodeBlock';
 
 interface MarkdownMessageProps {
   content: string;

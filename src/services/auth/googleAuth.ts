@@ -65,14 +65,20 @@ export class GoogleAuthService {
   /**
    * Initialize the service
    */
-  private async initialize(): Promise<void> {
+  public async initialize(): Promise<void> {
     if (this.isInitialized) return;
     
-    // Initialize the Google API client
-    await this.googleApiClient.initialize();
-    
-    this.isInitialized = true;
-    console.log('GoogleAuthService: Initialization complete');
+    try {
+      // Initialize the Google API client
+      await this.googleApiClient.initialize();
+      
+      this.isInitialized = true;
+      console.log('GoogleAuthService: Initialization complete');
+    } catch (error) {
+      console.error('GoogleAuthService: Initialization failed', error);
+      // Don't set isInitialized to true if initialization fails
+      throw new GoogleAuthError('Failed to initialize Google Auth Service');
+    }
   }
 
   /**
@@ -87,15 +93,63 @@ export class GoogleAuthService {
    * Get the correct callback URL based on environment
    */
   private getCallbackUrl(): string {
-    const { serverUrl } = getEnv();
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    if (isLocalhost) {
-      // Use local URL when running locally
-      return `${window.location.origin}/auth/callback`;
-    } else {
-      // Use Netlify URL in production
+    // Always prioritize environment variable
+    const envCallbackUrl = import.meta.env.VITE_AUTH_CALLBACK_URL;
+    if (envCallbackUrl) {
+      console.log('Using callback URL from environment:', envCallbackUrl);
+      return envCallbackUrl;
+    }
+
+    // For local development, use the current window location
+    if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+      const currentOrigin = window.location.origin;
+      const localCallbackUrl = `${currentOrigin}/auth/callback`;
+      console.log('Development environment detected, using current origin with correct port:', localCallbackUrl);
+      return localCallbackUrl;
+    }
+
+    // For production environment
+    if (import.meta.env.PROD || import.meta.env.MODE === 'production') {
+      console.log('Production environment detected, using production callback URL');
       return 'https://genieflowai.netlify.app/auth/callback';
+    }
+
+    // Fallback - use current origin
+    const callbackUrl = `${window.location.origin}/auth/callback`;
+    console.log('Using current origin as callback URL:', callbackUrl);
+    return callbackUrl;
+  }
+
+  /**
+   * Handle OAuth authorization code
+   * This is called by the callback component after receiving an auth code
+   */
+  public async handleAuthCode(code: string): Promise<void> {
+    try {
+      // The code should already be processed by Supabase during the redirect
+      // We just need to verify the session is valid
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Failed to get session after auth code:', error);
+        throw new Error(`Failed to complete authentication: ${error.message}`);
+      }
+      
+      if (!session) {
+        throw new Error('No session available after authentication code exchange');
+      }
+      
+      // Initialize the Google API client with the provider token
+      if (session.provider_token) {
+        await this.googleApiClient.initialize();
+        this.googleApiClient.setAccessToken(session.provider_token);
+        console.log('Successfully processed authentication code and initialized API client');
+      } else {
+        throw new Error('No provider token available in session after authentication');
+      }
+    } catch (error) {
+      console.error('Error handling auth code:', error);
+      throw error;
     }
   }
 
@@ -105,6 +159,11 @@ export class GoogleAuthService {
    * In development/mock mode, it creates a mock user
    */
   public async signIn(email?: string): Promise<GoogleAuthResponse> {
+    // Ensure service is initialized
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+    
     const { useMock } = getEnv();
     
     // If in mock mode, use mock data

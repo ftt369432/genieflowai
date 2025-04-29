@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { 
+  Navigate, 
+  useNavigate, 
+  useLocation, 
+  useParams,
+  RouterProvider,
+  createBrowserRouter
+} from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
 import { useSupabase } from './providers/SupabaseProvider';
-import routerConfig from './router/config';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -41,103 +47,107 @@ import DocumentsPage from './pages/DocumentsPage';
 import { AssistantChat } from './components/assistants/AssistantChat';
 import { useAssistantStore } from './store/assistantStore';
 import LegalSwarmPage from './pages/LegalSwarmPage';
+import { redirectToLocalhost } from './utils/devRedirect';
 
-// ProtectedRoute component that redirects to login if user is not authenticated
+// ProtectedRoute wrapper component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useSupabase();
-  const [checkedSession, setCheckedSession] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    // Only perform the check once loading is complete
-    if (!loading) {
-      console.log('ProtectedRoute check:', { user, loading });
+    if (!loading && !user) {
+      const isAuthPath = location.pathname === '/login' || 
+                        location.pathname === '/auth/callback' || 
+                        location.pathname === '/register';
       
-      if (user) {
-        console.log('ProtectedRoute: User authenticated, rendering protected content');
-        setCheckedSession(true);
-      } else {
-        // Don't redirect if we're already on the login page or callback
-        const isAuthPath = location.pathname === '/login' || 
-                          location.pathname === '/auth/callback' || 
-                          location.pathname === '/register';
-        
-        if (!isAuthPath) {
-          console.log('ProtectedRoute: No user found, redirecting to login');
-          navigate('/login', { replace: true });
-        }
+      if (!isAuthPath) {
+        console.log('ProtectedRoute: No user found, redirecting to login');
+        navigate('/login', { replace: true });
       }
     }
   }, [user, loading, navigate, location.pathname]);
 
-  // Show loading state if still checking auth
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
 
-  // If we have a user or we're on an auth page, render the children
   return user ? <AppLayout>{children}</AppLayout> : null;
 };
 
-// Home route that redirects to dashboard if authenticated
+// Home route component
 const HomeRoute = () => {
   const { user, loading } = useSupabase();
+  const navigate = useNavigate();
   const location = useLocation();
   
+  useEffect(() => {
+    if (!loading && user && location.pathname === '/') {
+      console.log("User is authenticated at root path, redirecting to dashboard");
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, loading, navigate, location.pathname]);
+
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  }
-  
-  // Only redirect if we're at the exact root path
-  if (user && location.pathname === '/') {
-    console.log("User is authenticated at root path, redirecting to dashboard");
-    return <Navigate to="/dashboard" replace />;
   }
   
   return <HomePage />;
 };
 
-// Login route that redirects to dashboard when already logged in
+// Login route component
 const LoginRoute = () => {
   const { user, loading } = useSupabase();
+  const navigate = useNavigate();
   
+  useEffect(() => {
+    if (!loading && user) {
+      console.log("User is authenticated, redirecting to dashboard from login page");
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, loading, navigate]);
+
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  }
-  
-  if (user) {
-    console.log("User is authenticated, redirecting to dashboard from login page");
-    return <Navigate to="/dashboard" replace />;
   }
   
   return <LoginPage />;
 };
 
-// SpecializedAssistantRoute component that loads a specific assistant by type
+// Specialized Assistant route component
 const SpecializedAssistantRoute = ({ assistantType }: { assistantType: string }) => {
   const { assistants, addTemplateAssistants } = useAssistantStore();
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Ensure template assistants are loaded
     addTemplateAssistants();
     setLoading(false);
   }, [addTemplateAssistants]);
+
+  useEffect(() => {
+    if (!loading) {
+      const assistant = assistants.find(a => 
+        a.name.toLowerCase().includes(assistantType.toLowerCase())
+      );
+      
+      if (!assistant) {
+        console.error(`No assistant found with type: ${assistantType}`);
+        navigate('/assistants', { replace: true });
+      }
+    }
+  }, [assistants, assistantType, loading, navigate]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading assistant...</div>;
   }
 
-  // Find the assistant with the matching type/name
   const assistant = assistants.find(a => 
     a.name.toLowerCase().includes(assistantType.toLowerCase())
   );
 
   if (!assistant) {
-    console.error(`No assistant found with type: ${assistantType}`);
-    return <Navigate to="/assistants" replace />;
+    return null; // Navigate is handled in useEffect
   }
 
   return (
@@ -149,297 +159,219 @@ const SpecializedAssistantRoute = ({ assistantType }: { assistantType: string })
   );
 };
 
+// Create router with React Router v7
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <HomeRoute />
+  },
+  {
+    path: "/login",
+    element: <LoginRoute />
+  },
+  {
+    path: "/examples/loading",
+    element: <LoadingExample />
+  },
+  {
+    path: "/auth/callback",
+    element: <AuthCallback />
+  },
+  {
+    path: "/gmail-test",
+    element: <ProtectedRoute><GmailConnectionTest /></ProtectedRoute>
+  },
+  {
+    path: "/dashboard",
+    element: <ProtectedRoute><DashboardPage /></ProtectedRoute>
+  },
+  {
+    path: "/agents",
+    element: <ProtectedRoute><AgentsPageComponent /></ProtectedRoute>
+  },
+  {
+    path: "/agents/create",
+    element: <ProtectedRoute><AgentWizardPage /></ProtectedRoute>
+  },
+  {
+    path: "/agent/:id",
+    element: <ProtectedRoute><AgentDetail /></ProtectedRoute>
+  },
+  {
+    path: "/calendar",
+    element: <ProtectedRoute><CalendarPage /></ProtectedRoute>
+  },
+  // Email route structure - Fixed to resolve conflicts
+  {
+    path: "/email",
+    children: [
+      {
+        index: true,
+        element: <ProtectedRoute><EmailInboxPage /></ProtectedRoute>
+      },
+      {
+        path: "connect/success",
+        element: <EmailConnectSuccess />
+      },
+      {
+        path: "connect/error",
+        element: <EmailConnectError />
+      },
+      {
+        path: "bypass",
+        element: <EmailBypass />
+      },
+      {
+        path: ":id",
+        element: <ProtectedRoute><EmailPage /></ProtectedRoute>
+      }
+    ]
+  },
+  {
+    path: "/email-test",
+    element: <ProtectedRoute><EmailTestPage /></ProtectedRoute>
+  },
+  {
+    path: "/tasks",
+    element: <ProtectedRoute><TasksPage /></ProtectedRoute>
+  },
+  {
+    path: "/task/:id",
+    element: <ProtectedRoute><TaskPage /></ProtectedRoute>
+  },
+  {
+    path: "/profile",
+    element: <ProtectedRoute><ProfilePage /></ProtectedRoute>
+  },
+  {
+    path: "/settings",
+    element: <ProtectedRoute><Settings /></ProtectedRoute>
+  },
+  {
+    path: "/subscription",
+    element: <ProtectedRoute><SubscriptionPage /></ProtectedRoute>
+  },
+  {
+    path: "/ai",
+    element: <ProtectedRoute><AIPage /></ProtectedRoute>
+  },
+  {
+    path: "/ai-drive",
+    element: <ProtectedRoute><AIDrivePage /></ProtectedRoute>
+  },
+  {
+    path: "/ai-assistant",
+    element: <ProtectedRoute><AIAssistantPage /></ProtectedRoute>
+  },
+  // Replace redirect with proper component
+  {
+    path: "/assistant",
+    element: <ProtectedRoute><AIAssistantPage useAssistantIntegration={true} /></ProtectedRoute>
+  },
+  {
+    path: "/assistants",
+    element: <ProtectedRoute><AssistantsPage /></ProtectedRoute>
+  },
+  {
+    path: "/contacts",
+    element: <ProtectedRoute><ContactsPage /></ProtectedRoute>
+  },
+  {
+    path: "/legal-swarm",
+    element: <ProtectedRoute><LegalSwarmPage /></ProtectedRoute>
+  },
+  {
+    path: "/legal-document/:id",
+    element: <ProtectedRoute><LegalDocumentPage /></ProtectedRoute>
+  },
+  {
+    path: "/notebooks",
+    element: <ProtectedRoute><NotebooksPage /></ProtectedRoute>
+  },
+  {
+    path: "/notifications",
+    element: <ProtectedRoute><NotificationsPage /></ProtectedRoute>
+  },
+  {
+    path: "/teams",
+    element: <ProtectedRoute><TeamsPage /></ProtectedRoute>
+  },
+  {
+    path: "/projects",
+    element: <ProtectedRoute><ProjectsPage /></ProtectedRoute>
+  },
+  {
+    path: "/drive",
+    element: <ProtectedRoute><GenieDrivePage /></ProtectedRoute>
+  },
+  {
+    path: "/documents",
+    element: <ProtectedRoute><DocumentsPage /></ProtectedRoute>
+  },
+  {
+    path: "/automation",
+    element: <ProtectedRoute><AutomationPage /></ProtectedRoute>
+  },
+  {
+    path: "/automation/audit",
+    element: <ProtectedRoute><AutomationAuditDashboard /></ProtectedRoute>
+  },
+  {
+    path: "/legal-assistant",
+    element: <SpecializedAssistantRoute assistantType="legal" />
+  },
+  {
+    path: "/writing-assistant",
+    element: <SpecializedAssistantRoute assistantType="writing" />
+  },
+  {
+    path: "/email-assistant",
+    element: <SpecializedAssistantRoute assistantType="email" />
+  },
+  {
+    path: "/calendar-assistant",
+    element: <SpecializedAssistantRoute assistantType="calendar" />
+  },
+  {
+    path: "/research-assistant",
+    element: <SpecializedAssistantRoute assistantType="research" />
+  },
+  // Add a catch-all 404 route
+  {
+    path: "*",
+    element: <div className="flex items-center justify-center h-screen">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold text-gray-800 mb-4">404</h1>
+        <p className="text-xl text-gray-600 mb-6">Page not found</p>
+        <button 
+          onClick={() => window.location.href = '/'}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+        >
+          Return Home
+        </button>
+      </div>
+    </div>
+  }
+], {
+  future: {
+    v7_startTransition: true,
+    v7_relativeSplatPath: true
+  }
+} as any);
+
 function App() {
-  return (
-    <Routes>
-      {/* Public routes with conditional redirect */}
-      <Route path="/" element={<HomeRoute />} />
-      <Route path="/login" element={<LoginRoute />} />
-      <Route path="/examples/loading" element={<LoadingExample />} />
-      
-      {/* Auth callback route */}
-      <Route path="/auth/callback" element={<AuthCallback />} />
-      
-      {/* Gmail connection test route */}
-      <Route 
-        path="/gmail-test" 
-        element={
-          <ProtectedRoute>
-            <GmailConnectionTest />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Protected routes */}
-      <Route 
-        path="/dashboard" 
-        element={
-          <ProtectedRoute>
-            <DashboardPage />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Agents routes - add these */}
-      <Route 
-        path="/agents" 
-        element={
-          <ProtectedRoute>
-            <AgentsPageComponent />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/agents/:agentId" 
-        element={
-          <ProtectedRoute>
-            <AgentDetail />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/agent-wizard" 
-        element={
-          <ProtectedRoute>
-            <AgentWizardPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/automation" 
-        element={
-          <ProtectedRoute>
-            <AutomationPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/dashboard/audit" 
-        element={
-          <ProtectedRoute>
-            <AutomationAuditDashboard />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Redirect from authenticated root to dashboard */}
-      <Route
-        path="/app"
-        element={
-          <ProtectedRoute>
-            <Navigate to="/dashboard" replace />
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route 
-        path="/profile" 
-        element={
-          <ProtectedRoute>
-            <ProfilePage />
-          </ProtectedRoute>
-        } 
-      />
+  // Add an effect to check for Netlify and redirect if needed
+  useEffect(() => {
+    // Check if we're accidentally using Netlify in dev mode
+    redirectToLocalhost();
+    
+    // Enable dev mode by default in development
+    if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+      localStorage.setItem('devMode', 'true');
+    }
+  }, []);
 
-      {/* Email Settings Route */}
-      <Route 
-        path="/email-settings" 
-        element={
-          <ProtectedRoute>
-            <ProfilePage />
-          </ProtectedRoute>
-        } 
-      />
-
-      <Route 
-        path="/subscription" 
-        element={
-          <ProtectedRoute>
-            <SubscriptionPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route path="/email" element={
-        <ProtectedRoute>
-          <EmailPage />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/email/connect" element={
-        <ProtectedRoute>
-          <EmailConnectSuccess />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/email/connect/success" element={
-        <ProtectedRoute>
-          <EmailConnectSuccess />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/email/connect/error" element={
-        <ProtectedRoute>
-          <EmailConnectError />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/email/inbox" element={
-        <ProtectedRoute>
-          <EmailInboxPage />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/email/bypass" element={
-        <ProtectedRoute>
-          <EmailBypass />
-        </ProtectedRoute>
-      } />
-      
-      {/* Add Email Test Route */}
-      <Route path="/email-test" element={
-        <ProtectedRoute>
-          <EmailTestPage />
-        </ProtectedRoute>
-      } />
-      
-      <Route 
-        path="/notifications" 
-        element={
-          <ProtectedRoute>
-            <NotificationsPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/ai" 
-        element={
-          <ProtectedRoute>
-            <AIPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/assistant" 
-        element={
-          <ProtectedRoute>
-            <AIAssistantPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/drive/*"
-        element={
-          <ProtectedRoute>
-            <GenieDrivePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route 
-        path="/calendar" 
-        element={
-          <ProtectedRoute>
-            <CalendarPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/contacts" 
-        element={
-          <ProtectedRoute>
-            <ContactsPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/tasks" 
-        element={
-          <ProtectedRoute>
-            <Navigate to="/tasks/board" replace />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Add new TaskPage route with view parameter */}
-      <Route 
-        path="/tasks/:viewType" 
-        element={
-          <ProtectedRoute>
-            <TaskPage />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Add the legal document route */}
-      <Route path="/documents" element={
-        <ProtectedRoute>
-          <DocumentsPage />
-        </ProtectedRoute>
-      } />
-      
-      {/* Add the notebooks route */}
-      <Route 
-        path="/notebooks" 
-        element={
-          <ProtectedRoute>
-            <NotebooksPage />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Add the teams route */}
-      <Route 
-        path="/teams" 
-        element={
-          <ProtectedRoute>
-            <TeamsPage />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Add the projects route */}
-      <Route 
-        path="/projects" 
-        element={
-          <ProtectedRoute>
-            <ProjectsPage />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Settings route */}
-      <Route 
-        path="/settings" 
-        element={
-          <ProtectedRoute>
-            <Settings />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Assistants route */}
-      <Route 
-        path="/assistants" 
-        element={
-          <ProtectedRoute>
-            <AssistantsPage />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Legal Swarm route */}
-      <Route 
-        path="/legal-swarm" 
-        element={
-          <ProtectedRoute>
-            <LegalSwarmPage />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Fallback route */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;

@@ -6,30 +6,29 @@
 
 export interface AIDocument {
   id: string;
+  title: string;
   content: string;
-  type?: string;  // File type like 'pdf', 'image', etc.
-  title?: string; // Document title
-  metadata: {
-    source: string;
-    title?: string;
-    author?: string;
-    date?: Date;
-    category?: string;
-    tags?: string[];
-  };
+  type: string;
+  size: number;
+  createdAt: Date;
+  updatedAt: Date;
   embedding?: number[];
-  relevanceScore?: number;
-  folderId?: string | null; // For organization in folders
-  tags?: string[]; // For searchability and filtering
+  metadata?: {
+    author?: string;
+    language?: string;
+    summary?: string;
+    keywords?: string[];
+  };
 }
 
 export interface AIFolder {
   id: string;
   name: string;
-  documents: AIDocument[];
+  description?: string;
+  documents?: AIDocument[];
+  parentId?: string | null;
   createdAt: Date;
   updatedAt: Date;
-  parentId?: string | null; // For nested folder structure
 }
 
 export interface AIPrompt {
@@ -37,7 +36,7 @@ export interface AIPrompt {
   name: string;
   content: string;
   category: string;
-  tags?: string[];
+  tags: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,7 +46,10 @@ export interface AIModel {
   name: string;
   provider: string;
   capabilities: string[];
-  contextSize: number;
+  contextSize?: number;
+  maxTokens?: number;
+  temperature?: number;
+  version?: string;
 }
 
 export type AICapability = 
@@ -61,21 +63,33 @@ export type AICapability =
   | 'summarization'
   | 'translation';
 
+export interface MessageMetadata {
+  sources?: Array<any>;
+  assistantId?: string;
+  model?: string;
+  provider?: string;
+  [key: string]: any;
+}
+
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface Message {
   id: string;
-  content: string;
   role: MessageRole;
+  content: string;
   timestamp: Date;
+  metadata?: MessageMetadata;
 }
 
 export interface AIMessage {
-  id: string;
+  role: 'user' | 'assistant' | 'system';
   content: string;
-  role: MessageRole;
-  timestamp: Date;
-  metadata?: MessageMetadata;
+  timestamp?: string;
+  metadata?: {
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+  };
 }
 
 export type AgentType = 'research' | 'work' | 'learning' | 'building' | 'general' | 'tasks' | 'email' | 'calendar' | 'drive';
@@ -83,22 +97,40 @@ export type AgentType = 'research' | 'work' | 'learning' | 'building' | 'general
 export interface AIAssistant {
   id: string;
   name: string;
-  type: AgentType;
-  capabilities: string[];
-  avatar?: string;
-  description?: string;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  systemPrompt?: string; // Instructions for the AI
-  knowledgeBase?: AIFolder[]; // Connected knowledge base folders
-  model?: AIModel; // AI model configuration
+  description: string;
+  model: string;
+  provider: string;
+  systemPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
+  features?: string[];
+  category?: 'general' | 'code' | 'analysis' | 'productivity';
+  isActive?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+  lastUsed?: Date;
+  usageCount?: number;
+  successRate?: number;
+  averageResponseTime?: number;
+  knowledgeBase?: {
+    id: string;
+    name: string;
+    documents: AIDocument[];
+  }[];
   settings?: {
-    temperature?: number;
-    maxTokens?: number;
-    frequencyPenalty?: number;
-    presencePenalty?: number;
+    tone?: string;
+    style?: string;
+    language?: string;
+    format?: string;
   };
+  metadata?: {
+    version?: string;
+    tags?: string[];
+    capabilities?: string[];
+    limitations?: string[];
+  };
+  capabilities?: string[];
+  tags?: string[];
 }
 
 export interface AssistantResponse {
@@ -136,40 +168,30 @@ export interface AIAnalysis {
 }
 
 export interface AIConfig {
-  provider: string;
-  defaultModel: AIModel;
-  apiKey?: string;
-  apiEndpoint?: string;
-  maxTokens?: number;
-  temperature?: number;
-  topP?: number;
-  frequencyPenalty?: number;
-  presencePenalty?: number;
-  stopSequences?: string[];
-  maxRetries?: number;
-  retryDelay?: number;
-  timeout?: number;
-  debug?: boolean;
+  mode: string;
+  systemPrompt: string;
+  formatStyle: 'standard' | 'structured' | 'streamlined';
+  streamingEnabled: boolean;
+  thinkingMode: boolean;
+  temperature: number;
+  maxTokens: number;
+  model: string; // Added model selection
 }
 
-export interface MessageMetadata {
-  mode?: 'flash' | 'flash-lite' | 'pro';
-  model?: string;
-  provider?: string;
-  tokens?: number;
-  processingTime?: number;
-  context?: DocumentReference[];
-  error?: string;
-  edited?: boolean;
-  threadId?: string;
-  parentId?: string;
-  reactions?: { [key: string]: string[] };
-  formatting?: {
-    isBold?: boolean;
-    isItalic?: boolean;
-    isCode?: boolean;
-    language?: string;
-  };
+export interface DocumentMetadata {
+  title?: string;
+  source?: string;
+  date?: Date;
+  author?: string;
+  category?: string;
+  tags?: string[];
+  [key: string]: any;
+}
+
+export interface KnowledgeBaseFolder {
+  id: string;
+  name: string;
+  documents?: AIDocument[];
 }
 
 export interface DocumentReference {
@@ -177,12 +199,21 @@ export interface DocumentReference {
   title: string;
   type: string;
   url?: string;
-  metadata?: Record<string, unknown>;
+  excerpt?: string;
+  metadata?: {
+    author?: string;
+    date?: Date;
+    source?: string;
+  };
 }
 
 export interface SearchResult {
   document: AIDocument;
-  similarity: number;
+  score: number;
+  highlights?: {
+    field: string;
+    snippet: string;
+  }[];
 }
 
 export interface EmbeddingResponse {
@@ -222,15 +253,16 @@ export interface SearchFilters {
   sourceType?: string;
   sortBy?: string;
   language?: string;
-  region?: string;
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
 }
 
 export interface DocumentProcessingOptions {
-  extractText: boolean;
-  generateSummary: boolean;
-  detectLanguage: boolean;
-  extractMetadata: boolean;
-  performOCR: boolean;
-  splitIntoChunks: boolean;
-  chunkSize: number;
-} 
+  chunkSize?: number;
+  maxChunks?: number;
+  overlap?: number;
+  language?: string;
+  format?: string;
+}

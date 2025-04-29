@@ -3,8 +3,8 @@ import { useAI } from '../hooks/useAI';
 import { useTheme } from '../contexts/ThemeContext';
 import { useKnowledgeBase } from '../hooks/useKnowledgeBase';
 import { cn } from '../lib/utils';
-import { Bot, Send, Mic, Settings, Loader2, Check, ChevronDown, Plus, Save, Library, Sparkles, Trash2, LineChart, Pin, Edit2, FileText, Image, File, Search, X, User, ExternalLink, Code, PenTool, BarChart, GraduationCap, Brain, Zap, Eye, Menu, ChevronRight, ChevronLeft, Sliders, Copy, MessageSquare } from 'lucide-react';
-import type { Message, AIDocument, DocumentReference, SearchFilters, DocumentProcessingOptions } from '../types/ai';
+import { Bot, Send, Mic, Settings, Loader2, Check, ChevronDown, Plus, Save, Library, Sparkles, Trash2, LineChart, Pin, Edit2, FileText, Image, File, Search, X, User, ExternalLink, Code, PenTool, BarChart, GraduationCap, Brain, Zap, Eye, Menu, ChevronRight, ChevronLeft, Sliders, Copy, MessageSquare, ArrowLeft } from 'lucide-react';
+import type { Message, AIDocument, DocumentReference, SearchFilters, DocumentProcessingOptions, AIAssistant } from '../types/ai';
 import type { MessageMetadata as BaseMessageMetadata } from '../types/ai';
 import { AIModelSelector } from '../components/ai/AIModelSelector';
 import { SystemPrompt } from '../components/ai/SystemPrompt';
@@ -45,6 +45,11 @@ import { AIContext } from '../contexts/AIContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { QuickAccessAssistants } from '../components/assistants/QuickAccessAssistants';
 import { useAssistantStore } from '../store/assistantStore';
+import { AssistantChat } from '../components/assistants/AssistantChat';
+import { chatWithAssistant } from '../services/documentChatService';
+import { GeminiTest } from '../components/ai/GeminiTest';
+import { toast } from 'react-hot-toast';
+import { Card } from '../components/ui/Card';
 
 interface MessageMetadata extends BaseMessageMetadata {
   edited?: boolean;
@@ -590,7 +595,11 @@ interface ExtendedMessage extends Message {
   metadata?: MessageMetadata;
 }
 
-export function AIAssistantPage() {
+export interface AIAssistantPageProps {
+  useAssistantIntegration?: boolean;
+}
+
+export function AIAssistantPage({ useAssistantIntegration = false }: AIAssistantPageProps) {
   const { 
     messages, 
     isLoading, 
@@ -607,8 +616,15 @@ export function AIAssistantPage() {
     maxResults: 10
   });
   const navigate = useNavigate();
-  const { assistants } = useAssistantStore();
-
+  const { assistants, selectedAssistant, setSelectedAssistant } = useAssistantStore();
+  
+  // Initialize assistants if integration is enabled
+  useEffect(() => {
+    if (useAssistantIntegration) {
+      // AddTemplateAssistants();
+    }
+  }, [useAssistantIntegration]);
+  
   const [chatMessages, setChatMessages] = useState<ExtendedMessage[]>([]);
   const [input, setInput] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<'google' | 'openai' | 'xai'>('google');
@@ -778,6 +794,39 @@ export function AIAssistantPage() {
   const [isTopToolbarVisible, setIsTopToolbarVisible] = useState(true);
   const [isTopToolbarHovered, setIsTopToolbarHovered] = useState(false);
   const topToolbarRef = useRef<HTMLDivElement>(null);
+  
+  // Add initial welcome message effect
+  useEffect(() => {
+    // Only initialize if there are no messages
+    if (chatMessages.length === 0) {
+      console.log('AI Assistant page initializing with Gemini model:', selectedModel);
+      
+      // Create initial welcome message
+      setChatMessages([
+        {
+          id: 'welcome',
+          role: 'assistant',
+          content: 'Hello! I\'m GenieFlow AI Assistant. How can I help you today?',
+          timestamp: new Date()
+        }
+      ]);
+
+      // Set default chat title if there's no active conversation
+      if (!currentConversation && conversations.length === 0) {
+        const newConversation: Conversation = {
+          id: uuidv4(),
+          title: 'New Chat',
+          messages: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          model: selectedModel,
+          provider: selectedProvider
+        };
+        setConversations([newConversation]);
+        setCurrentConversation(newConversation.id);
+      }
+    }
+  }, []);
   
   // Add an effect to hide the toolbar when scrolling down
   useEffect(() => {
@@ -1403,6 +1452,7 @@ export function AIAssistantPage() {
 
     if (!input.trim() || isProcessing) return;
     
+    const userInput = input.trim(); // Save input before clearing
     setInput('');
     setIsProcessing(true);
     
@@ -1410,19 +1460,19 @@ export function AIAssistantPage() {
       // Add the user message
       const userMessage: ExtendedMessage = {
         id: Date.now().toString(),
-        content: input,
+        content: userInput,
         role: 'user',
         timestamp: new Date()
       };
       
       setChatMessages(prev => [...prev, userMessage]);
       
-      // Create a typing indicator
-      const typingIndicatorId = (Date.now() + 1).toString();
+      // Create a typing indicator message ID
+      const typingId = (Date.now() + 1).toString();
       setChatMessages(prev => [
         ...prev,
         {
-          id: typingIndicatorId,
+          id: typingId,
           content: '',
           role: 'assistant',
           timestamp: new Date(),
@@ -1434,34 +1484,13 @@ export function AIAssistantPage() {
         }
       ]);
       
-      let response = '';
-      
-      const options = {
-        systemPrompt: systemPrompt,
-        context: selectedDocs.map(doc => ({
-          id: doc.id,
-          title: doc.name,
-          excerpt: doc.content.substring(0, 200),
-          type: doc.type,
-          relevance: 1.0
-        })),
-        model: selectedModel,
-        temperature: temperature,
-        maxTokens: maxTokens,
-        provider: selectedProvider
-      };
-      
-      if (selectedProvider === 'google') {
-        response = await sendMessage(input, options);
-      } else if (selectedProvider === 'openai') {
-        response = await sendMessage(input, options);
-      } else {
-        response = await sendMessage(input, options);
-      }
+      // Call the sendMessage from AIContext
+      console.log(`Sending message with ${selectedProvider} provider and ${selectedModel} model`);
+      const response = await sendMessage(userInput, "chat"); 
       
       // Remove typing indicator and add the actual response
       setChatMessages(prev => 
-        prev.filter(msg => msg.id !== typingIndicatorId).concat({
+        prev.filter(msg => msg.id !== typingId).concat({
           id: (Date.now() + 2).toString(),
           content: response,
           role: 'assistant',
@@ -1473,15 +1502,39 @@ export function AIAssistantPage() {
           }
         })
       );
+      
+      // Save to conversation if we have an active one
+      if (currentConversation) {
+        setConversations(prev => 
+          prev.map(conv => 
+            conv.id === currentConversation 
+              ? {
+                  ...conv,
+                  messages: [
+                    ...conv.messages,
+                    userMessage,
+                    {
+                      id: (Date.now() + 2).toString(),
+                      content: response,
+                      role: 'assistant',
+                      timestamp: new Date()
+                    }
+                  ],
+                  updatedAt: new Date()
+                }
+              : conv
+          )
+        );
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       setChatMessages(prev => 
-        prev.filter(msg => msg.id !== typingIndicatorId).concat({
+        prev.filter(msg => msg.id !== typingId).concat({
           id: (Date.now() + 2).toString(),
           content: error instanceof Error 
             ? `Error: ${error.message}` 
-            : 'An unknown error occurred',
-          role: 'error',
+            : 'An unknown error occurred. Please try again.',
+          role: 'assistant',
           timestamp: new Date()
         })
       );
@@ -1648,6 +1701,196 @@ export function AIAssistantPage() {
     ]);
   };
 
+  const leftPanelClasses = cn(
+    "h-full border-r transition-all duration-300 bg-card",
+    isLeftPanelCollapsed ? "w-0 overflow-hidden" : "w-64"
+  );
+  
+  const renderLeftPanelContent = () => {
+    if (useAssistantIntegration) {
+      return (
+        <div className="flex flex-col h-full">
+          <div className="p-3 border-b">
+            <h3 className="font-semibold mb-2">AI Assistants</h3>
+            <p className="text-xs text-muted-foreground">Select an assistant to chat with</p>
+            
+            {/* Silver Create Assistant button */}
+            <Button
+              className="w-full justify-start gap-2 bg-gradient-to-r from-gray-400 via-gray-300 to-gray-500 hover:from-gray-500 hover:via-gray-400 hover:to-gray-600 border border-black/50 shadow-md text-black font-medium transition-all duration-300 mt-3"
+              style={{ 
+                backgroundSize: '200% 100%', 
+                animation: 'shimmer 3s infinite linear',
+                boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.8), 0 2px 5px rgba(0,0,0,0.3)'
+              }}
+              onClick={() => {
+                console.log("Create Assistant button clicked");
+                // Navigate to assistants page in current tab and trigger interactive creation mode
+                const event = new CustomEvent('createInteractiveAssistant', {
+                  detail: { mode: 'interactive' }
+                });
+                window.dispatchEvent(event);
+                navigate('/assistants');
+              }}
+            >
+              <Brain className="h-4 w-4 text-black" />
+              Create Assistant
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2">
+            {assistants.map(assistant => (
+              <div 
+                key={assistant.id}
+                className={cn(
+                  "p-3 rounded-md mb-2 cursor-pointer hover:bg-muted transition-colors",
+                  selectedAssistant?.id === assistant.id ? "bg-primary/10 border border-primary/30" : ""
+                )}
+                onClick={() => setSelectedAssistant(assistant)}
+              >
+                <h4 className="font-medium text-sm">{assistant.name}</h4>
+                {assistant.description && (
+                  <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                    {assistant.description}
+                  </p>
+                )}
+              </div>
+            ))}
+            {assistants.length === 0 && (
+              <div className="text-center p-4 text-muted-foreground">
+                <p className="text-sm">No assistants available</p>
+                <Button
+                  className="mt-2"
+                  onClick={() => navigate('/assistants')}
+                >
+                  Create Assistant
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="p-3 border-t">
+            <Button
+              className="w-full"
+              onClick={() => navigate('/assistants')}
+            >
+              Manage Assistants
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    
+    return (
+      <>
+        {/* Original left panel content */}
+        <div className="p-4 border-b">
+          <h3 className="font-semibold">History</h3>
+        </div>
+        
+        <ChatHistory 
+          conversations={conversations.filter(conv => conv.id === currentConversation)}
+          onSelectConversation={id => setCurrentConversation(id)}
+          onDeleteConversation={deleteConversation}
+          onToggleFavorite={pinConversation}
+          onNewChat={handleNewChat}
+          selectedConversationId={currentConversation}
+        />
+      </>
+    );
+  };
+
+  // Add a handler for assistant selection
+  const handleAssistantChat = async (message: string) => {
+    if (!selectedAssistant) return;
+    
+    try {
+      const response = await chatWithAssistant(selectedAssistant, message);
+      // Handle the response
+    } catch (error) {
+      console.error('Error chatting with assistant:', error);
+      toast.error('Failed to send message to assistant');
+    }
+  };
+
+  // Override the main content based on integration mode and selected assistant
+  const renderMainContent = () => {
+    if (useAssistantIntegration) {
+      return (
+        <div className="flex flex-col h-full">
+          <div className="flex-1 overflow-y-auto p-4">
+            {selectedAssistant ? (
+              <AssistantChat
+                assistant={selectedAssistant}
+                onMessage={handleAssistantChat}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-500">Select an assistant to start chatting</p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col">
+        {selectedAssistant ? (
+          <AssistantChat
+            assistant={selectedAssistant}
+            onBack={() => setSelectedAssistant(null)}
+          />
+        ) : (
+          <div className="p-4 flex-1 space-y-6">
+            <h2 className="text-2xl font-bold">AI Assistant</h2>
+            
+            {/* AI Debug Panel */}
+            {renderAIDebugPanel()}
+            
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {assistants.map(assistant => (
+                <Card
+                  key={assistant.id}
+                  className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => setSelectedAssistant(assistant)}
+                >
+                  <div className="p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-5 w-5" />
+                      <h3 className="text-lg font-medium">{assistant.name}</h3>
+                    </div>
+                    {assistant.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {assistant.description}
+                      </p>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  const [showTestPanel, setShowTestPanel] = useState<boolean>(false);
+
+  // Add this to the settings panel or wherever appropriate
+  const renderAIDebugPanel = () => (
+    <div className="border rounded-lg p-4 my-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-medium">AI Configuration</h3>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => setShowTestPanel(!showTestPanel)}
+        >
+          {showTestPanel ? 'Hide Test Panel' : 'Show Test Panel'}
+        </Button>
+      </div>
+      
+      {showTestPanel && <GeminiTest />}
+    </div>
+  );
+
   return (
     <AIErrorBoundary>
       <TooltipProvider>
@@ -1655,254 +1898,22 @@ export function AIAssistantPage() {
           {/* Main 3-column layout with flex */}
           <div className="flex h-screen overflow-hidden">
             {/* Left sidebar - showing conversations */}
-            <div className={cn(
-              "border-r border-border/50 bg-muted/30 transition-all duration-300 overflow-hidden",
-              isLeftPanelCollapsed ? "w-0" : "w-64"
-            )}>
-              <div className="h-full flex flex-col">
-                <div className="p-4 border-b border-border/50">
-                  <div className="space-y-2">
-                    <Button
-                      variant="default"
-                      className="w-full justify-start gap-2 bg-gradient-to-r from-gray-400 via-gray-300 to-gray-500 hover:from-gray-500 hover:via-gray-400 hover:to-gray-600 border border-black/50 shadow-md text-black font-medium transition-all duration-300"
-                      style={{ 
-                        backgroundSize: '200% 100%', 
-                        animation: 'shimmer 3s infinite linear',
-                        boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.8), 0 2px 5px rgba(0,0,0,0.3)'
-                      }}
-                      onClick={() => {
-                        console.log("Create Assistant button clicked");
-                        // Navigate to assistants page in current tab and trigger interactive creation mode
-                        const event = new CustomEvent('createInteractiveAssistant', {
-                          detail: { mode: 'interactive' }
-                        });
-                        window.dispatchEvent(event);
-                        navigate('/assistants');
-                      }}
-                    >
-                      <Brain className="h-4 w-4 text-black" />
-                      Create Assistant
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start gap-2"
-                      onClick={handleNewChat}
-                    >
-                      <Plus className="h-4 w-4 interactive-icon" />
-                      New Chat
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto">
-                  {/* Quick Access Assistants */}
-                  <QuickAccessAssistants
-                    onSelectAssistant={handleSelectTemplateAssistant}
-                    selectedAssistantId={selectedTemplateAssistant?.id}
-                  />
-                  
-                  {/* Conversations section */}
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="p-4 pb-2">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium card-title">Conversations</h3>
-                        <div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={handleNewChat}
-                          >
-                            <Plus className="h-4 w-4 interactive-icon" />
-                            New Chat
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Rest of the left sidebar */}
-                    {conversations.map(conversation => (
-                      <div 
-                        key={conversation.id}
-                        className={cn(
-                          "flex items-start gap-2 p-3 cursor-pointer hover:bg-muted/80 transition-colors sidebar-item",
-                          currentConversation === conversation.id ? "bg-muted active" : ""
-                        )}
-                        onClick={() => {
-                          if (currentConversation !== conversation.id) {
-                            setCurrentConversation(conversation.id);
-                            setChatMessages(conversation.messages);
-                          }
-                        }}
-                      >
-                        <MessageSquare className="h-4 w-4 mt-1 interactive-icon" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">
-                            {conversation.title || 'New Chat'}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(conversation.createdAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div className={leftPanelClasses}>
+              {renderLeftPanelContent()}
             </div>
             
-            {/* Main content area - chat messages and input */}
-            <div className="flex-1 flex flex-col h-full">
-              {/* Header */}
-              <header className="flex items-center justify-between p-3 border-b bg-background/95 backdrop-blur-md ai-header">
-                <div className="flex items-center gap-2">
-                  {isLeftPanelCollapsed && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setIsLeftPanelCollapsed(false)}
-                  >
-                      <Menu className="h-4 w-4 interactive-icon" />
-                    </Button>
-                  )}
-                
-                  <h1 className="text-lg font-semibold">
-                    {currentConversation 
-                      ? conversations.find(c => c.id === currentConversation)?.title || 'Chat'
-                      : 'New Chat'
-                    }
-            </h1>
-          </div>
-          
-                <div className="flex items-center gap-2">
-                  <Tooltip content="Model Settings">
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      className="flex items-center gap-2"
-                      onClick={() => setShowSettings(!showSettings)}
-                    >
-                      <Sparkles className="w-4 h-4 text-primary interactive-icon" />
-                      <span className="text-sm hidden md:inline">
-                        {selectedProvider && modelGroups[selectedProvider] && modelGroups[selectedProvider].models[selectedModel] 
-                          ? modelGroups[selectedProvider].models[selectedModel].name 
-                          : 'Model'}
-                      </span>
-                    </Button>
-                  </Tooltip>
-                  
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
-                  >
-                    <ChevronLeft className={cn(
-                      "h-4 w-4 transition-transform interactive-icon",
-                      isRightSidebarOpen && "rotate-180"
-                    )} />
-                  </Button>
-          </div>
-        </header>
-
-              {/* Chat area */}
-              <div className="flex-1 overflow-y-auto p-4">
-                {chatMessages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                    <Bot className="h-12 w-12 mb-4 text-muted-foreground interactive-icon" />
-                    <h2 className="text-2xl font-semibold mb-2">How can I help you today?</h2>
-                    <p className="text-muted-foreground max-w-md mb-8">
-                      I can answer questions, generate content, help with research, and more.
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-lg">
-                      {/* Example prompts */}
-                      {['Write a summary about climate change', 
-                        'Generate a JavaScript function to sort an array', 
-                        'Create a marketing email template',
-                        'Explain quantum computing in simple terms'].map(prompt => (
-                      <Button
-                          key={prompt}
-                          variant="outline" 
-                          className="justify-start text-left h-auto py-3 recent-query"
-                        onClick={() => {
-                            setInput(prompt);
-                          }}
-                        >
-                          <MessageSquare className="h-4 w-4 mr-2 interactive-icon" />
-                          {prompt}
-                      </Button>
-                  ))}
-                </div>
-                </div>
-                ) : (
-                  <div className="space-y-6">
-                    {chatMessages.map(message => (
-                          <div
-                            key={message.id}
-                        className={cn(
-                          "flex",
-                          message.role === 'user' ? "justify-end" : "justify-start"
-                        )}
-                      >
-                        <div 
-                          className={cn(
-                            "max-w-3xl rounded-lg p-4",
-                            message.role === 'user' 
-                              ? "bg-primary text-primary-foreground message-user" 
-                              : "bg-muted message-assistant"
-                          )}
-                        >
-                              {renderMessage(message)}
-              </div>
-                </div>
-                    ))}
-                    {isLoading && (
-                      <div className="flex items-center gap-2 p-3 bg-muted rounded-lg typing-indicator">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce delay-100" />
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce delay-200" />
-                        </div>
-                        <span className="text-sm text-muted-foreground">AI is thinking...</span>
-      </div>
-                )}
-                <div ref={messagesEndRef} />
-                          </div>
-                        )}
-                </div>
-              
-              {/* Input area */}
-              <div className="border-t p-4 bg-background/95 backdrop-blur-md">
-                <form onSubmit={handleSubmit} className="flex items-end gap-2">
-                        <Textarea
-                          value={input}
-                          onChange={(e) => setInput(e.target.value)}
-                          onKeyDown={handleKeyDown}
-                          placeholder="Message AI Assistant..."
-                    className="flex-1 min-h-[60px] resize-none chat-input"
-                  />
-                        <Button
-                          type="submit"
-                          size="icon"
-                    className="primary"
-                          disabled={isLoading || !input.trim()}
-                        >
-                    <Send className="h-4 w-4 interactive-icon" />
-                  </Button>
-                  </form>
-          </div>
-        </div>
-
-            {/* Right sidebar - context and tools */}
-              <div className={cn(
+            {/* Main content area - chat */}
+            {renderMainContent()}
+            
+            {/* Right sidebar - showing settings/context */}
+            <div className={cn(
               "border-l border-border/50 bg-muted/30 transition-all duration-300 overflow-hidden",
               isRightSidebarOpen ? "w-80" : "w-0"
             )}>
               <div className="h-full flex flex-col">
                 <div className="p-4 border-b border-border/50">
                   <h2 className="font-semibold card-title">Context & Tools</h2>
-    </div>
+                </div>
 
                 <div className="flex-1 overflow-y-auto p-4">
                   <div className="space-y-4">
@@ -1920,7 +1931,7 @@ export function AIAssistantPage() {
                     {/* Document references */}
                     <div className="space-y-2">
                       <h3 className="text-sm font-medium card-title">Reference Documents</h3>
-                    <Button
+                      <Button
                         variant="outline" 
                         size="sm"
                         className="w-full justify-start gap-2 secondary"
@@ -1928,7 +1939,7 @@ export function AIAssistantPage() {
                       >
                         <Plus className="h-4 w-4 interactive-icon" />
                         Add Document
-                    </Button>
+                      </Button>
                       
                       {selectedDocs.length > 0 ? (
                         <div className="space-y-1 mt-2">
@@ -1941,21 +1952,21 @@ export function AIAssistantPage() {
                                 <FileText className="h-3 w-3 inline mr-2" />
                                 {doc.title || doc.id}
                               </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-5 w-5"
                                 onClick={() => setSelectedDocs(selectedDocs.filter(d => d.id !== doc.id))}
-                    >
+                              >
                                 <X className="h-3 w-3" />
-                    </Button>
+                              </Button>
                             </div>
                           ))}
-              </div>
-                ) : (
+                        </div>
+                      ) : (
                         <div className="text-xs text-muted-foreground italic">
                           No documents added
-    </div>
+                        </div>
                       )}
                     </div>
                     
@@ -1971,12 +1982,12 @@ export function AIAssistantPage() {
                         <Search className="h-4 w-4 interactive-icon" />
                         Search Web
                       </Button>
-                          </div>
-                  </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
         </div>
       </TooltipProvider>
     </AIErrorBoundary>

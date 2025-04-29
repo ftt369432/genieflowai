@@ -13,7 +13,7 @@ export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const { logout } = useAuth();
+  const { signOut } = useAuth();
   const { showSuccess } = useNotifications();
   const user = useUserStore(state => state.user);
   const navigate = useNavigate();
@@ -86,13 +86,13 @@ export function UserMenu() {
     console.log("Logout button clicked");
     try {
       setIsOpen(false); // Close menu first
-      await logout();
+      await signOut();
+      navigate('/login');
+      showSuccess('Logged out successfully');
     } catch (error) {
       console.error('Logout failed:', error);
-      showSuccess('Logged out successfully');
-      navigate('/login');
     }
-  }, [logout, showSuccess, navigate]);
+  }, [signOut, showSuccess, navigate]);
 
   const toggleMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -214,4 +214,4 @@ export function UserMenu() {
       )}
     </div>
   );
-} 
+}

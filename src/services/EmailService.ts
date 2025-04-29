@@ -1,12 +1,17 @@
 import { AIService } from './ai/baseAIService';
-import { geminiSimplifiedService } from './gemini-simplified';
+// Import the class, not an instance
+import { GeminiSimplifiedService } from "@/services/ai/gemini-simplified";
 import { Email, EmailDraft } from '../types/email';
+
+// Create an instance of the service
+const geminiSimplifiedServiceInstance = new GeminiSimplifiedService();
 
 export class EmailService {
   private aiService: AIService;
 
   constructor(aiService?: any) {
-    this.aiService = aiService || geminiSimplifiedService;
+    // Use the instantiated service as the default
+    this.aiService = aiService || geminiSimplifiedServiceInstance;
   }
 
   async analyzeEmail(email: Email): Promise<{
@@ -133,4 +138,4 @@ export class EmailService {
       shouldFollowUp: false
     };
   }
-} 
+}

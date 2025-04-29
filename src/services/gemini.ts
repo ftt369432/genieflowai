@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import { BaseAIService, AIService } from './ai/baseAIService';
 import { Task } from '../types/task';
 import { Event } from '../types/calendar';
@@ -71,7 +71,7 @@ export class GeminiService extends BaseAIService implements AIService {
       };
       
       if (this.apiKey) {
-        this.genAI = new GoogleGenerativeAI(this.apiKey);
+        this.genAI = new GoogleGenerativeAI(this.apiKey.trim());
         console.log('GeminiService initialized successfully');
       } else {
         console.error('Failed to initialize GeminiService: No API key found');
@@ -357,37 +357,28 @@ Format sources as a "sources" array in the JSON response. Each source should be 
   }
 
   async sendMessage(content: string, model: string = 'gemini-pro'): Promise<string> {
-    try {
-      console.log(`Sending message to Gemini model: ${model}`);
-      
-      // Add user message to history
-      this.addToHistory('user', content);
-      
-      // Extract variables from user input
-      this.extractVariables(content);
-
-      const geminiModel = this.genAI?.getGenerativeModel({ 
-        model: model || 'gemini-pro'
-      });
-      
-      // Format prompt with conversation history
-      const prompt = `Previous conversation:\n${this.getFormattedHistory()}\n\nCurrent message: ${content}`;
-      
-      const result = await geminiModel?.generateContent(prompt);
-      const response = await result?.response;
-      const responseText = response?.text();
-
-      // Add model response to history
-      this.addToHistory('model', responseText);
-      
-      return responseText;
-    } catch (error) {
-      console.error('Error in Gemini sendMessage:', error);
-      if (error instanceof Error) {
-        throw new Error(`Gemini API Error: ${error.message}`);
-      }
-      throw new Error('Unknown Gemini API Error');
-    }
+    // Add the user message to history
+    this.addToHistory('user', content);
+    
+    // Extract variables from the message content
+    this.extractVariables(content);
+    
+    // Build the prompt with conversation history
+    const history = this.getFormattedHistory();
+    
+    // Include history in the message for context
+    const prompt = `${history}\n\nUser: ${content}\n\nAssistant:`;
+    
+    // Get the completion using our improved method
+    const response = await this.getCompletion(prompt, {
+      model: model,
+      temperature: 0.7
+    });
+    
+    // Add the AI response to history
+    this.addToHistory('model', response);
+    
+    return response;
   }
 
   async getCompletion(prompt: string, options?: {
@@ -396,18 +387,76 @@ Format sources as a "sources" array in the JSON response. Each source should be 
     model?: string;
   }): Promise<string> {
     try {
-      const model = this.genAI?.getGenerativeModel({ 
-        model: options?.model || 'gemini-pro',
+      if (!this.genAI) {
+        throw new Error('GeminiService not properly initialized');
+      }
+
+      const modelName = options?.model || this.model.id;
+      
+      // Configure safety settings for unrestricted responses
+      const safetySettings = [
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+      ];
+
+      const model = this.genAI.getGenerativeModel({
+        model: modelName,
         generationConfig: {
-          maxOutputTokens: options?.maxTokens,
+          maxOutputTokens: options?.maxTokens || 2048,
           temperature: options?.temperature || 0.7,
-        }
+          topP: 0.95,
+          topK: 64,
+        },
+        safetySettings,
       });
-      const result = await model?.generateContent(prompt);
-      const response = await result?.response;
-      return response?.text();
+
+      // Create a proper content array for better reliability
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      });
+
+      const response = await result.response;
+      return response.text();
     } catch (error) {
-      return this.handleError(error, 'Gemini');
+      console.error('Error in getCompletion:', error);
+      
+      // Enhanced error handling
+      if (error instanceof Error) {
+        // Check for specific API key issues
+        if (error.message.includes('API_KEY_INVALID') || error.message.includes('API key not valid')) {
+          console.error('Invalid API key. Please check your Gemini API key.');
+          return 'Error: Invalid API key. Please check your Gemini API key configuration.';
+        }
+        
+        // Check for quota issues
+        if (error.message.includes('QUOTA_EXCEEDED') || error.message.includes('quota')) {
+          console.error('API quota exceeded.');
+          return 'Error: API quota exceeded. Please try again later.';
+        }
+        
+        // Model-specific errors
+        if (error.message.includes('model not found') || error.message.includes('model unavailable')) {
+          console.error(`Model '${options?.model || this.model.id}' is unavailable.`);
+          return `Error: The selected model is unavailable. Please use a different model.`;
+        }
+        
+        return `Error: ${error.message}`;
+      }
+      return 'Unknown error occurred while communicating with the Gemini API';
     }
   }
 
@@ -589,12 +638,21 @@ Format sources as a "sources" array in the JSON response. Each source should be 
 
   async testConnection(): Promise<string> {
     try {
-      const model = this.genAI?.getGenerativeModel({ model: 'gemini-pro' });
-      const result = await model?.generateContent('Test connection');
-      const response = await result?.response;
-      return response?.text();
+      if (!this.genAI) {
+        return 'Error: Gemini service not initialized. API key may be missing.';
+      }
+      
+      const response = await this.getCompletion('Test connection', {
+        maxTokens: 50,
+        temperature: 0.1
+      });
+      
+      return `Connection successful: ${response.substring(0, 30)}...`;
     } catch (error) {
-      return this.handleError(error, 'Gemini');
+      if (error instanceof Error) {
+        return `Connection failed: ${error.message}`;
+      }
+      return 'Connection failed with unknown error';
     }
   }
 
