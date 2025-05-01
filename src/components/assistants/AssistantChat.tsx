@@ -3,7 +3,7 @@ import { AIAssistant, Message } from '../../types/ai';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
-import { Send, ArrowLeft, Book, Loader2 } from 'lucide-react';
+import { Send, ArrowLeft, Book, Loader2, AlertTriangle } from 'lucide-react';
 import { chatWithAssistant } from '../../services/documentChatService';
 
 interface AssistantChatProps {
@@ -15,6 +15,7 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sources, setSources] = useState<any[]>([]);
   const messageEndRef = useRef<HTMLDivElement>(null);
   
@@ -39,6 +40,9 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
     
+    // Reset error state
+    setError(null);
+    
     // Add user message to chat
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -47,42 +51,91 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
       timestamp: new Date()
     };
     
+    // Save input before clearing
+    const userInput = input.trim();
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
     
     try {
+      console.log(`Sending message to assistant: "${userInput.substring(0, 50)}${userInput.length > 50 ? '...' : ''}"`);
+      
       // Get response from the assistant using the chatWithAssistant service
-      const result = await chatWithAssistant(
+      // This returns a string directly, not an object with message property
+      const response = await chatWithAssistant(
         assistant,
-        input,
-        messages.filter(m => m.id !== 'welcome') // Filter out welcome message from context
+        userInput
       );
       
-      // Add assistant's response to the chat
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: result.message,
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      // Update document sources
-      if (result.relevantDocuments && result.relevantDocuments.length > 0) {
-        setSources(result.relevantDocuments);
+      // Since response is a string (not an object with message property),
+      // we can check it directly
+      if (response && (response.startsWith('Error:') || response.includes('trouble accessing my AI service'))) {
+        setError(response);
+        // Still add the response to chat but mark it as an error
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: response,
+          timestamp: new Date(),
+          metadata: { isError: true }
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      } else if (response) {
+        // Add normal assistant's response to the chat
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: response,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, assistantMessage]);
+      } else {
+        // Handle empty response
+        console.error('Received empty response from assistant');
+        setError('Received an empty response from the assistant.');
+        const unexpectedResponseMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: 'Sorry, I received an empty response. Please try again.',
+          timestamp: new Date(),
+          metadata: { isError: true }
+        };
+        setMessages(prev => [...prev, unexpectedResponseMessage]);
       }
+      
+      // Since we're not getting relevantDocuments anymore in this implementation,
+      // we'll skip updating sources
     } catch (error) {
       console.error('Error getting assistant response:', error);
+      
+      // Set the error state
+      setError('An error occurred while communicating with the assistant');
+      
+      // Determine specific error message
+      let errorMessage = 'Sorry, I encountered an error while processing your request.';
+      if (error instanceof Error) {
+        if (error.message.includes('message channel closed')) {
+          errorMessage = 'The connection was interrupted. Please try again.';
+          console.warn('Message channel closed prematurely:', error);
+        } else if (error.message.includes('API key')) {
+          errorMessage = 'There seems to be an issue with the API configuration. Please check your Gemini API key.';
+        } else if (error.message.includes('quota')) {
+          errorMessage = 'The API quota has been exceeded. Please try again later.';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      
       // Add error message to chat
       setMessages(prev => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: 'Sorry, I encountered an error while processing your request.',
-          timestamp: new Date()
+          content: errorMessage,
+          timestamp: new Date(),
+          metadata: { isError: true }
         }
       ]);
     } finally {
@@ -106,6 +159,14 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
           )}
         </div>
         
+        {/* Error banner if needed */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
+        
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map(message => (
@@ -119,7 +180,9 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
                 className={`max-w-[80%] rounded-lg p-3 ${
                   message.role === 'user'
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
+                    : message.metadata?.isError 
+                      ? 'bg-red-100 text-red-800' 
+                      : 'bg-muted'
                 }`}
               >
                 <p className="whitespace-pre-wrap">{message.content}</p>
@@ -186,4 +249,4 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
       )}
     </div>
   );
-} 
+}
