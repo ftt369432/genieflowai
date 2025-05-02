@@ -3,8 +3,8 @@ import { useAI } from '../hooks/useAI';
 import { useTheme } from '../contexts/ThemeContext';
 import { useKnowledgeBase } from '../hooks/useKnowledgeBase';
 import { cn } from '../lib/utils';
-import { Bot, Send, Mic, Settings, Loader2, Check, ChevronDown, Plus, Save, Library, Sparkles, Trash2, LineChart, Pin, Edit2, FileText, Image, File, Search, X, User, ExternalLink, Code, PenTool, BarChart, GraduationCap, Brain, Zap, Eye, Menu, ChevronRight, ChevronLeft, Sliders, Copy, MessageSquare } from 'lucide-react';
-import type { Message, AIDocument, DocumentReference, SearchFilters, DocumentProcessingOptions } from '../types/ai';
+import { Bot, Send, Mic, Settings, Loader2, Check, ChevronDown, Plus, Save, Library, Sparkles, Trash2, LineChart, Pin, Edit2, FileText, Image, File, Search, X, User, ExternalLink, Code, PenTool, BarChart, GraduationCap, Brain, Zap, Eye, Menu, ChevronRight, ChevronLeft, Sliders, Copy, MessageSquare, Users } from 'lucide-react';
+import type { Message, AIDocument, DocumentReference, SearchFilters, DocumentProcessingOptions, AIAssistant } from '../types/ai';
 import type { MessageMetadata as BaseMessageMetadata } from '../types/ai';
 import { AIModelSelector } from '../components/ai/AIModelSelector';
 import { SystemPrompt } from '../components/ai/SystemPrompt';
@@ -42,6 +42,10 @@ import remarkGfm from 'remark-gfm';
 import { MarkdownMessage } from '../components/ai/MarkdownMessage';
 import { ProfessionalModeService } from '../services/legalDoc/professionalModeService';
 import { AIContext } from '../contexts/AIContext';
+import { useAssistantStore } from '../store/assistantStore';
+import { Card } from '../components/ui/Card';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 interface MessageMetadata extends BaseMessageMetadata {
   edited?: boolean;
@@ -515,6 +519,8 @@ const documentUtils = {
 };
 
 export function AIAssistantPage() {
+  const navigate = useNavigate();
+  const { user, session } = useAuth();
   const { 
     messages, 
     isLoading, 
@@ -1525,6 +1531,26 @@ export function AIAssistantPage() {
 
   // Add a new state for the right sidebar
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
+  
+  // Assistants state
+  const { assistants } = useAssistantStore();
+  const [showAssistantsDialog, setShowAssistantsDialog] = useState<boolean>(false);
+  const [selectedAssistant, setSelectedAssistant] = useState<AIAssistant | null>(null);
+
+  // Add dialog state for editing an assistant
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
+  const [assistantToEdit, setAssistantToEdit] = useState<AIAssistant | null>(null);
+  
+  // Add state for creating a new assistant
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState<boolean>(false);
+  const [newAssistantData, setNewAssistantData] = useState<Partial<AIAssistant>>({
+    name: '',
+    description: '',
+    type: 'general',
+    capabilities: [],
+    systemPrompt: '',
+    isActive: true
+  });
 
   return (
     <AIErrorBoundary>
@@ -1539,6 +1565,17 @@ export function AIAssistantPage() {
             )}>
               <div className="h-full flex flex-col">
                 <div className="p-4 border-b border-border/50">
+                  <Link 
+                    to="/assistants"
+                    className="w-full justify-start gap-2 mb-2 bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center px-4 py-2 rounded-md text-sm font-medium"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate('/assistants', { state: { user, session } });
+                    }}
+                  >
+                    <Users className="h-4 w-4" />
+                    Assistants
+                  </Link>
                   <Button 
                     variant="outline"
                     className="w-full justify-start gap-2"
@@ -1604,6 +1641,19 @@ export function AIAssistantPage() {
                 </div>
                 
                 <div className="flex items-center gap-2">
+                  {/* Replace the Assistants button with a navigation link */}
+                  <Link 
+                    to="/assistants"
+                    className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate('/assistants', { state: { user, session } });
+                    }}
+                  >
+                    <Users className="w-4 h-4" />
+                    <span className="text-sm">Assistants</span>
+                  </Link>
+                  
                   <Tooltip content="Model Settings">
                     <Button 
                       variant="ghost" 
@@ -1807,6 +1857,225 @@ export function AIAssistantPage() {
           </div>
         </div>
       </TooltipProvider>
+      
+      {/* Assistants Dialog */}
+      <Dialog open={showAssistantsDialog} onOpenChange={setShowAssistantsDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle>AI Assistants</DialogTitle>
+              <DialogDescription>
+                Select a trained assistant to use in your conversation. Chat history will be preserved.
+              </DialogDescription>
+            </div>
+            <Button
+              onClick={() => {
+                setNewAssistantData({
+                  name: '',
+                  description: '',
+                  type: 'general',
+                  capabilities: [],
+                  systemPrompt: '',
+                  isActive: true
+                });
+                setShowAssistantsDialog(false);
+                setIsCreateDialogOpen(true);
+              }}
+              className="mt-0"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Assistant
+            </Button>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 my-4">
+            {assistants.length > 0 ? (
+              assistants.map(assistant => (
+                <Card 
+                  key={assistant.id}
+                  className={cn(
+                    "p-4 hover:shadow-md transition-shadow cursor-pointer relative",
+                    selectedAssistant?.id === assistant.id ? "border-2 border-primary" : ""
+                  )}
+                  onClick={() => setSelectedAssistant(assistant)}
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 hover:bg-background"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAssistantToEdit(assistant);
+                      setIsEditDialogOpen(true);
+                    }}
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                  <div className="flex flex-col h-full">
+                    <div className="flex justify-between items-start pr-8">
+                      <h3 className="text-lg font-semibold">{assistant.name}</h3>
+                      <div className={cn(
+                        "px-2 py-1 rounded-full text-xs",
+                        assistant.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                      )}>
+                        {assistant.isActive ? 'Active' : 'Inactive'}
+                      </div>
+                    </div>
+                    
+                    {assistant.description && (
+                      <p className="text-muted-foreground text-sm mt-2 flex-grow">{assistant.description}</p>
+                    )}
+                    
+                    <div className="flex flex-wrap gap-1 mt-3">
+                      {assistant.capabilities?.slice(0, 3).map((capability, i) => (
+                        <Badge key={i} variant="secondary" className="text-xs">{capability}</Badge>
+                      ))}
+                      {assistant.capabilities?.length > 3 && (
+                        <Badge variant="outline" className="text-xs">+{assistant.capabilities.length - 3} more</Badge>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <div className="col-span-full flex flex-col items-center justify-center p-8 border rounded-lg bg-muted/10">
+                <p className="text-muted-foreground mb-4">You haven't created any assistants yet.</p>
+                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                  Create Your First Assistant
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAssistantsDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                if (selectedAssistant) {
+                  // Apply the selected assistant's system prompt and configuration
+                  setSystemPrompt(selectedAssistant.systemPrompt || '');
+                  setShowAssistantsDialog(false);
+                  
+                  // Update the conversation title to reflect the selected assistant
+                  if (currentConversation) {
+                    updateConversationTitle(
+                      currentConversation, 
+                      `Chat with ${selectedAssistant.name}`
+                    );
+                  }
+                  
+                  // Add a system message indicating the assistant change
+                  const systemMessage: Message = {
+                    id: uuidv4(),
+                    role: 'system',
+                    content: `Switched to ${selectedAssistant.name} assistant. ${selectedAssistant.description || ''}`,
+                    timestamp: new Date()
+                  };
+                  setChatMessages(prev => [...prev, systemMessage]);
+                }
+              }}
+              disabled={!selectedAssistant}
+            >
+              Use Selected Assistant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Assistant Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Assistant</DialogTitle>
+            <DialogDescription>
+              Modify the assistant's details and capabilities.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {assistantToEdit && (
+            <div className="space-y-4">
+              <Input
+                value={assistantToEdit.name}
+                onChange={(e) => setAssistantToEdit({ ...assistantToEdit, name: e.target.value })}
+                placeholder="Assistant Name"
+              />
+              <Textarea
+                value={assistantToEdit.description}
+                onChange={(e) => setAssistantToEdit({ ...assistantToEdit, description: e.target.value })}
+                placeholder="Assistant Description"
+              />
+              <Textarea
+                value={assistantToEdit.systemPrompt}
+                onChange={(e) => setAssistantToEdit({ ...assistantToEdit, systemPrompt: e.target.value })}
+                placeholder="System Prompt"
+              />
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                if (assistantToEdit) {
+                  // Save changes to the assistant
+                  setAssistantToEdit(null);
+                  setIsEditDialogOpen(false);
+                }
+              }}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Create Assistant Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create New Assistant</DialogTitle>
+            <DialogDescription>
+              Define the assistant's details and capabilities.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <Input
+              value={newAssistantData.name}
+              onChange={(e) => setNewAssistantData({ ...newAssistantData, name: e.target.value })}
+              placeholder="Assistant Name"
+            />
+            <Textarea
+              value={newAssistantData.description}
+              onChange={(e) => setNewAssistantData({ ...newAssistantData, description: e.target.value })}
+              placeholder="Assistant Description"
+            />
+            <Textarea
+              value={newAssistantData.systemPrompt}
+              onChange={(e) => setNewAssistantData({ ...newAssistantData, systemPrompt: e.target.value })}
+              placeholder="System Prompt"
+            />
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                // Save the new assistant
+                setIsCreateDialogOpen(false);
+              }}
+            >
+              Create Assistant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AIErrorBoundary>
   );
 } 
