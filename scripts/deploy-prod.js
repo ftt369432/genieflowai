@@ -1,154 +1,130 @@
 #!/usr/bin/env node
 
 /**
- * Production Deployment Script for GenieFlowAI
+ * GenieFlowAI Production Deployment Script
  * 
- * This script handles deployment to Netlify and ensures that 
- * the correct environment variables are set for production.
+ * This script:
+ * 1. Runs the production cleanup to remove test files
+ * 2. Builds the application for production
+ * 3. Deploys to Netlify production environment
  */
 
 const { execSync } = require('child_process');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 
-// Colors for terminal output
+// Colors for console output
 const colors = {
   reset: '\x1b[0m',
-  red: '\x1b[31m',
+  bright: '\x1b[1m',
+  dim: '\x1b[2m',
   green: '\x1b[32m',
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
+  red: '\x1b[31m',
 };
 
-// Print a colored message
-const print = (color, message) => {
-  console.log(`${colors[color]}${message}${colors.reset}`);
-};
+// Banner
+console.log(`
+${colors.blue}${colors.bright}=======================================${colors.reset}
+${colors.blue}${colors.bright}  GenieFlowAI Production Deployment   ${colors.reset}
+${colors.blue}${colors.bright}=======================================${colors.reset}
+`);
 
-// Execute a command and return the output
-const exec = (command) => {
+const rootDir = path.resolve(__dirname, '..');
+
+// Make sure we're in the right directory
+if (!fs.existsSync(path.join(rootDir, 'package.json'))) {
+  console.error(`${colors.red}Error: package.json not found. Make sure you are running this script from the project root.${colors.reset}`);
+  process.exit(1);
+}
+
+// Function to run a command and log its output
+function runCommand(command, description) {
+  console.log(`\n${colors.yellow}${colors.bright}${description}${colors.reset}`);
+  console.log(`${colors.dim}$ ${command}${colors.reset}\n`);
+  
   try {
-    return execSync(command, { stdio: 'inherit' });
+    execSync(command, { stdio: 'inherit', cwd: rootDir });
+    return true;
   } catch (error) {
-    print('red', `Error executing command: ${command}`);
-    print('red', error.message);
+    console.error(`${colors.red}Failed to execute: ${command}${colors.reset}`);
+    console.error(`${colors.red}${error.message}${colors.reset}`);
+    return false;
+  }
+}
+
+// 1. Check environment variables
+console.log(`${colors.yellow}Checking environment variables...${colors.reset}`);
+const requiredEnvVars = [
+  'VITE_SUPABASE_URL',
+  'VITE_SUPABASE_ANON_KEY'
+];
+
+const missingEnvVars = requiredEnvVars.filter(env => !process.env[env]);
+if (missingEnvVars.length > 0) {
+  console.error(`${colors.red}Missing required environment variables: ${missingEnvVars.join(', ')}${colors.reset}`);
+  console.error(`${colors.red}Please set these variables before deploying.${colors.reset}`);
+  process.exit(1);
+}
+
+// 2. Run the production cleanup script
+if (!runCommand('node scripts/production-cleanup.js', 'Running production cleanup')) {
+  console.error(`${colors.red}Production cleanup failed. Fix errors before continuing.${colors.reset}`);
+  process.exit(1);
+}
+
+// 3. Install production dependencies only
+if (!runCommand('npm ci --production', 'Installing production dependencies')) {
+  console.error(`${colors.red}Failed to install production dependencies.${colors.reset}`);
+  process.exit(1);
+}
+
+// 4. Run tests for production verification
+if (!runCommand('npm run test:prod', 'Running production verification tests')) {
+  console.log(`${colors.yellow}Warning: Production tests had issues. Review before continuing.${colors.reset}`);
+  
+  // Prompt to continue
+  const readline = require('readline').createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  
+  readline.question(`${colors.yellow}Do you want to continue with deployment? (y/n) ${colors.reset}`, (answer) => {
+    readline.close();
+    if (answer.toLowerCase() !== 'y') {
+      console.log(`${colors.blue}Deployment aborted.${colors.reset}`);
+      process.exit(0);
+    } else {
+      continueDeploy();
+    }
+  });
+} else {
+  continueDeploy();
+}
+
+// Continue deployment after checks
+function continueDeploy() {
+  // 5. Build the production app
+  if (!runCommand('npm run build', 'Building for production')) {
+    console.error(`${colors.red}Build failed. Fix errors before deploying.${colors.reset}`);
     process.exit(1);
   }
-};
-
-// Main function
-const deploy = () => {
-  print('cyan', '🚀 Starting production deployment process...');
   
-  // Step 1: Verify we're on the production-ready branch
-  try {
-    const currentBranch = execSync('git branch --show-current').toString().trim();
-    if (currentBranch !== 'production-ready') {
-      print('yellow', `⚠️ Warning: You're not on the production-ready branch. Current branch: ${currentBranch}`);
-      const proceed = require('readline-sync').question('Continue anyway? (y/n): ');
-      if (proceed.toLowerCase() !== 'y') {
-        print('red', '❌ Deployment aborted.');
-        process.exit(0);
-      }
-    }
-  } catch (error) {
-    print('red', '❌ Failed to check git branch.');
-    print('red', error.message);
+  // 6. Deploy to Netlify production
+  if (!runCommand('netlify deploy --prod', 'Deploying to Netlify production')) {
+    console.error(`${colors.red}Deployment to Netlify failed.${colors.reset}`);
     process.exit(1);
   }
   
-  // Step 2: Make sure all changes are committed
-  try {
-    const status = execSync('git status --porcelain').toString().trim();
-    if (status) {
-      print('yellow', '⚠️ Warning: You have uncommitted changes:');
-      console.log(status);
-      const proceed = require('readline-sync').question('Commit these changes? (y/n): ');
-      if (proceed.toLowerCase() === 'y') {
-        const message = require('readline-sync').question('Commit message: ');
-        exec(`git add . && git commit -m "${message}"`);
-      } else {
-        print('red', '❌ Deployment aborted. Please commit your changes first.');
-        process.exit(0);
-      }
-    }
-  } catch (error) {
-    print('red', '❌ Failed to check git status.');
-    print('red', error.message);
-    process.exit(1);
-  }
+  // 7. Final success message
+  console.log(`\n${colors.green}${colors.bright}✓ GenieFlowAI has been successfully deployed to production!${colors.reset}`);
+  console.log(`${colors.green}✓ Your app is now live at: https://genieflowai.com${colors.reset}`);
   
-  // Step 3: Verify environment setup
-  print('blue', '🔍 Verifying environment setup...');
-  
-  // Check if .env.production exists
-  const envProductionPath = path.join(process.cwd(), '.env.production');
-  if (!fs.existsSync(envProductionPath)) {
-    print('yellow', '⚠️ No .env.production file found. Creating one from .env...');
-    
-    // Read .env file
-    const envPath = path.join(process.cwd(), '.env');
-    if (!fs.existsSync(envPath)) {
-      print('red', '❌ No .env file found. Cannot create .env.production.');
-      process.exit(1);
-    }
-    
-    let envContent = fs.readFileSync(envPath, 'utf8');
-    
-    // Replace development variables with production ones
-    envContent = envContent
-      .replace(/NODE_ENV=development/g, 'NODE_ENV=production')
-      .replace(/VITE_USE_MOCK=true/g, 'VITE_USE_MOCK=false')
-      .replace(/VITE_API_URL=http:\/\/localhost:[0-9]+\/api/g, 'VITE_API_URL=https://genieflowai.netlify.app/api')
-      .replace(/VITE_API_BASE_URL=http:\/\/localhost:[0-9]+/g, 'VITE_API_BASE_URL=https://genieflowai.netlify.app')
-      .replace(/VITE_DEBUG_MODE=true/g, 'VITE_DEBUG_MODE=false');
-    
-    // Save .env.production
-    fs.writeFileSync(envProductionPath, envContent);
-    print('green', '✅ Created .env.production file.');
-  }
-  
-  // Step 4: Build the project
-  print('blue', '🔨 Building project for production...');
-  exec('npm run build');
-  print('green', '✅ Build completed successfully.');
-  
-  // Step 5: Deploy to Netlify
-  print('blue', '🚀 Deploying to Netlify...');
-  exec('npx netlify deploy --prod');
-  print('green', '✅ Deployment to Netlify completed.');
-  
-  // Step 6: Update the TODO list
-  try {
-    const todoPath = path.join(process.cwd(), 'TODO.md');
-    if (fs.existsSync(todoPath)) {
-      let todoContent = fs.readFileSync(todoPath, 'utf8');
-      
-      // Mark completed tasks
-      todoContent = todoContent
-        .replace(/- \[ \] Complete Google OAuth verification process/g, '- [x] Complete Google OAuth verification process')
-        .replace(/- \[ \] Configure OAuth consent screen/g, '- [x] Configure OAuth consent screen')
-        .replace(/- \[ \] Add authorized domains/g, '- [x] Add authorized domains')
-        .replace(/- \[ \] Add test users/g, '- [x] Add test users')
-        .replace(/- \[ \] Configure Supabase URLs/g, '- [x] Configure Supabase URLs')
-        .replace(/- \[ \] Update Site URL to Netlify domain/g, '- [x] Update Site URL to Netlify domain')
-        .replace(/- \[ \] Add correct redirect URLs/g, '- [x] Add correct redirect URLs')
-        .replace(/- \[ \] Verify OAuth state handling/g, '- [x] Verify OAuth state handling')
-        .replace(/- \[ \] Set up environment variables in Netlify/g, '- [x] Set up environment variables in Netlify');
-      
-      fs.writeFileSync(todoPath, todoContent);
-      print('green', '✅ Updated TODO.md to mark tasks as completed.');
-    }
-  } catch (error) {
-    print('yellow', '⚠️ Warning: Failed to update TODO list.');
-    print('yellow', error.message);
-  }
-  
-  print('green', '✅ Deployment process completed successfully!');
-  print('cyan', 'Your application is now live at: https://genieflowai.netlify.app');
-};
-
-// Run the deployment
-deploy(); 
+  // 8. Reminder for post-deployment steps
+  console.log(`\n${colors.yellow}Post-deployment checklist:${colors.reset}`);
+  console.log(`${colors.yellow}1. Verify all features are working in production${colors.reset}`);
+  console.log(`${colors.yellow}2. Check analytics are properly recording visits${colors.reset}`);
+  console.log(`${colors.yellow}3. Verify email services are functioning${colors.reset}`);
+  console.log(`${colors.yellow}4. Review Supabase logs for any errors${colors.reset}`);
+}

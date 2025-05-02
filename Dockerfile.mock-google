@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install express and required dependencies
+COPY package.json ./
+RUN npm install -g npm@latest && \
+    npm install express cors
+
+# Copy mock API server code
+COPY src/services/mocks /app/src/services/mocks
+
+# Set environment variables
+ENV PORT=3001
+ENV NODE_ENV=development
+
+# Expose the port
+EXPOSE 3001
+
+# Start the mock server
+CMD ["node", "--experimental-modules", "/app/src/services/mocks/server.js"]

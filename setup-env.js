@@ -41,13 +41,13 @@ console.log('Please enter your Supabase project details:');
 
 rl.question('Supabase URL: ', (supabaseUrl) => {
   rl.question('Supabase Anon Key: ', (supabaseAnonKey) => {
-    rl.question('OpenAI API Key (for embeddings): ', (openaiApiKey) => {
+    rl.question('Gemini API Key (for embeddings and AI features): ', (geminiApiKey) => {
       // Update environment variables
       currentEnv['VITE_SUPABASE_URL'] = supabaseUrl;
       currentEnv['VITE_SUPABASE_ANON_KEY'] = supabaseAnonKey;
       
-      if (openaiApiKey) {
-        currentEnv['VITE_OPENAI_API_KEY'] = openaiApiKey;
+      if (geminiApiKey) {
+        currentEnv['VITE_GEMINI_API_KEY'] = geminiApiKey;
       }
       
       // Convert to .env format
@@ -64,8 +64,10 @@ rl.question('Supabase URL: ', (supabaseUrl) => {
       console.log('   cat setup-database.sql | pbcopy  # Copy to clipboard');
       console.log('2. Test your Supabase connection:');
       console.log('   node test-supabase.js');
+      console.log('3. Validate your Gemini API key:');
+      console.log('   node scripts/validate-gemini-api-key.js');
       
       rl.close();
     });
   });
-}); 
+});

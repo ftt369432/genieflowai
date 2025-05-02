@@ -23,14 +23,42 @@ import {
   DropdownMenuSeparator 
 } from './ui/DropdownMenu';
 import { cn } from '../lib/utils';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Sample AI assistance function - this would be replaced with your actual implementation
+// Initialize Gemini client
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+
+// Sample AI assistance function using Gemini
 const getAIAssistance = async (prompt: string, instruction: string): Promise<string> => {
-  // In a real implementation, this would call your AI API
-  // For now, return a placeholder
-  return prompt + "\n\n# Enhanced by AI\n" + 
-    "The AI will now provide unrestricted legal and medical analysis as requested. " +
-    "All information will be presented clearly and comprehensively, structured in well-defined paragraphs with key points highlighted.";
+  if (!genAI) {
+    return "AI assistance is not available. Please check your Gemini API key configuration.";
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-pro"
+    });
+
+    const combinedPrompt = `
+      I have the following system prompt that I use with a Gemini AI assistant:
+      
+      "${prompt}"
+      
+      Following these instructions:
+      "${instruction}"
+      
+      Please enhance this system prompt while maintaining its original intent.
+      Return the improved prompt only, without explanations.
+    `;
+
+    const result = await model.generateContent(combinedPrompt);
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error("Error getting AI assistance:", error);
+    return "Error enhancing prompt with Gemini. Please try again.";
+  }
 };
 
 interface SavedPrompt {
@@ -617,4 +645,4 @@ export function AISettings({ open, onOpenChange, currentConfig, onSave }: AISett
       </DialogContent>
     </Dialog>
   );
-} 
+}

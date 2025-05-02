@@ -20,7 +20,7 @@ This document provides detailed instructions for deploying the GenieFlowAI appli
    - Click "New site from Git" and select your repository
    - Configure build settings:
      - Build command: `npm run build`
-     - Publish directory: `dist`
+     - Publish directory: `build`
 
 3. **Configure environment variables**
    - Go to Site settings > Build & deploy > Environment
@@ -114,4 +114,4 @@ Ensure the following environment variables are set correctly in Netlify:
 - [ ] Test core functionalities
 - [ ] Check for any console errors
 
-For additional help, refer to the [Netlify documentation](https://docs.netlify.com/) or contact the GenieFlowAI development team. 
+For additional help, refer to the [Netlify documentation](https://docs.netlify.com/) or contact the GenieFlowAI development team.

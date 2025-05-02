@@ -38,20 +38,29 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var fs = require("fs");
 var path = require("path");
-// import { prompt } from 'inquirer'; // Remove this import if not used
+
 function configureAI() {
     return __awaiter(this, void 0, void 0, function () {
         var testConfig, envContent;
         return __generator(this, function (_a) {
             testConfig = {
-                openaiKey: "test-openai-key",
-                geminiKey: "test-gemini-key",
-                claudeKey: "test-claude-key"
+                geminiKey: "test-gemini-key"
             };
-            envContent = "\nVITE_OPENAI_API_KEY=".concat(testConfig.openaiKey, "\nVITE_GEMINI_API_KEY=").concat(testConfig.geminiKey, "\nVITE_CLAUDE_API_KEY=").concat(testConfig.claudeKey, "\n# CLAUDE_API_KEY not configured\n# ... other configurations\n  ").trim();
-            fs.writeFileSync(path.join(process.cwd(), '.env.local'), envContent);
+            
+            // Create a .env file with the test key
+            envContent = "VITE_GEMINI_API_KEY=" + testConfig.geminiKey + "\n";
+            
+            // Write the .env file
+            fs.writeFileSync(path.resolve(process.cwd(), '.env'), envContent);
+            
+            console.log('Created .env file with test Gemini API key');
             return [2 /*return*/];
         });
     });
 }
-configureAI().catch(console.error);
+
+// Run the configuration
+configureAI().catch(function (error) {
+    console.error('Error configuring AI:', error);
+    process.exit(1);
+});

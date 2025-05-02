@@ -1,138 +1,73 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { aiConfig } from './aiConfig';
 import { getEnv } from '../config/env';
 
-/**
- * Simplified Gemini Service for direct API access
- * This implementation avoids the complex inheritance structure to focus on core functionality
- */
 export class GeminiSimplifiedService {
-  private genAI: GoogleGenerativeAI | null = null;
-  private apiKey: string = '';
-  private isInitialized: boolean = false;
-  private defaultModel: string = 'gemini-2.0-flash';
+  private client: GoogleGenerativeAI;
+  private defaultModel = 'gemini-2.0-flash';
 
   constructor() {
     try {
       const env = getEnv();
-      // Get API key directly from environment
-      this.apiKey = env.geminiApiKey || '';
-      
-      // Get the configured model from environment
+      const apiKey = env.geminiApiKey;
+      this.client = new GoogleGenerativeAI(apiKey);
       this.defaultModel = env.aiModel || this.defaultModel;
-      
-      // Fallback to aiConfig if direct env var is not available
-      if (!this.apiKey) {
-        try {
-          this.apiKey = aiConfig.getApiKey('google');
-          console.log('Using API key from aiConfig');
-        } catch (error) {
-          console.error('Failed to get API key from aiConfig:', error);
-        }
-      }
-      
-      if (this.apiKey) {
-        this.genAI = new GoogleGenerativeAI(this.apiKey);
-        this.isInitialized = true;
-        console.log('GeminiSimplifiedService initialized successfully');
-        console.log(`Using Gemini model: ${this.defaultModel}`);
-      } else {
-        console.error('Failed to initialize GeminiSimplifiedService: No API key found');
-      }
     } catch (error) {
       console.error('Error initializing GeminiSimplifiedService:', error);
+      throw error;
     }
   }
 
-  /**
-   * Get a completion from the Gemini API
-   */
-  async getCompletion(prompt: string, options?: {
-    maxTokens?: number;
-    temperature?: number;
-    model?: string;
-  }): Promise<string> {
+  async generateText(prompt: string): Promise<string> {
     try {
-      if (!this.isInitialized || !this.genAI) {
-        throw new Error('GeminiSimplifiedService not properly initialized');
-      }
-      
-      const modelName = options?.model || this.defaultModel;
-      console.log(`Using Gemini model: ${modelName}`);
-      
-      const model = this.genAI.getGenerativeModel({ 
-        model: modelName,
+      const model = this.client.getGenerativeModel({ model: this.defaultModel });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text() || '';
+    } catch (error) {
+      console.error('Gemini API Error:', error);
+      throw error;
+    }
+  }
+
+  // Add a getCompletion method that the legalAssistant service expects
+  async getCompletion(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+    try {
+      const model = this.client.getGenerativeModel({
+        model: this.defaultModel,
         generationConfig: {
+          temperature: options?.temperature,
           maxOutputTokens: options?.maxTokens,
-          temperature: options?.temperature || 0.7,
         }
       });
       
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      const text = response.text();
-      return text;
+      return response.text() || '';
     } catch (error) {
-      console.error('Error in getCompletion:', error);
-      if (error instanceof Error) {
-        return `Error: ${error.message}`;
-      }
-      return 'Unknown error occurred';
+      console.error('Gemini API Error:', error);
+      throw error;
     }
   }
 
-  /**
-   * Test the connection to the Gemini API
-   */
-  async testConnection(): Promise<{success: boolean, message: string}> {
+  async getEmbedding(text: string): Promise<number[]> {
     try {
-      if (!this.isInitialized || !this.genAI) {
-        return {
-          success: false, 
-          message: 'Service not initialized. API key may be missing.'
-        };
+      const model = this.client.getGenerativeModel({ model: 'embedding-001' });
+      const embedResult = await model.embedContent(text);
+      // Directly access the values array from the embedding object
+      const values = embedResult.embedding.values;
+      if (!values) {
+        throw new Error('Embedding values are missing in the response');
       }
-      
-      const model = this.genAI.getGenerativeModel({ model: this.defaultModel });
-      const result = await model.generateContent('Test connection');
-      const response = await result.response;
-      return {
-        success: true,
-        message: `Connection successful. Response: ${response.text().substring(0, 50)}...`
-      };
+      return values;
     } catch (error) {
-      console.error('Connection test failed:', error);
-      if (error instanceof Error) {
-        return {
-          success: false,
-          message: `Connection failed: ${error.message}`
-        };
-      }
-      return {
-        success: false,
-        message: 'Connection failed with unknown error'
-      };
+      console.error('Error getting embedding:', error);
+      throw error;
     }
-  }
-
-  /**
-   * Check if the service is initialized properly
-   */
-  isReady(): boolean {
-    return this.isInitialized && !!this.genAI;
-  }
-
-  /**
-   * Get the API key being used (for diagnostic purposes)
-   */
-  getApiKey(): string {
-    // Return masked version for security
-    if (!this.apiKey) return '';
-    const visible = 4;
-    return '•'.repeat(Math.max(0, this.apiKey.length - visible)) + 
-           this.apiKey.slice(-visible);
   }
 }
 
-// Export a singleton instance
-export const geminiSimplifiedService = new GeminiSimplifiedService(); 
+// Export an instance of the class to be used by other services
+export const geminiSimplifiedService = new GeminiSimplifiedService();
+
+// Make sure this is also exported as default for compatibility
+export default { geminiSimplifiedService };

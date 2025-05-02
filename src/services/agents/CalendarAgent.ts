@@ -275,7 +275,7 @@ export class CalendarAgent extends BaseAgent {
     return this.findCommonSlots(availabilities, duration);
   }
 
-  private findCommonSlots(
+  private async findCommonSlots(
     availabilities: Array<Array<{ start: Date; end: Date }>>,
     duration: number
   ): Array<{ start: Date; end: Date }> {
@@ -319,7 +319,7 @@ export class CalendarAgent extends BaseAgent {
     }
   }
 
-  private async suggestMeetingTimes(
+  private async findSuggestedMeetingTimes(
     participants: string[],
     duration: number,
     preferences?: any
@@ -342,4 +342,4 @@ export class CalendarAgent extends BaseAgent {
       };
     }
   }
-} 
+}

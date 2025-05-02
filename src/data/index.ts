@@ -1,9 +1,2 @@
-// Export all test data
-export {
-  testContacts,
-  testEvents,
-  testTasks,
-  testDocuments,
-  testEmails,
-  testAnalytics
-} from './testData'; 
+// Export production data types and utilities only
+// Test data exports have been removed for production

@@ -5,10 +5,6 @@ import { WorkflowOrchestrator } from '../WorkflowOrchestrator';
 import { AgentCreationService } from '../AgentCreationService';
 import { VoiceControl } from '../VoiceControl';
 import { AIAssistantService } from '../AIAssistantService';
-import { OpenAIService } from '../ai/openai';
-import { mockAIService } from '../ai/mockOpenAI';
-import { GeminiService } from '../ai/gemini';
-import { ClaudeService } from '../ai/claude';
 import { geminiService } from '../gemini';
 
 class ServiceContainer {
@@ -91,7 +87,6 @@ class ServiceContainer {
   }
 
   private initializeAIService(): AIService {
-    // Always use geminiService regardless of environment configuration
     console.log('Initializing AI Service: Using Google Gemini as provider');
     return geminiService as any;
   }
@@ -115,4 +110,4 @@ export const {
   agentCreationService,
   voiceControl,
   aiAssistant
-} = services; 
+} = services;

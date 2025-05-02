@@ -21,6 +21,14 @@ export class TeamService {
         }
         return this.getMockTeam();
       }
+      
+      // Detect policy recursion errors which require fix_supabase_policy.sql to be applied
+      if (checkError && checkError.code === '42P17' && checkError.message.includes('infinite recursion detected in policy')) {
+        console.error('Supabase policy recursion error detected. Please apply fix_supabase_policy.sql to your database.');
+        console.error('You can run: node scripts/fix-supabase-policy.js');
+        console.warn('Using mock data until policy is fixed.');
+        return this.getMockTeam();
+      }
 
       // First, fetch teams the user belongs to
       // We'll try this, but we'll catch and handle any "table doesn't exist" errors
@@ -29,6 +37,14 @@ export class TeamService {
           .from('team_members')
           .select('team_id')
           .eq('user_id', userId);
+
+        // Handle policy recursion errors which require fix_supabase_policy.sql to be applied
+        if (membershipError && membershipError.code === '42P17' && membershipError.message.includes('infinite recursion detected in policy')) {
+          console.error('Supabase policy recursion error detected in team_members. Please apply fix_supabase_policy.sql');
+          console.error('You can run: node scripts/fix-supabase-policy.js');
+          console.warn('Using mock data until policy is fixed.');
+          return this.getMockTeam();
+        }
 
         if (membershipError) {
           // If the error is specifically about the table not existing, return mock data
@@ -106,23 +122,47 @@ export class TeamService {
 
   // Generate consistent mock data for demo/development
   private static getMockTeam(): Team[] {
+    console.info('🧪 MOCK MODE: Using mock team data for development');
+    
     return [{
       id: 'mock-team-1',
-      name: 'Demo Team',
-      description: 'This is a demo team (tables not yet created in database)',
+      name: 'Demo Team [MOCK]',
+      description: 'This is a mock team for development (Supabase tables not available or policy issue)',
       avatar: '/logos/default.png',
       members: [
         {
           id: 'mock-member-1',
+          user_id: 'mock-user-id',
+          team_id: 'mock-team-1',
           name: 'Demo User',
           avatar: '/avatars/default.png',
           role: 'admin',
           status: 'online',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
+        },
+        {
+          id: 'mock-member-2',
+          user_id: 'mock-user-2',
+          team_id: 'mock-team-1',
+          name: 'Development Tester',
+          avatar: '/images/avatar-female-1.svg',
+          role: 'member',
+          status: 'away',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         }
       ],
-      pages: [],
+      pages: [
+        {
+          id: 'mock-page-1',
+          team_id: 'mock-team-1',
+          title: 'Development Notes',
+          content: '# Development Notes\n\nThis is a mock page for testing.',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ],
       threads: [],
       direct_messages: [],
       created_at: new Date().toISOString(),
@@ -272,4 +312,4 @@ export class TeamService {
     if (error) throw error;
     return data || [];
   }
-} 
+}

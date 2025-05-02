@@ -1,8 +1,6 @@
 import { ActionMetrics } from '../../types/workflow';
 import { BehaviorSubject } from 'rxjs';
-import { ActionResult } from '../../types/actions';
-import { getEnv } from '../../config/env';
-import { geminiService } from '../gemini';
+import { GeminiService } from '../gemini';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuditStore } from '../../store/auditStore';
 
@@ -47,7 +45,7 @@ export interface AgentActionResult {
 
 export abstract class BaseAgent {
   protected config: AgentConfig;
-  protected ai = geminiService;
+  protected ai: GeminiService;
   protected context: Record<string, any> = {};
   protected metrics$ = new BehaviorSubject<ActionMetrics[]>([]);
   protected isExecuting$ = new BehaviorSubject<boolean>(false);
@@ -93,6 +91,9 @@ export abstract class BaseAgent {
     this.lastModified = this.config.lastModified;
     this.status = this.config.status;
     this.preferences = this.config.preferences;
+
+    // Instantiate GeminiService
+    this.ai = new GeminiService();
   }
 
   public async executeAction(action: AgentAction): Promise<AgentActionResult> {
@@ -262,14 +263,12 @@ export abstract class BaseAgent {
   
   protected async getCompletion(prompt: string, context: Record<string, any> = {}): Promise<string> {
     const systemPrompt = this.buildSystemPrompt(context);
-    const env = getEnv();
     
     // Call the Gemini service with the proper parameters
     try {
       const completion = await this.ai.getCompletion(
         `${systemPrompt}\n\n${prompt}`,
         {
-          model: "gemini-pro", // Use Gemini model
           maxTokens: 1000, // Default max tokens
           temperature: 0.7
         }
@@ -424,4 +423,4 @@ Always respond in a helpful, concise, and accurate manner.
   protected abstract performAction(action: AgentAction): Promise<any>;
 }
 
-// Similar implementations for DocumentAgent, CalendarAgent, etc. 
+// Similar implementations for DocumentAgent, CalendarAgent, etc.

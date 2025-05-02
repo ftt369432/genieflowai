@@ -2,7 +2,7 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
-const { OpenAI } = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // Initialize Supabase
 const supabase = createClient(
@@ -10,10 +10,8 @@ const supabase = createClient(
   process.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.VITE_OPENAI_API_KEY,
-});
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(process.env.VITE_GEMINI_API_KEY);
 
 // Check configuration
 if (!process.env.VITE_SUPABASE_URL || !process.env.VITE_SUPABASE_ANON_KEY) {
@@ -21,19 +19,17 @@ if (!process.env.VITE_SUPABASE_URL || !process.env.VITE_SUPABASE_ANON_KEY) {
   process.exit(1);
 }
 
-if (!process.env.VITE_OPENAI_API_KEY) {
-  console.error('Missing OpenAI API key. Please run setup-env.js first.');
+if (!process.env.VITE_GEMINI_API_KEY) {
+  console.error('Missing Gemini API key. Please run setup-env.js first.');
   process.exit(1);
 }
 
 // Function to generate embedding
 async function getEmbedding(text) {
   try {
-    const response = await openai.embeddings.create({
-      model: "text-embedding-ada-002",
-      input: text
-    });
-    return response.data[0].embedding;
+    const model = genAI.getGenerativeModel({ model: 'embedding-001' });
+    const embedResult = await model.embedContent(text);
+    return embedResult.embedding.values;
   } catch (error) {
     console.error('Error generating embedding:', error);
     throw error;
@@ -160,4 +156,4 @@ This Agreement ("Agreement") is made and entered into as of the date of the last
   }
 }
 
-uploadSampleDocument(); 
+uploadSampleDocument();

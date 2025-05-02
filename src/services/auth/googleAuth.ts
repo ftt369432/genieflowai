@@ -88,14 +88,19 @@ export class GoogleAuthService {
    */
   private getCallbackUrl(): string {
     const { serverUrl } = getEnv();
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isLocalhost = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' ||
+                        window.location.hostname.includes('192.168.');
     
     if (isLocalhost) {
-      // Use local URL when running locally
-      return `${window.location.origin}/auth/callback`;
+      // Use the current origin when running locally to support both direct localhost and Docker
+      const port = window.location.port ? `:${window.location.port}` : '';
+      const protocol = window.location.protocol;
+      const host = window.location.hostname;
+      return `${protocol}//${host}${port}/auth/callback`;
     } else {
-      // Use Netlify URL in production
-      return 'https://genieflowai.netlify.app/auth/callback';
+      // Use the appropriate production URL
+      return serverUrl ? `${serverUrl}/auth/callback` : 'https://genieflowai.netlify.app/auth/callback';
     }
   }
 

@@ -1,13 +1,12 @@
 import { useState, useCallback } from 'react';
-import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { useAIStore } from '../store/aiStore';
 import { useNotifications } from './useNotifications';
-import type { AIConfig, AIModel, Message, DocumentReference } from '../types/ai';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat';
+import type { AIConfig, Message, DocumentReference } from '../types/ai';
 import { mockAIService } from '../services/ai/mockOpenAI';
 
-export type AIProvider = 'openai' | 'gemini' | 'anthropic';
+// Only support Gemini provider
+export type AIProvider = 'gemini';
 
 interface AIState extends AIConfig {
   provider: AIProvider;
@@ -22,17 +21,11 @@ export function useAI() {
     model: 'gemini-1.5-flash'
   });
 
-  // Initialize AI clients only if API keys are available
-  const openai = import.meta.env.VITE_OPENAI_API_KEY ? new OpenAI({
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-    dangerouslyAllowBrowser: true
-  }) : null;
-
+  // Initialize Gemini client only if API key is available
   const genAI = import.meta.env.VITE_GEMINI_API_KEY ? new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY) : null;
 
   const formatContextForProvider = (
-    context: DocumentReference[] | undefined,
-    provider: AIProvider
+    context: DocumentReference[] | undefined
   ): string => {
     if (!context || context.length === 0) return '';
 
@@ -40,16 +33,7 @@ export function useAI() {
       .map(doc => `${doc.title}:\n${doc.excerpt}`)
       .join('\n\n');
 
-    switch (provider) {
-      case 'openai':
-        return `Context:\n${formattedContext}\n\nBased on the above context, `;
-      case 'gemini':
-        return `Here is some relevant context:\n${formattedContext}\n\nUsing this context, `;
-      case 'anthropic':
-        return `Given this context:\n${formattedContext}\n\nWith this information in mind, `;
-      default:
-        return `Context:\n${formattedContext}\n\n`;
-    }
+    return `Here is some relevant context:\n${formattedContext}\n\nUsing this context, `;
   };
 
   const sendMessage = useCallback(async (
@@ -61,7 +45,7 @@ export function useAI() {
 
     try {
       // If no API keys are available, use mock service
-      if (!import.meta.env.VITE_OPENAI_API_KEY && !import.meta.env.VITE_GEMINI_API_KEY) {
+      if (!import.meta.env.VITE_GEMINI_API_KEY) {
         const mockResponse = await mockAIService.getCompletion(content, {
           model: options?.model || config.model,
           temperature: options?.temperature || 0.7
@@ -70,53 +54,21 @@ export function useAI() {
       }
 
       const mergedConfig = { ...config, ...options };
-      const contextPrefix = formatContextForProvider(mergedConfig.context, mergedConfig.provider);
+      const contextPrefix = formatContextForProvider(mergedConfig.context);
       const fullContent = contextPrefix + content;
 
-      switch (mergedConfig.provider) {
-        case 'openai':
-          if (!openai) throw new Error('OpenAI API key not configured');
-          const messages: ChatCompletionMessageParam[] = [];
-          if (mergedConfig.systemPrompt) {
-            messages.push({ 
-              role: 'system', 
-              content: mergedConfig.systemPrompt 
-            });
-          }
-          messages.push({ 
-            role: 'user', 
-            content: fullContent 
-          });
+      if (!genAI) throw new Error('Gemini API key not configured');
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-1.5-flash",
+      });
 
-          const completion = await openai.chat.completions.create({
-            messages,
-            model: mergedConfig.model,
-            temperature: mergedConfig.temperature,
-            max_tokens: mergedConfig.maxTokens,
-          });
-          return completion.choices[0].message.content;
+      const prompt = mergedConfig.systemPrompt 
+        ? `${mergedConfig.systemPrompt}\n\n${fullContent}`
+        : fullContent;
 
-        case 'gemini':
-          if (!genAI) throw new Error('Gemini API key not configured');
-          const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
-          });
-
-          const prompt = mergedConfig.systemPrompt 
-            ? `${mergedConfig.systemPrompt}\n\n${fullContent}`
-            : fullContent;
-
-          const result = await model.generateContent(prompt);
-          const response = await result.response;
-          return response.text();
-
-        case 'anthropic':
-          // Implement Claude/Anthropic API call
-          throw new Error('Anthropic integration not implemented');
-
-        default:
-          throw new Error(`Unsupported AI provider: ${mergedConfig.provider}`);
-      }
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to get AI response';
       setError(errorMessage);
@@ -125,7 +77,7 @@ export function useAI() {
     } finally {
       setIsLoading(false);
     }
-  }, [config, openai, genAI, showError]);
+  }, [config, genAI, showError]);
 
   const updateConfig = useCallback((newConfig: Partial<AIState>) => {
     setConfig(current => ({ ...current, ...newConfig }));
@@ -138,4 +90,4 @@ export function useAI() {
     isLoading,
     error
   };
-} 
+}
