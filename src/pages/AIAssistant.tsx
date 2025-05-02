@@ -365,8 +365,24 @@ interface DocumentGroup {
   createdAt: Date;
   updatedAt: Date;
   tags: string[];
-  type: 'collection' | 'project' | 'research';
+  type: 'collection' | 'project' | 'research' | 'prompts' | 'cases' | 'labor_code' | 'work_samples';
   status: 'active' | 'archived';
+}
+
+interface LegalFolderStructure {
+  prompts: DocumentGroup;
+  cases: DocumentGroup;
+  laborCode: DocumentGroup;
+  workSamples: DocumentGroup;
+}
+
+interface AssistantLearningMode {
+  isActive: boolean;
+  commands: string[];
+  learningNotes: string[];
+  lastUpdated: Date;
+  styleExamples: string[];
+  trainingStatus: 'untrained' | 'in_progress' | 'trained';
 }
 
 // Consolidate document processing functions 
@@ -607,6 +623,64 @@ export function AIAssistantPage() {
     chunkSize: 1000
   });
   
+  // Add state for assistant learning mode
+  const [learningMode, setLearningMode] = useState<AssistantLearningMode>({
+    isActive: false,
+    commands: [],
+    learningNotes: [],
+    lastUpdated: new Date(),
+    styleExamples: [],
+    trainingStatus: 'untrained'
+  });
+
+  // Add state for legal document folder structure
+  const [legalFolders, setLegalFolders] = useState<LegalFolderStructure>({
+    prompts: {
+      id: 'legal-prompts',
+      name: 'Legal Prompts',
+      description: 'Custom prompts for legal document generation',
+      documents: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tags: ['legal', 'prompts'],
+      type: 'prompts',
+      status: 'active'
+    },
+    cases: {
+      id: 'case-library',
+      name: 'Case Library',
+      description: 'Archive of case references and precedents',
+      documents: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tags: ['legal', 'cases'],
+      type: 'cases',
+      status: 'active'
+    },
+    laborCode: {
+      id: 'labor-code',
+      name: 'Labor Code',
+      description: 'California labor code references',
+      documents: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tags: ['legal', 'labor-code'],
+      type: 'labor_code',
+      status: 'active'
+    },
+    workSamples: {
+      id: 'work-samples',
+      name: 'My Petition Samples',
+      description: 'Examples of petitions I have drafted',
+      documents: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tags: ['legal', 'work-samples'],
+      type: 'work_samples',
+      status: 'active'
+    }
+  });
+
   // Add state variables for panel collapse
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
@@ -1310,6 +1384,119 @@ export function AIAssistantPage() {
     input.click();
   };
 
+  // Handle learning mode commands
+  const handleLearningCommand = (input: string) => {
+    if (!learningMode.isActive) return false;
+    
+    // Check if this is a learning command
+    if (input.startsWith('/learn') || input.startsWith('/train')) {
+      const commandParts = input.split(' ');
+      const command = commandParts[0].toLowerCase();
+      const commandContent = commandParts.slice(1).join(' ');
+      
+      switch (command) {
+        case '/learn':
+          setLearningMode(prev => ({
+            ...prev,
+            learningNotes: [...prev.learningNotes, commandContent],
+            lastUpdated: new Date()
+          }));
+          break;
+        case '/train':
+          if (commandContent.includes('writing') || commandContent.includes('style')) {
+            setLearningMode(prev => ({
+              ...prev,
+              styleExamples: [...prev.styleExamples, commandContent],
+              trainingStatus: 'in_progress',
+              lastUpdated: new Date()
+            }));
+          }
+          break;
+        case '/remember':
+          setLearningMode(prev => ({
+            ...prev,
+            commands: [...prev.commands, commandContent],
+            lastUpdated: new Date()
+          }));
+          break;
+        default:
+          return false;
+      }
+
+      // Add a system message acknowledging the learning command
+      const systemMessage: Message = {
+        id: uuidv4(),
+        role: 'system',
+        content: `Learning mode: ${command} command processed successfully.`,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, systemMessage]);
+      
+      return true; // Command was processed
+    }
+    
+    return false; // Not a learning command
+  };
+
+  // Function to save documents to the appropriate legal folder
+  const saveToLegalFolder = async (files: File[], folderType: keyof LegalFolderStructure) => {
+    try {
+      const processedDocs = await documentUtils.processFiles(Array.from(files), processingOptions);
+      
+      if (processedDocs.length > 0) {
+        // Update the specific legal folder
+        setLegalFolders(prev => ({
+          ...prev,
+          [folderType]: {
+            ...prev[folderType],
+            documents: [...prev[folderType].documents, ...processedDocs],
+            updatedAt: new Date()
+          }
+        }));
+
+        // Show success message
+        const systemMessage: Message = {
+          id: uuidv4(),
+          role: 'system',
+          content: `Added ${processedDocs.length} document(s) to ${legalFolders[folderType].name} folder.`,
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, systemMessage]);
+        
+        return processedDocs;
+      }
+    } catch (error) {
+      console.error(`Error processing files for ${folderType}:`, error);
+      
+      // Show error message
+      const errorMessage: Message = {
+        id: uuidv4(),
+        role: 'error',
+        content: `Error processing files: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    }
+    
+    return [];
+  };
+
+  // Function to upload to specific legal folder
+  const uploadToLegalFolder = (folderType: keyof LegalFolderStructure) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = '.pdf,.doc,.docx,.txt,.md';
+    
+    input.onchange = async (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (!files) return;
+      await saveToLegalFolder(Array.from(files), folderType);
+    };
+    
+    input.click();
+  };
+
   // Use theme values in the UI
   const containerClassName = `min-h-screen bg-${theme === 'dark' ? 'gray-900' : 'white'} text-${isDark ? 'white' : 'gray-900'}`;
   const headerClassName = `flex items-center justify-between p-4 border-b border-${isDark ? 'gray-700' : 'gray-200'}`;
@@ -1330,6 +1517,13 @@ export function AIAssistantPage() {
     }
 
     if (!input.trim() || isProcessing) return;
+    
+    // Check if this is a learning command first
+    if (learningMode.isActive && handleLearningCommand(input)) {
+      // If a learning command was processed, clear the input and return
+      setInput('');
+      return;
+    }
     
     setInput('');
     setIsProcessing(true);
@@ -1364,13 +1558,65 @@ export function AIAssistantPage() {
       
       let response = '';
       
+      // Gather all relevant context from user resources
+      const contextDocs = [...selectedDocs];
+      
+      // Add documents from legal folders if professional mode is enabled
+      if (professionalMode) {
+        // Add case law documents if relevant
+        if (input.toLowerCase().includes('case') || 
+            input.toLowerCase().includes('legal') ||
+            input.toLowerCase().includes('law')) {
+          contextDocs.push(...legalFolders.cases.documents);
+        }
+        
+        // Add labor code documents if relevant
+        if (input.toLowerCase().includes('labor') || 
+            input.toLowerCase().includes('code') ||
+            input.toLowerCase().includes('regulation')) {
+          contextDocs.push(...legalFolders.laborCode.documents);
+        }
+        
+        // Add writing samples if discussing document creation
+        if (input.toLowerCase().includes('write') || 
+            input.toLowerCase().includes('draft') ||
+            input.toLowerCase().includes('create document') ||
+            input.toLowerCase().includes('petition')) {
+          contextDocs.push(...legalFolders.workSamples.documents);
+        }
+      }
+
+      // Enhance system prompt with learning data if active
+      let enhancedSystemPrompt = systemPrompt;
+      if (learningMode.isActive && (learningMode.commands.length > 0 || learningMode.styleExamples.length > 0)) {
+        enhancedSystemPrompt += '\n\n===USER PREFERENCES===\n';
+        
+        // Add remembered commands
+        if (learningMode.commands.length > 0) {
+          enhancedSystemPrompt += '\nRemembered Commands:\n' + 
+            learningMode.commands.map(cmd => `- ${cmd}`).join('\n');
+        }
+        
+        // Add writing style examples
+        if (learningMode.styleExamples.length > 0) {
+          enhancedSystemPrompt += '\n\nWriting Style Examples:\n' + 
+            learningMode.styleExamples.map(style => `"${style}"`).join('\n\n');
+        }
+        
+        // Add learning notes
+        if (learningMode.learningNotes.length > 0) {
+          enhancedSystemPrompt += '\n\nAdditional Knowledge:\n' +
+            learningMode.learningNotes.map(note => `- ${note}`).join('\n');
+        }
+      }
+      
       const options = {
-        systemPrompt: systemPrompt,
-        context: selectedDocs.map(doc => ({
+        systemPrompt: enhancedSystemPrompt,
+        context: contextDocs.map(doc => ({
           id: doc.id,
-          title: doc.name,
+          title: doc.metadata?.title || 'Untitled',
           excerpt: doc.content.substring(0, 200),
-          type: doc.type,
+          type: doc.type || 'document',
           relevance: 1.0
         })),
         model: selectedModel,
@@ -1381,6 +1627,11 @@ export function AIAssistantPage() {
       
       if (selectedProvider === 'google') {
         response = await sendMessage(input, options);
+        
+        // If professional mode is enabled, clean the response
+        if (professionalMode) {
+          response = cleanResponse(response);
+        }
       }
       
       // Remove typing indicator and add the actual response
@@ -1397,6 +1648,36 @@ export function AIAssistantPage() {
           }
         })
       );
+      
+      // Store this conversation in the selected conversation
+      if (currentConversation) {
+        const updatedConversations = conversations.map(conv => {
+          if (conv.id === currentConversation) {
+            return {
+              ...conv,
+              messages: [
+                ...conv.messages,
+                userMessage,
+                {
+                  id: (Date.now() + 2).toString(),
+                  content: response,
+                  role: 'assistant',
+                  timestamp: new Date(),
+                  metadata: {
+                    model: selectedModel,
+                    provider: selectedProvider,
+                    mode: getModelMode(selectedModel),
+                  }
+                }
+              ],
+              updatedAt: new Date()
+            };
+          }
+          return conv;
+        });
+        setConversations(updatedConversations);
+      }
+      
     } catch (error) {
       console.error('Error sending message:', error);
       setChatMessages(prev => 
@@ -1752,22 +2033,38 @@ export function AIAssistantPage() {
               
               {/* Input area */}
               <div className="border-t p-4 bg-background/95 backdrop-blur-md">
-                <form onSubmit={handleSubmit} className="flex items-end gap-2">
-                  <Textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Message AI Assistant..."
-                    className="flex-1 min-h-[60px] resize-none chat-input"
-                  />
-                  <Button 
-                    type="submit" 
-                    size="icon" 
-                    className="primary"
-                    disabled={isLoading || !input.trim()}
-                  >
-                    <Send className="h-4 w-4 interactive-icon" />
-                  </Button>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <Textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Message AI Assistant..."
+                        className="min-h-[60px] resize-none chat-input pr-10"
+                      />
+                      <div className="absolute right-2 bottom-2">
+                        <Button 
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="rounded-full h-8 w-8"
+                          onClick={() => handleDocumentUpload('document')}
+                          title="Upload file"
+                        >
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </div>
+                    <Button 
+                      type="submit" 
+                      size="icon" 
+                      className="primary h-12 w-12"
+                      disabled={isLoading || !input.trim()}
+                    >
+                      <Send className="h-4 w-4 interactive-icon" />
+                    </Button>
+                  </div>
                 </form>
               </div>
             </div>
@@ -1784,6 +2081,144 @@ export function AIAssistantPage() {
                 
                 <div className="flex-1 overflow-y-auto p-4">
                   <div className="space-y-4">
+                    {/* Learning Mode Toggle */}
+                    <div className="flex items-center justify-between pb-2 border-b border-border/30">
+                      <div>
+                        <h3 className="text-sm font-medium card-title">Learning Mode</h3>
+                        <p className="text-xs text-muted-foreground">Train the assistant with your preferences</p>
+                      </div>
+                      <Switch 
+                        checked={learningMode.isActive} 
+                        onCheckedChange={(checked) => setLearningMode(prev => ({...prev, isActive: checked}))}
+                      />
+                    </div>
+                    
+                    {/* Learning Mode Info */}
+                    {learningMode.isActive && (
+                      <div className="space-y-2 p-2 bg-primary/5 rounded-md">
+                        <p className="text-xs font-medium">Learning Commands:</p>
+                        <ul className="text-xs space-y-1 pl-4 text-muted-foreground">
+                          <li>/learn [information] - Add knowledge</li>
+                          <li>/train [writing sample] - Train writing style</li>
+                          <li>/remember [command] - Remember a command</li>
+                        </ul>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Training Status: <span className={cn(
+                            "font-medium",
+                            learningMode.trainingStatus === 'untrained' ? "text-yellow-500" :
+                            learningMode.trainingStatus === 'in_progress' ? "text-blue-500" :
+                            "text-green-500"
+                          )}>
+                            {learningMode.trainingStatus.replace('_', ' ')}
+                          </span>
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Legal Resources Tabs */}
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium card-title">Legal Resources</h3>
+                      <Tabs defaultValue="prompts" className="w-full">
+                        <TabsList className="grid grid-cols-4 h-8">
+                          <TabsTrigger value="prompts" className="text-xs">Prompts</TabsTrigger>
+                          <TabsTrigger value="cases" className="text-xs">Cases</TabsTrigger>
+                          <TabsTrigger value="labor" className="text-xs">Labor Code</TabsTrigger>
+                          <TabsTrigger value="samples" className="text-xs">Samples</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="prompts" className="pt-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="w-full justify-start gap-2 secondary mb-2"
+                            onClick={() => uploadToLegalFolder('prompts')}
+                          >
+                            <Plus className="h-4 w-4 interactive-icon" />
+                            Add Prompts
+                          </Button>
+                          <div className="max-h-32 overflow-y-auto space-y-1">
+                            {legalFolders.prompts.documents.map(doc => (
+                              <div key={doc.id} className="text-xs flex items-center p-1 hover:bg-muted rounded">
+                                <FileText className="h-3 w-3 mr-1 flex-shrink-0" />
+                                <span className="truncate">{doc.metadata?.title || 'Untitled Prompt'}</span>
+                              </div>
+                            ))}
+                            {legalFolders.prompts.documents.length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">No prompts added</p>
+                            )}
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="cases" className="pt-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="w-full justify-start gap-2 secondary mb-2"
+                            onClick={() => uploadToLegalFolder('cases')}
+                          >
+                            <Plus className="h-4 w-4 interactive-icon" />
+                            Add Case References
+                          </Button>
+                          <div className="max-h-32 overflow-y-auto space-y-1">
+                            {legalFolders.cases.documents.map(doc => (
+                              <div key={doc.id} className="text-xs flex items-center p-1 hover:bg-muted rounded">
+                                <FileText className="h-3 w-3 mr-1 flex-shrink-0" />
+                                <span className="truncate">{doc.metadata?.title || 'Untitled Case'}</span>
+                              </div>
+                            ))}
+                            {legalFolders.cases.documents.length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">No cases added</p>
+                            )}
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="labor" className="pt-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="w-full justify-start gap-2 secondary mb-2"
+                            onClick={() => uploadToLegalFolder('laborCode')}
+                          >
+                            <Plus className="h-4 w-4 interactive-icon" />
+                            Add Labor Code
+                          </Button>
+                          <div className="max-h-32 overflow-y-auto space-y-1">
+                            {legalFolders.laborCode.documents.map(doc => (
+                              <div key={doc.id} className="text-xs flex items-center p-1 hover:bg-muted rounded">
+                                <FileText className="h-3 w-3 mr-1 flex-shrink-0" />
+                                <span className="truncate">{doc.metadata?.title || 'Untitled Code'}</span>
+                              </div>
+                            ))}
+                            {legalFolders.laborCode.documents.length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">No labor code added</p>
+                            )}
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="samples" className="pt-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="w-full justify-start gap-2 secondary mb-2"
+                            onClick={() => uploadToLegalFolder('workSamples')}
+                          >
+                            <Plus className="h-4 w-4 interactive-icon" />
+                            Add Writing Samples
+                          </Button>
+                          <div className="max-h-32 overflow-y-auto space-y-1">
+                            {legalFolders.workSamples.documents.map(doc => (
+                              <div key={doc.id} className="text-xs flex items-center p-1 hover:bg-muted rounded">
+                                <FileText className="h-3 w-3 mr-1 flex-shrink-0" />
+                                <span className="truncate">{doc.metadata?.title || 'Untitled Sample'}</span>
+                              </div>
+                            ))}
+                            {legalFolders.workSamples.documents.length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">No writing samples added</p>
+                            )}
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    </div>
+                    
                     {/* System prompt */}
                     <div className="space-y-2">
                       <h3 className="text-sm font-medium card-title">Custom Instructions</h3>

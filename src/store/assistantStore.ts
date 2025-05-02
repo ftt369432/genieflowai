@@ -56,23 +56,18 @@ export const useAssistantStore = create<AssistantState>()(
         set((state) => ({
           assistants: state.assistants.map(assistant => {
             if (assistant.id === assistantId) {
-              // Initialize knowledgeBase array if it doesn't exist
-              const knowledgeBase = assistant.knowledgeBase || [];
-              // Check if the folder is already assigned
-              const folderAlreadyAssigned = knowledgeBase.some(
-                folder => folder.id === folderId
-              );
+              // Initialize linkedFolders array if it doesn't exist
+              const linkedFolders = assistant.linkedFolders || [];
               
-              if (folderAlreadyAssigned) {
+              // Check if the folder is already assigned
+              if (linkedFolders.includes(folderId)) {
                 return assistant;
               }
               
               return {
                 ...assistant,
-                // Add the folder ID to the knowledge base
-                // Note: This adds just the folder ID, the actual folder
-                // will be fetched from knowledgeBaseStore when needed
-                knowledgeBase: [...knowledgeBase, { id: folderId } as AIFolder]
+                // Add the folder ID to the linked folders
+                linkedFolders: [...linkedFolders, folderId]
               };
             }
             return assistant;
@@ -83,12 +78,10 @@ export const useAssistantStore = create<AssistantState>()(
       removeFolderFromAssistant: (assistantId, folderId) => {
         set((state) => ({
           assistants: state.assistants.map(assistant => {
-            if (assistant.id === assistantId && assistant.knowledgeBase) {
+            if (assistant.id === assistantId && assistant.linkedFolders) {
               return {
                 ...assistant,
-                knowledgeBase: assistant.knowledgeBase.filter(
-                  folder => folder.id !== folderId
-                )
+                linkedFolders: assistant.linkedFolders.filter(id => id !== folderId)
               };
             }
             return assistant;
@@ -98,14 +91,22 @@ export const useAssistantStore = create<AssistantState>()(
       
       getAssistantFolders: (assistantId) => {
         const assistant = get().getAssistantById(assistantId);
-        if (!assistant || !assistant.knowledgeBase) {
+        if (!assistant) {
           return [];
         }
-        return assistant.knowledgeBase.map(folder => folder.id);
+        
+        // Support both new linkedFolders and legacy knowledgeBase for backward compatibility
+        if (assistant.linkedFolders) {
+          return assistant.linkedFolders;
+        } else if (assistant.knowledgeBase) {
+          return assistant.knowledgeBase.map(folder => folder.id);
+        }
+        
+        return [];
       }
     }),
     {
       name: 'assistant-store',
     }
   )
-); 
+);
