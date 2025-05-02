@@ -63,6 +63,7 @@ export interface Message {
   content: string;
   role: MessageRole;
   timestamp: Date;
+  metadata?: MessageMetadata;
 }
 
 export type AgentType = 'research' | 'work' | 'learning' | 'building' | 'general' | 'tasks' | 'email' | 'calendar' | 'drive';
@@ -77,6 +78,8 @@ export interface AIAssistant {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  systemPrompt?: string;
+  knowledgeBase?: AIFolder[];
 }
 
 export interface AssistantResponse {
@@ -215,4 +218,4 @@ export interface DocumentProcessingOptions {
   performOCR: boolean;
   splitIntoChunks: boolean;
   chunkSize: number;
-} 
+}

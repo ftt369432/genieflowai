@@ -1,0 +1,15 @@
+  all-features[m
+* [32mdocker-hybrid-setup[m
+  feature-enhanced-header[m
+  feature/email-and-knowledge-enhancements[m
+  feature/enhanced-header[m
+  feature/legal-swarm-system[m
+  feature/remove-mock-responses[m
+  feature/remove-mock-responses-clean[m
+  feature/unified-auth-service[m
+  fix-build-issue[m
+  local-backup[m
+  main[m
+  production-legal-swarm[m
+  production-ready[m
+  safe-branch[m

@@ -33,6 +33,7 @@ import { LoadingExample } from './components/examples/LoadingExample';
 import { AutomationAuditDashboard } from './components/dashboard/AutomationAuditDashboard';
 import { GmailConnectionTest } from './pages/GmailConnectionTest';
 import { Settings } from './pages/Settings';
+import { AssistantsPage } from './pages/AssistantsPage';
 
 // ProtectedRoute component that redirects to login if user is not authenticated
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -249,6 +250,20 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <AIAssistantPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/assistants" 
+                element={
+                  <ProtectedRoute>
+                    <EmailProvider>
+                      <NotificationProvider>
+                        <ThemeProvider>
+                          <AssistantsPage />
+                        </ThemeProvider>
+                      </NotificationProvider>
+                    </EmailProvider>
                   </ProtectedRoute>
                 } 
               />
