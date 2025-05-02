@@ -37,6 +37,7 @@ export class GoogleAPIClient {
   private accessToken: string | null = null;
   private initialized = false;
   private useMockData = false;
+  private isHybridMode = false;
 
   private constructor() {}
 
@@ -52,6 +53,13 @@ export class GoogleAPIClient {
    */
   isUsingMockData(): boolean {
     return this.useMockData;
+  }
+  
+  /**
+   * Check if we're in hybrid mode (both live and mock data)
+   */
+  isUsingHybridMode(): boolean {
+    return this.isHybridMode;
   }
 
   /**
@@ -77,12 +85,18 @@ export class GoogleAPIClient {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    const { useMock } = getEnv();
-    this.useMockData = useMock;
+    const { useMock, enableLiveData, enableMockData } = getEnv();
     
-    // If in mock mode, initialize with mock data
-    if (useMock) {
-      console.log('GoogleAPIClient: Initializing in mock mode');
+    // Check for hybrid mode (both live and mock data)
+    this.isHybridMode = useMock === 'hybrid' || (enableLiveData && enableMockData);
+    
+    // Set useMockData flag based on the mode
+    this.useMockData = useMock === true || this.isHybridMode;
+    
+    console.log(`GoogleAPIClient: Initializing in ${this.isHybridMode ? 'hybrid' : (this.useMockData ? 'mock' : 'live')} mode`);
+    
+    // For pure mock mode or if we're in hybrid mode, set a mock token
+    if (useMock === true) {
       this.accessToken = 'mock-token';
       this.initialized = true;
       return;
@@ -94,12 +108,12 @@ export class GoogleAPIClient {
       
       if (error) {
         console.error('Failed to get session:', error);
-        // Fall back to mock mode if configured
-        if (useMock) {
+        if (this.isHybridMode || useMock) {
+          // In hybrid or mock mode, we can continue with mock data
           this.useMockData = true;
           this.accessToken = 'mock-token';
           this.initialized = true;
-          console.log('GoogleAPIClient: Falling back to mock mode after session error');
+          console.log('GoogleAPIClient: Using mock mode after session error');
           return;
         }
         throw error;
@@ -107,14 +121,17 @@ export class GoogleAPIClient {
 
       if (!session) {
         console.warn('No session available');
-        // Add this to force real authentication even without session
-        const forceReal = true; // Add this to your code or as env var
         
-        if (!session && !forceReal) {
-          // Only fall back to mock if not forcing real auth
+        if (this.isHybridMode || useMock) {
+          // In hybrid or mock mode, we can continue with mock data
           this.useMockData = true;
+          this.accessToken = 'mock-token';
+          this.initialized = true;
+          return;
         }
-        this.accessToken = 'mock-token';
+        
+        // Otherwise, we need authentication
+        this.accessToken = 'mock-token'; // Temporary mock token
         this.initialized = true;
         return;
       }
@@ -138,11 +155,22 @@ export class GoogleAPIClient {
             this.accessToken = updatedSession.provider_token;
             this.initialized = true;
             console.log('GoogleAPIClient: Initialized with real token after retry');
-            console.log('Successfully connected to Google. You can now use Gmail and other Google services.');
+            if (this.isHybridMode) {
+              console.log('Hybrid mode active: Using both live and mock data!');
+            } else {
+              console.log('Successfully connected to Google. You can now use Gmail and other Google services.');
+            }
             return;
           }
           
           retryCount++;
+        }
+
+        if (this.isHybridMode) {
+          console.warn('No provider token available, but continuing in hybrid mode with mock data available');
+          this.accessToken = 'mock-token';
+          this.initialized = true;
+          return;
         }
 
         // If we still don't have a token after retrying, force mock mode globally
@@ -161,10 +189,25 @@ export class GoogleAPIClient {
 
       this.accessToken = session.provider_token;
       this.initialized = true;
-      console.log('GoogleAPIClient: Initialized with real token');
-      console.log('Successfully connected to Google. You can now use Gmail and other Google services.');
+      
+      if (this.isHybridMode) {
+        console.log('GoogleAPIClient: Initialized in hybrid mode with real token');
+        console.log('Hybrid mode active: Using both live and mock data!');
+      } else {
+        console.log('GoogleAPIClient: Initialized with real token');
+        console.log('Successfully connected to Google. You can now use Gmail and other Google services.');
+      }
     } catch (error) {
       console.error('Error during initialization:', error);
+      
+      if (this.isHybridMode) {
+        console.log('GoogleAPIClient: Continuing in hybrid mode with mock data after error');
+        this.useMockData = true;
+        this.accessToken = 'mock-token';
+        this.initialized = true;
+        return;
+      }
+      
       // Force mock mode globally
       console.log('GoogleAPIClient: Forcing mock mode after error');
       updateEnvConfig({ useMock: true });
@@ -213,47 +256,82 @@ export class GoogleAPIClient {
       await this.initialize();
     }
 
-    // If we're in mock mode, return mock data
-    if (this.useMockData) {
+    // If we're in pure mock mode (not hybrid), return only mock data
+    if (this.useMockData && !this.isHybridMode) {
       return this.getMockResponse<T>(endpoint);
     }
 
-    if (!this.accessToken) {
-      console.warn('No access token available, attempting to refresh');
+    // For hybrid mode or live mode, try to get live data first
+    if (this.isHybridMode || this.accessToken) {
       try {
-        await this.refreshToken();
+        if (!this.accessToken) {
+          console.warn('No access token available, attempting to refresh');
+          try {
+            await this.refreshToken();
+          } catch (error) {
+            console.error('Failed to refresh token:', error);
+            // If in hybrid mode, fall back to mock data
+            if (this.isHybridMode) {
+              console.log('Hybrid mode: Falling back to mock data after token refresh failure');
+              return this.getMockResponse<T>(endpoint);
+            }
+            throw error;
+          }
+        }
+
+        // Make the actual API request with the token
+        const response = await fetch(`https://www.googleapis.com${endpoint}`, {
+          ...options,
+          headers: {
+            ...options.headers,
+            Authorization: `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.status === 401) {
+          // Token expired, try to refresh and retry the request
+          await this.refreshToken();
+          return this.request(endpoint, options);
+        }
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(JSON.stringify(error));
+        }
+
+        const liveData = await response.json();
+        
+        // In hybrid mode, we can enhance live data with mock data if needed
+        if (this.isHybridMode) {
+          const mockData = this.getMockResponse<T>(endpoint);
+          // Here you can implement specific merging logic for different endpoints
+          // For now, just add a flag to identify real vs mock data
+          return {
+            ...liveData,
+            isLiveData: true,
+            // Add mock data as a separate property if useful for your UI
+            _mockDataAvailable: mockData
+          };
+        }
+        
+        return liveData;
       } catch (error) {
-        console.error('Failed to refresh token:', error);
+        console.error('API request error:', error);
+        
+        // If in hybrid mode, fall back to mock data
+        if (this.isHybridMode) {
+          console.log('Hybrid mode: Falling back to mock data after live API error');
+          return this.getMockResponse<T>(endpoint);
+        }
+        
+        // In live-only mode, if we can't get data, throw error or return mock
         return this.getMockResponse<T>(endpoint);
       }
     }
 
-    try {
-      const response = await fetch(`https://www.googleapis.com${endpoint}`, {
-        ...options,
-        headers: {
-          ...options.headers,
-          Authorization: `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.status === 401) {
-        // Token expired, try to refresh and retry the request
-        await this.refreshToken();
-        return this.request(endpoint, options);
-      }
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(JSON.stringify(error));
-      }
-
-      return response.json();
-    } catch (error) {
-      console.error('API request error:', error);
-      return this.getMockResponse<T>(endpoint);
-    }
+    // Default fallback to mock response
+    return this.getMockResponse<T>(endpoint);
   }
 
   /**
@@ -396,4 +474,4 @@ export class GoogleAPIClient {
 }
 
 // Export the singleton instance
-export const googleApiClient = GoogleAPIClient.getInstance(); 
+export const googleApiClient = GoogleAPIClient.getInstance();

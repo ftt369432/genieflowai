@@ -1,10 +1,7 @@
-import { OpenAI } from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-const openai = apiKey ? new OpenAI({
-  apiKey,
-  dangerouslyAllowBrowser: true
-}) : null;
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 export interface ResearchResult {
   response: string;
@@ -12,9 +9,9 @@ export interface ResearchResult {
 }
 
 export async function performDeepResearch(content: string): Promise<ResearchResult> {
-  if (!openai) {
+  if (!genAI) {
     return {
-      response: 'OpenAI API key not configured. Research feature is disabled.',
+      response: 'Gemini API key not configured. Research feature is disabled.',
       error: 'API key not available'
     };
   }
@@ -38,15 +35,12 @@ export async function performDeepResearch(content: string): Promise<ResearchResu
       Format the response in markdown for better readability.
     `;
 
-    const aiResponse = await openai.chat.completions.create({
-      model: "gpt-4-turbo",
-      messages: [{ role: "system", content: researchPrompt }],
-      temperature: 0.7,
-      max_tokens: 2000,
-    });
-
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const result = await model.generateContent(researchPrompt);
+    const response = await result.response;
+    
     return {
-      response: aiResponse.choices[0].message.content || '',
+      response: response.text() || '',
     };
   } catch (error) {
     console.error('Research error:', error);
@@ -55,4 +49,4 @@ export async function performDeepResearch(content: string): Promise<ResearchResu
       error: 'Error processing research request'
     };
   }
-} 
+}

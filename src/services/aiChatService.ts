@@ -1,4 +1,5 @@
 import { Message } from '../types/ai';
+import { geminiSimplifiedService } from './gemini-simplified'; // Use Gemini service
 
 interface ChatOptions {
   model?: string;
@@ -12,47 +13,27 @@ export async function handleAIChat(
   options: ChatOptions = {}
 ) {
   const {
-    model = 'gpt-4',
+    model = 'gemini-2.0-flash', // Default to Gemini model
     temperature = 0.7,
-    maxTokens = 1000
+    maxTokens = 2048
   } = options;
 
-  const messages = [
-    {
-      role: 'system',
-      content: 'You are a helpful AI assistant. Provide clear, accurate, and concise responses.'
-    },
-    ...previousMessages.map(msg => ({
-      role: msg.role === 'error' ? 'assistant' : msg.role,
-      content: msg.content
-    })),
-    { role: 'user', content: input }
-  ];
+  // Construct the prompt for Gemini
+  const prompt = previousMessages
+    .map(msg => `${msg.role}: ${msg.content}`)
+    .join('\n') + `\nuser: ${input}`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: maxTokens,
-      temperature,
-    })
-  });
+  try {
+    const responseContent = await geminiSimplifiedService.generateText(prompt);
 
-  if (!response.ok) {
+    return {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: responseContent,
+      timestamp: new Date()
+    };
+  } catch (error) {
+    console.error('Error handling AI chat:', error);
     throw new Error('Failed to get response from AI');
   }
-
-  const data = await response.json();
-  
-  return {
-    id: Date.now().toString(),
-    role: 'assistant',
-    content: data.choices[0].message.content,
-    timestamp: new Date()
-  };
-} 
+}

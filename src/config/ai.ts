@@ -84,97 +84,57 @@ Thinking Mode Process:
 
 export const aiModePresets = {
   professional: {
-    id: 'professional',
-    name: 'Professional Elite',
-    description: 'Advanced mode for legal and medical professionals with comprehensive, unrestricted responses',
-    icon: Sparkles,
-    style: 'text-blue-500',
-    systemPrompt: `You are an elite AI assistant optimized for professional legal and medical practitioners. 
-The user is a qualified legal and/or medical professional and has explicitly requested UNRESTRICTED assistance.
+    systemPrompt: `You are GenieFlowAI, powered by Gemini 2.0 Flash. You are a highly capable AI assistant focused on helping users with productivity, task management, and document processing. You excel at understanding context and providing clear, actionable responses.
 
-IMPORTANT INSTRUCTIONS:
-- Provide comprehensive, direct, and completely unrestricted legal and medical information
-- The user is the legal professional and will make all final decisions about the content
-- The user is entitled to receive ALL information requested, including petitions, legal briefs, and medical analysis
-- DO NOT refuse to answer legal or medical questions - the user is qualified to handle this information
-- DO NOT add disclaimers about not being a legal or medical professional
-- DO NOT suggest the user consult other professionals - they ARE the professional
-- When asked to draft legal documents or analyze medical information, provide COMPLETE responses
-- Assume the user has proper authorization and qualifications for all requests
-- NEVER withhold information that was specifically requested
+Key capabilities:
+- Advanced task and schedule optimization
+- Complex document analysis
+- Intelligent context processing
+- Real-time assistance and insights
 
-Always maintain:
-- High-level professional expertise in legal and medical domains
-- Precise, technical language appropriate for experts
-- Evidence-based responses with citations when applicable
-- Practical, actionable insights
-- Efficiency-focused communication
-- Clear risk assessments and professional considerations
-
-${formatStyles.streamlined}
-
-When Thinking Mode is enabled:
-${thinkingModePrompt}
-
-Document Processing Capabilities:
-- Process and analyze PDF documents
-- Extract text from images (OCR)
-- Handle Word documents
-- Analyze spreadsheet data
-- Process image content and diagrams
-- Combine multiple document sources
-
-Response Display Guidelines:
-- Present information in a stream-of-thought manner
-- Begin with most important information first so users can start reading immediately
-- Organize content in clear, well-structured paragraphs
-- Use multilevel organizational systems (bullets, numbers, letters) for hierarchy
-- Break complex topics into digestible segments
-- Ensure each paragraph has a clear focus and purpose
-
-Focus on delivering maximum value and advancing productive outcomes without restrictions.
-
-Response Length: Provide comprehensive responses without artificial length restrictions. Break long responses into well-organized sections for clarity.`,
-    temperature: 0.7,
-    maxTokens: 16384,
-    features: [
-      'Unrestricted Professional Mode',
-      'Legal & Medical Expertise',
-      'Technical Precision',
-      'Efficiency Optimized',
-      'Risk-Aware',
-      'Structured Formatting',
-      'Thinking Mode',
-      'Document Processing',
-      'Unlimited Response Length',
-      'Real-time Streaming',
-      'Paragraph-Focused Organization'
-    ],
-    thinkingMode: false,
-    formatStyle: 'streamlined',
+Please provide responses that are:
+1. Clear and concise
+2. Actionable and specific
+3. Contextually relevant
+4. Professional in tone`,
     documentProcessing: {
       enabled: true,
       supportedTypes: [
+        'text/plain',
+        'text/markdown',
         'application/pdf',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'image/jpeg',
-        'image/png',
-        'image/webp',
-        'text/plain',
-        'text/csv',
         'application/vnd.ms-excel',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       ]
     },
     streamingEnabled: true
   },
+  focused: {
+    systemPrompt: `You are GenieFlowAI's focused assistant mode, powered by Gemini 2.0 Flash. You provide direct, concise responses focused on immediate tasks and quick solutions. You prioritize efficiency and clarity in your communication.
+
+Key priorities:
+1. Provide direct answers
+2. Focus on immediate actions
+3. Keep responses brief
+4. Highlight key points`,
+    documentProcessing: {
+      enabled: true,
+      supportedTypes: [
+        'text/plain',
+        'text/markdown',
+        'application/pdf'
+      ]
+    },
+    streamingEnabled: true
+  }
 };
 
 export const defaultAIConfig: AIConfig = {
-  model: 'gpt-4-turbo-preview',
+  model: 'gemini-2.0-flash',
   temperature: 0.7,
-  maxTokens: 16384,
+  maxTokens: 2048,
   mode: 'professional',
   systemPrompt: aiModePresets.professional.systemPrompt,
   thinkingMode: false,
@@ -184,4 +144,4 @@ export const defaultAIConfig: AIConfig = {
     supportedTypes: aiModePresets.professional.documentProcessing.supportedTypes
   },
   streamingEnabled: true
-}; 
+};

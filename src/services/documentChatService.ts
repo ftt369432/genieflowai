@@ -1,3 +1,4 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AIDocument, Message, SearchResult } from '../types/ai';
 import { getEmbedding } from './embeddingService';
 import { useAssistantStore } from '../store/assistantStore';
@@ -9,6 +10,10 @@ interface DocumentChatOptions {
   relevanceThreshold?: number;
   systemPrompt?: string;
 }
+
+// Initialize Gemini client
+const genAI = import.meta.env.VITE_GEMINI_API_KEY ? 
+  new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY) : null;
 
 /**
  * Chat with documents using semantic search and RAG
@@ -51,35 +56,30 @@ say so. Here are the relevant documents:
 
 ${context}`;
 
-  const messages = [
-    { role: 'system', content: systemPrompt || defaultSystemPrompt },
-    ...previousMessages,
-    { role: 'user', content: query }
-  ];
+  // Construct the full prompt for Gemini
+  const fullPrompt = `${systemPrompt || defaultSystemPrompt}
 
-  // Make API call to OpenAI
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'gpt-4',
-      messages,
-      max_tokens: maxTokens,
-      temperature,
-    })
-  });
+Previous conversation:
+${previousMessages.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
 
-  if (!response.ok) {
-    throw new Error('Failed to get response from OpenAI');
+User: ${query}`;
+
+  if (!genAI) {
+    throw new Error('Gemini client is not initialized');
   }
 
-  const data = await response.json();
-  
+  const response = await genAI.generateMessage({
+    prompt: fullPrompt,
+    maxOutputTokens: maxTokens,
+    temperature,
+  });
+
+  if (!response) {
+    throw new Error('Failed to get response from Gemini');
+  }
+
   return {
-    message: data.choices[0].message.content,
+    message: response.candidates[0].content,
     relevantDocuments: relevantDocs.map(({ doc, similarity }) => ({
       document: doc,
       similarity
@@ -148,4 +148,4 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
   const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
   const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
   return dotProduct / (magnitudeA * magnitudeB);
-} 
+}

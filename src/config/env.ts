@@ -5,7 +5,7 @@
 
 // Environment configuration type
 export interface EnvironmentConfig {
-  useMock: boolean;
+  useMock: boolean | 'hybrid'; // Re-adding useMock with support for hybrid mode
   isDevelopment: boolean;
   isProduction: boolean;
   serverUrl: string;
@@ -16,7 +16,26 @@ export interface EnvironmentConfig {
   authCallbackUrl: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
+  // AI-related configurations
+  aiProvider: 'google' | 'xai' | 'deepseek';
+  aiModel: string;
+  geminiApiKey: string;
+  hasGeminiApiKey: boolean;
+  debug: boolean;
+  // Model settings
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  // Node environment
+  nodeEnv: string;
+  // Hybrid mode settings
+  enableLiveData: boolean;
+  enableMockData: boolean;
 }
+
+// Default AI provider
+const DEFAULT_AI_PROVIDER = 'gemini';
 
 // Cache for the environment config
 let environmentConfig: EnvironmentConfig | null = null;
@@ -34,17 +53,12 @@ export function getEnv(): EnvironmentConfig {
   const isDevelopment = import.meta.env.MODE === 'development';
   const isProduction = import.meta.env.MODE === 'production';
   
-  // Determine whether to use mock data
-  const useMock = import.meta.env.VITE_USE_MOCK === 'true' || 
-                 import.meta.env.VITE_USE_MOCK === true ||
-                 import.meta.env.VITE_USE_MOCK === '1';
-
   // Set up the base URL depending on environment
   const baseUrl = isDevelopment
     ? 'http://localhost:3000'
     : 'https://genieflowai.netlify.app';
 
-  // Set up the auth callback URL - use the environment variable if available, otherwise use default
+  // Set up the auth callback URL
   const authCallbackUrl = import.meta.env.VITE_AUTH_CALLBACK_URL || 
     (isDevelopment
       ? `${baseUrl}/auth/callback`
@@ -52,7 +66,7 @@ export function getEnv(): EnvironmentConfig {
 
   // Create the environment config
   environmentConfig = {
-    useMock,
+    useMock: import.meta.env.VITE_USE_MOCK === 'true' ? true : import.meta.env.VITE_USE_MOCK === 'hybrid' ? 'hybrid' : false,
     isDevelopment,
     isProduction,
     serverUrl: baseUrl,
@@ -66,7 +80,23 @@ export function getEnv(): EnvironmentConfig {
     ],
     authCallbackUrl,
     supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
-    supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+    supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+    // AI-related configurations
+    aiProvider: DEFAULT_AI_PROVIDER,
+    aiModel: import.meta.env.VITE_AI_MODEL || 'gemini-2.0-flash',
+    geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
+    hasGeminiApiKey: !!import.meta.env.VITE_GEMINI_API_KEY,
+    debug: import.meta.env.VITE_DEBUG_MODE === 'true',
+    // Model settings
+    maxTokens: import.meta.env.VITE_MAX_TOKENS ? Number(import.meta.env.VITE_MAX_TOKENS) : undefined,
+    temperature: import.meta.env.VITE_TEMPERATURE ? Number(import.meta.env.VITE_TEMPERATURE) : undefined,
+    topP: import.meta.env.VITE_TOP_P ? Number(import.meta.env.VITE_TOP_P) : undefined,
+    topK: import.meta.env.VITE_TOP_K ? Number(import.meta.env.VITE_TOP_K) : undefined,
+    // Node environment
+    nodeEnv: import.meta.env.NODE_ENV || '',
+    // Hybrid mode settings
+    enableLiveData: import.meta.env.VITE_ENABLE_LIVE_DATA === 'true',
+    enableMockData: import.meta.env.VITE_ENABLE_MOCK_DATA === 'true'
   };
 
   return environmentConfig;
@@ -74,10 +104,10 @@ export function getEnv(): EnvironmentConfig {
 
 /**
  * Update the environment configuration 
- * Used to force mock mode when provider token is missing
+ * Used for runtime configuration updates
  */
 export function updateEnvConfig(updates: Partial<EnvironmentConfig>): void {
   if (environmentConfig) {
     environmentConfig = { ...environmentConfig, ...updates };
   }
-} 
+}

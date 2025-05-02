@@ -228,74 +228,6 @@ const modelGroups: Record<string, ModelGroup> = {
         features: ['Complex reasoning', 'Detailed analysis', 'Balanced performance']
       }
     }
-  },
-  xai: {
-    name: 'xAI/Grok',
-    description: 'Advanced AI models with real-time knowledge',
-    models: {
-      'grok-1': {
-        name: 'Grok-1',
-        description: 'Latest model with real-time data access',
-        temperature: 0.8,
-        maxTokens: 8192,
-        category: 'general',
-        features: ['Real-time knowledge', 'Contextual understanding', 'Advanced reasoning']
-      },
-      'grok-1-pro': {
-        name: 'Grok-1 Pro',
-        description: 'Enhanced version for professional applications',
-        temperature: 0.9,
-        maxTokens: 12288,
-        category: 'analysis',
-        features: ['Professional tools', 'Advanced analytics', 'Enterprise features']
-      }
-    }
-  },
-  openai: {
-    name: 'OpenAI',
-    description: 'Powerful and versatile language models',
-    models: {
-      'gpt-4-turbo-preview': {
-        name: 'GPT-4 Turbo',
-        description: 'Latest and most capable model with up-to-date knowledge',
-        temperature: 0.7,
-        maxTokens: 128000,
-        category: 'general',
-        features: ['Most recent knowledge', 'Highest capability', 'Long context', 'Advanced reasoning']
-      },
-      'gpt-4-vision-preview': {
-        name: 'GPT-4 Vision',
-        description: 'Multimodal capabilities with image understanding',
-        temperature: 0.7,
-        maxTokens: 128000,
-        category: 'analysis',
-        features: ['Image understanding', 'Visual analysis', 'Multimodal reasoning']
-      },
-      'gpt-4': {
-        name: 'GPT-4',
-        description: 'Highly capable model for complex tasks',
-        temperature: 0.7,
-        maxTokens: 8192,
-        category: 'general',
-        features: ['Advanced reasoning', 'Complex problem solving', 'Reliable outputs']
-      },
-      'gpt-3.5-turbo': {
-        name: 'GPT-3.5 Turbo',
-        description: 'Fast and efficient for most tasks',
-        temperature: 0.7,
-        maxTokens: 16385,
-        category: 'productivity',
-        features: ['Quick responses', 'Cost effective', 'General purpose']
-      },
-      'gpt-3.5-turbo-16k': {
-        name: 'GPT-3.5 Turbo 16K',
-        description: 'Extended context version of GPT-3.5',
-        temperature: 0.7,
-        maxTokens: 16385,
-        category: 'productivity',
-        features: ['Longer context', 'Memory efficient', 'Cost effective']
-      }
-    }
   }
 };
 
@@ -601,7 +533,7 @@ export function AIAssistantPage() {
 
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState<'google' | 'openai' | 'xai'>('google');
+  const [selectedProvider, setSelectedProvider] = useState<'google'>('google');
   const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash');
   const [selectedDocs, setSelectedDocs] = useState<AIDocument[]>([]);
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -1443,10 +1375,6 @@ export function AIAssistantPage() {
       
       if (selectedProvider === 'google') {
         response = await sendMessage(input, options);
-      } else if (selectedProvider === 'openai') {
-        response = await sendMessage(input, options);
-      } else {
-        response = await sendMessage(input, options);
       }
       
       // Remove typing indicator and add the actual response
@@ -1591,11 +1519,7 @@ export function AIAssistantPage() {
   );
 
   // Fix the provider mapping when loading a conversation
-  const mapProviderToSupported = (provider: string): 'google' | 'openai' | 'xai' => {
-    if (provider === 'gemini') return 'google';
-    if (provider === 'openai' || provider === 'google' || provider === 'xai') {
-      return provider as 'google' | 'openai' | 'xai';
-    }
+  const mapProviderToSupported = (provider: string): 'google' => {
     return 'google'; // Default fallback
   };
 

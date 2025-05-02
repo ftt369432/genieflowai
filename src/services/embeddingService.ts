@@ -1,7 +1,11 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AIDocument, EmbeddingResponse } from '../types/ai';
 import { supabase } from '../lib/supabase';
+import { getEnv } from '../config/env';
 
-const OPENAI_API_URL = 'https://api.openai.com/v1/embeddings';
+// Initialize Gemini client
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 // Define SearchResult interface
 interface SearchResult {
@@ -10,8 +14,8 @@ interface SearchResult {
 }
 
 /**
- * Generates an embedding for the given text using Supabase's pgvector functions.
- * This uses the OpenAI embedding model via Supabase Edge Functions.
+ * Generates an embedding for the given text using Google Gemini embedding model.
+ * Falls back to Supabase Edge Functions if direct API access is not available.
  * 
  * @param text The text to generate an embedding for
  * @returns A vector representation of the text
@@ -21,13 +25,26 @@ export async function getEmbedding(text: string): Promise<number[]> {
     // Clean and truncate the text
     const input = cleanText(text);
     
-    // Call the Supabase Edge Function to generate the embedding
+    if (genAI) {
+      // Use Gemini's embedding model directly
+      try {
+        const model = genAI.getGenerativeModel({ model: "embedding-001" });
+        const result = await model.embedContent(input);
+        // Return embedding values
+        return result.embedding.values;
+      } catch (error) {
+        console.error('Error using Gemini embedding API directly:', error);
+        // Fall through to Supabase Edge Function approach
+      }
+    }
+    
+    // Fallback to Supabase Edge Function
     const { data, error } = await supabase.functions.invoke('generate-embedding', {
-      body: { text: input }
+      body: { text: input, provider: 'gemini' }
     });
     
     if (error) {
-      console.error('Error generating embedding:', error);
+      console.error('Error generating embedding via Supabase:', error);
       throw error;
     }
     
@@ -41,7 +58,7 @@ export async function getEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Fallback method to generate a simple "pseudo-embedding" when the OpenAI API is unavailable.
+ * Fallback method to generate a simple "pseudo-embedding" when the embedding API is unavailable.
  * This is NOT a real embedding and should only be used as a temporary fallback.
  * It simply hashes words to create a vector that can be used for basic matching.
  * 
@@ -86,7 +103,7 @@ function cleanText(text: string): string {
   // Remove excessive whitespace
   let cleaned = text.trim().replace(/\s+/g, ' ');
   
-  // Truncate to a max of 8192 characters (OpenAI's limit)
+  // Truncate to a max of 8192 characters (Gemini's limit)
   if (cleaned.length > 8192) {
     cleaned = cleaned.substring(0, 8192);
   }
@@ -152,4 +169,4 @@ export async function searchDocuments(
       .filter(result => result.similarity > 0)
       .slice(0, limit);
   }
-} 
+}

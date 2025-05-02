@@ -107,28 +107,25 @@
     "vite-plugin-env-compatible": "^2.0.1"
   },
   "scripts": {
-    "dev": "vite",
     "start": "vite",
     "build": "vite build",
-    "test": "vitest",
-    "eject": "react-scripts eject",
     "deploy": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
     "deploy:unix": "node scripts/deploy.js",
     "deploy:netlify": "netlify deploy --prod",
-    "deploy:netlify:draft": "netlify deploy",
-    "deploy:netlify:interactive": "node scripts/deploy-netlify.js",
     "deploy:production": "node scripts/deploy-prod.js",
     "lint": "eslint . --ext .ts,.tsx",
-    "track-progress": "node scripts/update-progress.js",
-    "custom-start": "vite --port 3001",
-    "use:mock": "powershell -Command \"Copy-Item -Path .env.mock -Destination .env.local -Force\" && echo Switched to MOCK mode",
-    "use:live": "powershell -Command \"Copy-Item -Path .env.live -Destination .env.local -Force\" && echo Switched to LIVE mode with real data",
-    "server": "node -r dotenv/config src/server.js dotenv_config_path=.env.server"
+    "server": "node -r dotenv/config src/server.js dotenv_config_path=.env.production",
+    "docker:up": "docker-compose up",
+    "docker:build": "docker-compose build",
+    "docker:down": "docker-compose down",
+    "docker:restart": "docker-compose down && docker-compose up",
+    "docker:logs": "docker-compose logs -f",
+    "env:local": "node scripts/switch-env.js local",
+    "env:remote": "node scripts/switch-env.js remote"
   },
   "eslintConfig": {
     "extends": [
-      "react-app",
-      "react-app/jest"
+      "react-app"
     ]
   },
   "browserslist": {

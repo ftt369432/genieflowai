@@ -1,85 +1,63 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { BaseAIService } from './baseAIService';
-import type { Message, AIModel } from '../../types/ai';
+import type { Message } from '../../types/ai';
 import { getEnv } from '../../config/env';
-import { ResponseWithSources, Source } from '../AIService';
-import { Task } from '../../types/task';
-import { Event } from '../../types/calendar';
 
 export class GeminiService extends BaseAIService {
   private client: GoogleGenerativeAI;
-  private defaultModel: string;
+  private defaultModel = 'gemini-2.0-flash';
 
   constructor() {
+    super('google');
     try {
-      console.log('Initializing GeminiService...');
-      super('google');
-      console.log('BaseAIService initialized successfully');
-      
-      const apiKey = this.getApiKey('google');
-      console.log('Got API key successfully');
-      
-      this.client = new GoogleGenerativeAI(apiKey);
-      console.log('GoogleGenerativeAI client created successfully');
-      
-      // Get the configured Gemini model from environment, or fallback to gemini-2.0-flash
       const env = getEnv();
-      console.log('Environment config:', { 
-        model: env.model, 
-        aiProvider: env.aiProvider,
-        hasGeminiApiKey: env.hasGeminiApiKey
-      });
-      
-      this.defaultModel = env.model || 'gemini-2.0-flash';
-      
-      console.log(`Initialized Gemini service with model: ${this.defaultModel}`);
+      const apiKey = env.geminiApiKey;
+      this.client = new GoogleGenerativeAI(apiKey);
+      console.log('GeminiService initialized with model:', this.defaultModel);
     } catch (error) {
       console.error('Error initializing GeminiService:', error);
       throw error;
     }
   }
 
-  async sendMessage(message: Message): Promise<Message> {
+  async generateResponse(messages: Message[]): Promise<string> {
+    try {
+      // Combine multiple messages into a single context
+      const combinedMessage = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+      const result = await this.getCompletion(combinedMessage);
+      return result;
+    } catch (error) {
+      throw this.handleError(error, 'Gemini generateResponse');
+    }
+  }
+
+  // Make sendMessage public to match BaseAIService
+  public async sendMessage(message: Message): Promise<Message> {
     try {
       const model = this.client.getGenerativeModel({ 
-        model: this.defaultModel
+        model: this.defaultModel,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+          topK: 40,
+          topP: 0.95
+        }
       });
       
       const result = await model.generateContent(message.content);
       const response = await result.response;
-      const responseText = response.text();
+      const text = response.text();
       
-      // Return a message object
+      if (!text) throw new Error('Empty response from Gemini');
+
       return {
         id: Date.now().toString(),
         role: 'assistant',
-        content: responseText,
-        timestamp: new Date(),
-        metadata: {
-          model: this.defaultModel,
-          provider: 'google'
-        }
+        content: text,
+        timestamp: new Date()
       };
     } catch (error) {
-      console.error('Error in Gemini sendMessage:', error);
-      throw error;
-    }
-  }
-
-  async generateResponse(messages: Message[]): Promise<string> {
-    try {
-      // Take the last message from the array
-      const lastMessage = messages[messages.length - 1];
-      const model = this.client.getGenerativeModel({ 
-        model: this.defaultModel
-      });
-      
-      const result = await model.generateContent(lastMessage.content);
-      const response = await result.response;
-      return response.text();
-    } catch (error) {
-      console.error('Error in Gemini generateResponse:', error);
-      return this.handleError(error, 'Gemini');
+      throw this.handleError(error, 'Gemini');
     }
   }
 
@@ -92,55 +70,59 @@ export class GeminiService extends BaseAIService {
       const model = this.client.getGenerativeModel({ 
         model: this.defaultModel,
         generationConfig: {
-          maxOutputTokens: options?.maxTokens,
+          maxOutputTokens: options?.maxTokens || 2048,
           temperature: options?.temperature || 0.7,
-          stopSequences: options?.stopSequences
+          stopSequences: options?.stopSequences,
+          topK: 40,
+          topP: 0.95
         }
       });
       
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      return response.text();
+      return response.text() || '';
     } catch (error) {
-      return this.handleError(error, 'Gemini');
+      throw this.handleError(error, 'Gemini');
     }
   }
 
   async getEmbedding(text: string): Promise<number[]> {
     try {
-      // The GoogleGenerativeAI embedding API might be different
-      // For now, we'll return a mock embedding
-      console.warn('Gemini embedding is not fully implemented - returning mock data');
-      
-      // Generate a deterministic mock embedding based on the input text
-      const mockEmbedding = new Array(128).fill(0).map((_, i) => {
-        // Use a simple hash of the text + position to get a consistent value
-        const hashCode = (text.charCodeAt(Math.min(i, text.length - 1)) + i) / 255;
-        return Math.sin(hashCode) * 0.5 + 0.5; // Value between 0 and 1
+      const model = this.client.getGenerativeModel({ 
+        model: 'embedding-001',
+        generationConfig: {
+          temperature: 0
+        }
       });
-      
-      return mockEmbedding;
+
+      const embedResult = await model.embedContent(text);
+      // Convert embedding to array of numbers
+      const values = Object.values(embedResult.embedding);
+      return values.map(v => Number(v));
     } catch (error) {
-      return this.handleError(error, 'Gemini Embedding');
+      console.error('Error getting embedding:', error);
+      throw this.handleError(error, 'Gemini Embedding');
     }
   }
 
   async testConnection(): Promise<boolean> {
     try {
-      const testMessage: Message = {
-        id: '1',
-        role: 'user',
-        content: 'Hello, this is a test message',
-        timestamp: new Date()
-      };
-      
-      await this.sendMessage(testMessage);
-      return true;
+      const testMessage = 'Test connection to Gemini 2.0 Flash';
+      const response = await this.getCompletion(testMessage, { temperature: 0.1 });
+      return response.length > 0;
     } catch (error) {
       console.error('Connection test failed:', error);
       return false;
     }
   }
+
+  protected handleError(error: unknown, service: string): never {
+    console.error(`${service} API Error:`, error);
+    if (error instanceof Error) {
+      throw new Error(`${service} Error: ${error.message}`);
+    }
+    throw new Error(`${service} Error: Unknown error occurred`);
+  }
 }
 
-export const geminiService = new GeminiService(); 
+export const geminiService = new GeminiService();

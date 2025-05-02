@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # Frontend application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: genieflowai-app
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-http://localhost:54321}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTl9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0}
+      - VITE_MOCK_MODE=hybrid
+      - VITE_USE_MOCK=hybrid
+      - VITE_ENABLE_LIVE_DATA=true
+      - VITE_ENABLE_MOCK_DATA=true
+    depends_on:
+      - supabase
+      - mailhog
+    networks:
+      - genieflow_network
+
+  # Local Supabase
+  supabase:
+    image: supabase/supabase-dev:latest
+    container_name: genieflowai-supabase
+    ports:
+      - "54321:54321" # Supabase API
+      - "54322:54322" # Supabase Studio
+    environment:
+      STUDIO_PORT: 54322
+      API_URL: http://localhost:54321
+      SUPABASE_URL: http://localhost:54321
+    volumes:
+      - ./supabase/migrations:/supabase/migrations
+      - ./supabase/functions:/supabase/functions
+      - ./supabase-init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - genieflow_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:54321/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Mail testing server
+  mailhog:
+    image: mailhog/mailhog
+    container_name: genieflowai-mailhog
+    ports:
+      - "1025:1025" # SMTP server
+      - "8025:8025" # Web interface
+    networks:
+      - genieflow_network
+
+  # Mock Google API service (for development)
+  mock-google-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.mock-google
+    container_name: genieflowai-mock-google
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./src:/app/src
+    networks:
+      - genieflow_network
+
+networks:
+  genieflow_network:
+    driver: bridge

@@ -1,17 +1,34 @@
-# Netlify configuration for GenieFlowAI
+# Netlify configuration for GenieFlowAI Production
 # Documentation: https://docs.netlify.com/configure-builds/file-based-configuration/
+# Last updated: April 30, 2025 - Standardized build output directory
 
 [build]
   command = "npm run build"
-  publish = "dist"  # Vite's default output directory
+  publish = "build"  # Matches Vite's output directory in vite.config.js
 
 # Handle SPA routing by redirecting all paths to index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+  
+# Add cache headers for static assets
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
 
-# Enable HTTPS and security headers
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Enable HTTPS and security headers for all files
 [[headers]]
   for = "/*"
   [headers.values]
@@ -19,35 +36,52 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
     Content-Security-Policy = """
       default-src 'self';
       script-src 'self' 'unsafe-inline' 'unsafe-eval';
       style-src 'self' 'unsafe-inline';
-      img-src 'self' data: https:;
+      img-src 'self' data: https: blob:;
       connect-src 'self' 
         https://api.genieflowai.com 
         https://*.supabase.co 
         https://generativelanguage.googleapis.com 
+        https://api.openai.com
+        https://api.anthropic.com
         https://www.googleapis.com 
         https://oauth2.googleapis.com;
       font-src 'self' data:;
+      media-src 'self' blob:;
+      worker-src 'self' blob:;
       frame-ancestors 'none';
       form-action 'self';
+      base-uri 'self';
+      upgrade-insecure-requests;
     """
 
-# Environment variables should be set in Netlify UI, not here
-[context.production.environment]
-  NODE_ENV = "production"
-  VITE_USE_MOCK = "false"
-
-# Environment variables for branch deployments
-[context.branch-deploy.environment]
-  NODE_ENV = "production"
-  VITE_USE_MOCK = "false"
-
+# Production environment variables
 [build.environment]
+  NODE_ENV = "production"
   NODE_VERSION = "18"
   NPM_VERSION = "9"
+  VITE_APP_ENV = "production"
+
+# Enable built-in performance optimization
+[build.processing]
+  skip_processing = false
+
+[build.processing.css]
+  minify = true
+  
+[build.processing.js]
+  minify = true
+  
+[build.processing.html]
+  pretty_urls = true
+  
+[build.processing.images]
+  compress = true
 
 [functions]
   directory = "netlify/functions"
@@ -73,4 +107,4 @@
 [[redirects]]
   from = "/api/train/*"
   to = "/.netlify/functions/train/api/train/:splat"
-  status = 200 
+  status = 200
