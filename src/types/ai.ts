@@ -17,8 +17,19 @@ export interface AIDocument {
   };
   embedding?: number[];
   relevanceScore?: number;
+  folderId?: string;
+  title?: string;
 }
 
+export interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Keep existing AIFolder for backward compatibility
 export interface AIFolder {
   id: string;
   name: string;
@@ -80,6 +91,7 @@ export interface AIAssistant {
   updatedAt: Date;
   systemPrompt?: string;
   knowledgeBase?: AIFolder[];
+  linkedFolders?: string[]; // Array of folder IDs linked to this assistant
 }
 
 export interface AssistantResponse {
