@@ -163,6 +163,7 @@ export interface MessageMetadata {
     isCode?: boolean;
     language?: string;
   };
+  isTyping?: boolean; // Add isTyping property
 }
 
 export interface DocumentReference {

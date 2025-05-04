@@ -4,7 +4,13 @@ import { Check, ChevronDown } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 
-const Select = ({ children }: { children: React.ReactNode }) => {
+interface SelectProps {
+  children: React.ReactNode;
+  value?: string;
+  onValueChange?: (value: string) => void;
+}
+
+const Select = ({ children, value, onValueChange }: SelectProps) => {
   return <div className="select-container">{children}</div>;
 };
 
@@ -14,8 +20,13 @@ const SelectValue = ({ placeholder }: { placeholder?: string }) => {
   return <span className="select-value">{placeholder}</span>;
 };
 
-const SelectTrigger = ({ children }: { children: React.ReactNode }) => {
-  return <button className="select-trigger">{children}</button>;
+interface SelectTriggerProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+const SelectTrigger = ({ children, className }: SelectTriggerProps) => {
+  return <button className={cn("select-trigger", className)}>{children}</button>;
 };
 
 const SelectContent = ({ children }: { children: React.ReactNode }) => {
@@ -63,4 +74,4 @@ export {
   SelectLabel,
   SelectItem,
   SelectSeparator,
-}; 
+};

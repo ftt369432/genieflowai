@@ -228,6 +228,98 @@
     color: rgb(191, 219, 254);
     border-left: 2px solid rgb(59, 130, 246);
   }
+
+  /* Gleaming silver and slate blue silver buttons */
+  .gleaming-silver-button {
+    background: linear-gradient(135deg, #e2e8f0, #cbd5e1, #f8fafc);
+    color: #334155;
+    box-shadow: 
+      0 2px 5px rgba(0, 0, 0, 0.1),
+      0 0 0 1px rgba(255, 255, 255, 0.05),
+      inset 0 0 10px rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.7);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .gleaming-silver-button::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(30deg);
+    animation: gleam 3s infinite ease-in-out;
+    pointer-events: none;
+  }
+
+  .gleaming-silver-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 
+      0 4px 12px rgba(0, 0, 0, 0.15),
+      0 0 0 1px rgba(255, 255, 255, 0.1),
+      inset 0 0 15px rgba(255, 255, 255, 0.8);
+    filter: brightness(1.05);
+  }
+
+  .slate-silver-gleam {
+    background: linear-gradient(135deg, #475569, #64748b, #94a3b8);
+    color: white;
+    box-shadow: 
+      0 2px 5px rgba(0, 0, 0, 0.2),
+      0 0 0 1px rgba(255, 255, 255, 0.05),
+      inset 0 0 10px rgba(148, 163, 184, 0.5);
+    border: 1px solid rgba(71, 85, 105, 0.7);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .slate-silver-gleam::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.2) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(30deg);
+    animation: gleam 3s infinite ease-in-out;
+    pointer-events: none;
+  }
+
+  .slate-silver-gleam:hover {
+    transform: translateY(-1px);
+    box-shadow: 
+      0 4px 12px rgba(0, 0, 0, 0.25),
+      0 0 0 1px rgba(255, 255, 255, 0.1),
+      inset 0 0 15px rgba(148, 163, 184, 0.7);
+    filter: brightness(1.1);
+  }
+
+  @keyframes gleam {
+    0% {
+      transform: translate(-100%, -100%) rotate(30deg);
+    }
+    15%, 100% {
+      transform: translate(100%, 100%) rotate(30deg);
+    }
+  }
 }
 
 @layer utilities {
@@ -602,4 +694,4 @@
 .dark .ai-assistant-container .recent-query:hover {
   background-color: rgba(99, 102, 241, 0.1);
   color: white;
-} 
+}

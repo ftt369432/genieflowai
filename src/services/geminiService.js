@@ -3,7 +3,14 @@ import axios from 'axios';
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent';
 
-export const getGeminiResponse = async (prompt) => {
+const getCompletion = async (prompt, options = {}) => {
+  const {
+    temperature = 0.7,
+    maxTokens = 1024,
+    topK = 40,
+    topP = 0.95
+  } = options;
+
   try {
     const response = await axios.post(
       `${GEMINI_API_URL}?key=${geminiApiKey}`,
@@ -13,10 +20,10 @@ export const getGeminiResponse = async (prompt) => {
           parts: [{ text: prompt }]
         }],
         generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
+          temperature,
+          topK,
+          topP,
+          maxOutputTokens: maxTokens,
         },
         safetySettings: [
           {
@@ -36,4 +43,11 @@ export const getGeminiResponse = async (prompt) => {
     console.error('Gemini API error:', error.response?.data || error.message);
     throw error;
   }
-}; 
+};
+
+export const getGeminiResponse = getCompletion;
+
+// Export the geminiService object to match the import in assistantConversationService.ts
+export const geminiService = {
+  getCompletion
+};
