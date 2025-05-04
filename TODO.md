@@ -31,6 +31,11 @@
     - [ ] Add loading indicators
     - [x] Verify AI assistant is operational in current state
     - [ ] Document current AI assistant capabilities and limitations
+    - [ ] Continue to iterate with enhanced assistant creation
+      - [ ] Add avatar/logo selection for assistants
+      - [ ] Create personalized assistant templates
+      - [ ] Implement assistant customization wizard
+      - [ ] Build assistant preview experience
   - [ ] Finalize email integration
     - [ ] Complete SMTP provider integration
     - [ ] Add email template system
