@@ -1,8 +1,8 @@
 import React from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
-import { SwarmPanel } from '../swarm/SwarmPanel'; // Corrected relative path
+import { SwarmPanel } from '@/components/swarm/SwarmPanel'; // Try path relative to src
 // Import KnowledgePanel or its content if it's a separate component
-// import { KnowledgePanel } from './knowledge/KnowledgePanel'; 
+// import { KnowledgePanel } from '@/components/knowledge/KnowledgePanel'; 
 
 interface RightSidePanelProps {
   // Add any necessary props, e.g., selectedDocs, systemPrompt for KnowledgePanel

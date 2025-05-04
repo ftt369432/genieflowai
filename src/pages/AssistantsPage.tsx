@@ -30,10 +30,10 @@ export function AssistantsPage() {
   };
   
   return (
-    <div className="container mx-auto p-4 h-full flex flex-col">
-      <h1 className="text-3xl font-bold mb-6">AI Assistants</h1>
+    <div className="h-full flex flex-col">
+      <h1 className="text-3xl font-bold mb-6 px-4 pt-4">AI Assistants</h1> 
       
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden px-4 pb-4"> 
         {isCreating ? (
           <div className="h-full overflow-y-auto">
             <button 
@@ -64,4 +64,4 @@ export function AssistantsPage() {
   );
 }
 
-export default AssistantsPage; 
+export default AssistantsPage;

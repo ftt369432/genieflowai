@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
-import { Bot, Send, Settings, Plus, MessageSquare, Users, Menu, PanelRightOpen, PanelRightClose, BookOpen, Users as UsersIcon } from 'lucide-react';
-import type { Message, AIAssistant, Conversation } from '../types/ai';
+import { Bot, Send, Settings, Plus, MessageSquare, Users, Menu, PanelRightOpen, PanelRightClose, BookOpen, Users as UsersIcon, Mic, Paperclip, Image as ImageIconLucide, Folder } from 'lucide-react';
+import type { Message, AIAssistant, Conversation, AIDocument } from '../types/ai';
 import { Button } from '../components/ui/Button';
 import { Textarea } from '../components/ui/Textarea';
-import { TooltipProvider } from '../components/ui/Tooltip';
+import { Tooltip, TooltipProvider } from '../components/ui/Tooltip';
 import { AIErrorBoundary } from '../components/error/AIErrorBoundary';
 import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/Dialog';
@@ -18,6 +18,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { RightSidePanel } from '../components/layout/RightSidePanel';
 import { useRightPanelState } from '../hooks/useRightPanelState';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 
 export function AIAssistantPage() {
   const navigate = useNavigate();
@@ -40,6 +41,7 @@ export function AIAssistantPage() {
     toggleRightPanel,
   } = useRightPanelState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
   const { assistants } = useAssistantStore();
   const [showAssistantsDialog, setShowAssistantsDialog] = useState<boolean>(false);
@@ -206,6 +208,14 @@ export function AIAssistantPage() {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('File selected:', e.target.files);
+  };
+
+  const toggleListening = () => {
+    setIsListening((prev) => !prev);
+  };
+
   return (
     <AIErrorBoundary>
       <TooltipProvider>
@@ -226,7 +236,7 @@ export function AIAssistantPage() {
             >
               <div className="h-full flex flex-col">
                 <div className="p-4 border-b border-border/50">
-                  <Link
+                  <Link 
                     to="/assistants"
                     className="w-full justify-start gap-2 mb-2 gleaming-silver-button inline-flex items-center px-4 py-2 rounded-md text-sm font-medium"
                     onClick={(e) => {
@@ -237,14 +247,46 @@ export function AIAssistantPage() {
                     <Users className="h-4 w-4" />
                     Assistants
                   </Link>
-                  <Button
+                  <Button 
                     variant="outline"
-                    className="w-full justify-start gap-2 slate-silver-gleam"
+                    className="w-full justify-start gap-2 slate-silver-gleam mb-4"
                     onClick={handleNewChat}
                   >
                     <Plus className="h-4 w-4 interactive-icon" />
                     New Chat
                   </Button>
+
+                  {/* --- Recent Assistants Section --- */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground px-2">Recent Assistants</h4>
+                    <div className="flex space-x-2 px-2">
+                      {assistants.slice(0, 2).map(assistant => (
+                        <TooltipProvider key={assistant.id}>
+                          <Tooltip content={assistant.name}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10 rounded-full p-0 overflow-hidden border border-border/50 hover:border-primary/50"
+                              onClick={() => {
+                                console.log("Switch to assistant:", assistant.name);
+                                setSelectedAssistant(assistant);
+                              }}
+                            >
+                              {assistant.avatar ? (
+                                <img src={assistant.avatar} alt={assistant.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <Bot className="h-5 w-5 text-muted-foreground" />
+                              )}
+                            </Button>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ))}
+                      {assistants.length === 0 && (
+                        <p className="text-xs text-muted-foreground px-2">No assistants yet.</p>
+                      )}
+                    </div>
+                  </div>
+                  {/* --- End Recent Assistants Section --- */}
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
@@ -278,7 +320,9 @@ export function AIAssistantPage() {
               </div>
             </div>
 
+            {/* Main Content Area */}
             <div className="flex-1 flex flex-col h-full">
+              {/* Header */}
               <header className="flex items-center justify-between p-3 border-b bg-background/95 backdrop-blur-md ai-header z-10">
                 <div className="flex items-center gap-2">
                   {isLeftPanelCollapsed && (
@@ -316,16 +360,17 @@ export function AIAssistantPage() {
                 </div>
               </header>
 
-              <div className="flex-1 overflow-y-auto p-4 chat-container">
+              {/* Chat Area - Add bottom padding */}
+              <div className="flex-1 overflow-y-auto chat-container pb-32"> {/* Increased bottom padding significantly */}
                 {chatMessages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8"> {/* Keep padding for empty state */}
                     <Bot className="h-12 w-12 mb-4 text-muted-foreground interactive-icon" />
                     <h2 className="text-2xl font-semibold mb-2">
                       How can I help you today?
                     </h2>
                   </div>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="space-y-6 p-4"> {/* Add padding here for message spacing */}
                     {chatMessages.map((message) => (
                       <div
                         key={message.id}
@@ -366,28 +411,58 @@ export function AIAssistantPage() {
                 )}
               </div>
 
-              <div className="border-t p-4 bg-background/95 backdrop-blur-md">
-                <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-                  <div className="flex gap-2">
-                    <div className="flex-1 relative">
-                      <Textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Message AI Assistant..."
-                        className="min-h-[60px] resize-none chat-input pr-10"
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      size="icon"
-                      className="primary h-12 w-12"
-                      disabled={isProcessing || !input.trim()}
-                    >
-                      <Send className="h-4 w-4 interactive-icon" />
-                    </Button>
-                  </div>
-                </form>
+              {/* Input Area - Lifted floating styles */}
+              <div className="sticky bottom-16 px-4 pt-4 pb-4 bg-gradient-to-t from-background via-background/90 to-transparent mt-auto"> {/* Changed bottom-8 to bottom-16 */}
+                 {/* Centering and Max Width Wrapper */}
+                 <div className="relative max-w-3xl mx-auto">
+                   <form onSubmit={handleSubmit} className="relative flex items-end gap-2 bg-background border border-border/50 rounded-xl shadow-lg p-2">
+                     {/* Attachment Button Popover */}
+                     <Popover>
+                       <PopoverTrigger asChild>
+                         {/* Position button inside the form area */}
+                         <Button variant="ghost" size="icon" className="h-9 w-9 flex-shrink-0">
+                           <Paperclip className="h-4 w-4 interactive-icon" />
+                         </Button>
+                       </PopoverTrigger>
+                       <PopoverContent className="w-48 p-2 mb-1">
+                         {/* ... Popover content ... */}
+                       </PopoverContent>
+                     </Popover>
+                     {/* Hidden file inputs (keep outside form or handle differently if needed) */}
+                     
+                     {/* Mic Button */}
+                     <Button 
+                       type="button" 
+                       variant="ghost" 
+                       size="icon" 
+                       className="h-9 w-9 flex-shrink-0" 
+                       onClick={toggleListening} 
+                     >
+                       <Mic className={cn("h-4 w-4 interactive-icon", isListening ? "text-red-500" : "")} />
+                     </Button>
+
+                     <Textarea
+                       value={input}
+                       onChange={(e) => setInput(e.target.value)}
+                       onKeyDown={handleKeyDown}
+                       placeholder="Message AI Assistant..."
+                       className="flex-1 resize-none chat-input bg-transparent border-none focus:ring-0 focus:outline-none p-0 pl-2 pr-10" /* Simplified styles, adjust padding */
+                       rows={1}
+                     />
+                     {/* Send Button */}
+                     <Button 
+                       type="submit" 
+                       size="icon" 
+                       className="h-9 w-9 primary flex-shrink-0" /* Use flex-shrink-0 */
+                       disabled={isProcessing || !input.trim()}
+                     >
+                       <Send className="h-4 w-4 interactive-icon" />
+                     </Button>
+                   </form>
+                 </div>
+                 {/* Hidden file inputs moved outside form if needed, or handle via state */}
+                 <input type="file" id="file-input-hidden" className="hidden" onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.txt,.md" />
+                 <input type="file" id="image-input-hidden" className="hidden" onChange={handleFileChange} multiple accept="image/*" />
               </div>
             </div>
           </div>
