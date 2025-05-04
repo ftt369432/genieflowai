@@ -26,22 +26,23 @@ const envSchema = z.object({
   debug: z.boolean().default(false)
 });
 
+// Process environment variables
+const processEnv = {
+  nodeEnv: process.env.NODE_ENV,
+  apiUrl: process.env.VITE_API_URL,
+  port: process.env.VITE_PORT ? Number(process.env.VITE_PORT) : undefined,
+  useMock: process.env.VITE_USE_MOCK === 'true',
+  aiProvider: process.env.VITE_AI_PROVIDER,
+  aiModel: process.env.VITE_AI_MODEL,
+  geminiApiKey: process.env.VITE_GEMINI_API_KEY,
+  googleClientId: process.env.VITE_GOOGLE_CLIENT_ID,
+  googleClientSecret: process.env.VITE_GOOGLE_CLIENT_SECRET,
+  hasGeminiApiKey: process.env.VITE_GEMINI_API_KEY ? true : false,
+  debug: process.env.VITE_DEBUG === 'true',
+};
+
+// Parse and validate environment variables
+export const env = envSchema.parse(processEnv);
+
+// Type export for TypeScript consumption
 export type Env = z.infer<typeof envSchema>;
-
-export function getEnv(): Env {
-  const env = {
-    nodeEnv: process.env.NODE_ENV,
-    apiUrl: process.env.VITE_API_URL,
-    port: process.env.PORT ? parseInt(process.env.PORT) : undefined,
-    useMock: process.env.VITE_USE_MOCK === 'true',
-    aiProvider: 'google', // Always use Google Gemini
-    aiModel: process.env.VITE_AI_MODEL || 'gemini-2.0-flash',
-    geminiApiKey: process.env.VITE_GEMINI_API_KEY,
-    googleClientId: process.env.VITE_GOOGLE_CLIENT_ID,
-    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    hasGeminiApiKey: !!process.env.VITE_GEMINI_API_KEY,
-    debug: process.env.VITE_DEBUG_MODE === 'true'
-  };
-
-  return envSchema.parse(env);
-}
