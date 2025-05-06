@@ -112,6 +112,7 @@
   - [ ] Update README with comprehensive setup instructions
   - [ ] Create API documentation
   - [ ] Document AI integration patterns
+  - [ ] Document AIAssistantPage structure (Left panel: auto-hide, conversations, recent assistants; Center: chat history, floating input w/ attachments/mic; Right panel: pull-out for Knowledge/Swarm)
 
 - [ ] **Project Structure**
   - [ ] Consolidate duplicate configuration files

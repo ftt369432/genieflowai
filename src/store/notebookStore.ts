@@ -3,36 +3,8 @@ import { persist } from 'zustand/middleware';
 import { Notebook as NotebookType, NotebookSection, NotebookBlock } from '../types/notebook';
 import { generateNotebookResponse, analyzeNotebook } from '../services/ai/notebookAI';
 
-export interface Note {
-  id: string;
-  notebookId: string;
-  title: string;
-  content: string;
-  tags: string[];
-  created: Date;
-  updated: Date;
-  attachments?: {
-    id: string;
-    name: string;
-    type: string;
-    url: string;
-  }[];
-}
-
-export interface Notebook {
-  id: string;
-  name: string;
-  description: string;
-  projectId?: string;
-  icon?: string;
-  color?: string;
-  created: Date;
-  updated: Date;
-}
-
 interface NotebookStore {
   notebooks: NotebookType[];
-  notes: Note[];
   activeNotebookId: string | null;
   activeNoteId: string | null;
   isLoading: boolean;
@@ -62,7 +34,6 @@ export const useNotebookStore = create<NotebookStore>()(
   persist(
     (set, get) => ({
       notebooks: [],
-      notes: [],
       activeNotebookId: null,
       activeNoteId: null,
       isLoading: false,
@@ -103,10 +74,10 @@ export const useNotebookStore = create<NotebookStore>()(
         set({ isLoading: true, error: null });
         try {
           set(state => ({
-          notebooks: state.notebooks.map(notebook => 
-            notebook.id === id 
+            notebooks: state.notebooks.map(notebook => 
+              notebook.id === id 
                 ? { ...notebook, ...updates, updatedAt: new Date(), lastModified: new Date() }
-              : notebook
+                : notebook
             ),
             selectedNotebook: state.selectedNotebook?.id === id
               ? { ...state.selectedNotebook, ...updates, updatedAt: new Date(), lastModified: new Date() }
@@ -122,7 +93,6 @@ export const useNotebookStore = create<NotebookStore>()(
         set({ isLoading: true, error: null });
         try {
           set(state => ({
-            notes: state.notes.filter(note => note.notebookId !== id),
             notebooks: state.notebooks.filter(notebook => notebook.id !== id),
             activeNotebookId: state.activeNotebookId === id ? null : state.activeNotebookId,
             selectedNotebook: state.selectedNotebook?.id === id ? null : state.selectedNotebook,
@@ -382,7 +352,6 @@ export const useNotebookStore = create<NotebookStore>()(
 
           const response = await generateNotebookResponse(notebook, message, context);
           
-          // Add the AI response as a new block in the current section
           if (context?.currentSection) {
             await get().addBlock(notebookId, context.currentSection, {
               type: 'ai',
@@ -418,7 +387,39 @@ export const useNotebookStore = create<NotebookStore>()(
       },
     }),
     {
-      name: 'notebook-storage'
+      name: 'notebook-storage',
+      // Add merge function to handle rehydration
+      merge: (persistedState, currentState) => {
+        if (persistedState && typeof persistedState === 'object') {
+          const typedState = persistedState as Partial<NotebookStore>;
+          // Ensure notebooks array exists and map items to the correct type
+          const notebooks = (typedState.notebooks || []).map((notebook: any) => ({
+            id: notebook.id || crypto.randomUUID(),
+            title: typeof notebook.name === 'object' ? notebook.name.name : (notebook.title || notebook.name || 'Untitled'), // Prioritize title, fallback to name (string) or nested name
+            description: typeof notebook.name === 'object' ? notebook.name.description : (notebook.description || ''), // Handle nested description
+            sections: notebook.sections || [],
+            tags: notebook.tags || [],
+            isFavorite: notebook.isFavorite || false,
+            isArchived: notebook.isArchived || false,
+            createdAt: notebook.createdAt ? new Date(notebook.createdAt) : new Date(),
+            updatedAt: notebook.updatedAt ? new Date(notebook.updatedAt) : new Date(),
+            lastModified: notebook.lastModified ? new Date(notebook.lastModified) : new Date(),
+            // Handle potential metadata, icon, color if they exist in NotebookType
+            // metadata: notebook.metadata,
+            // icon: typeof notebook.name === 'object' ? notebook.name.icon : notebook.icon,
+            // color: typeof notebook.name === 'object' ? notebook.name.color : notebook.color,
+          }));
+          
+          return {
+            ...currentState,
+            ...typedState, // Spread other persisted state properties
+            notebooks, // Overwrite with correctly typed notebooks
+            selectedNotebook: null, // Reset selected notebook on rehydration
+            activeNotebookId: null, // Reset active ID
+          };
+        }
+        return currentState;
+      },
     }
   )
-); 
+);

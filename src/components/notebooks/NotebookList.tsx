@@ -124,7 +124,7 @@ export const NotebookList: React.FC<NotebookListProps> = ({ onSelectNotebook }) 
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-2">
                     <BookOpen className="h-5 w-5 text-primary" />
-                    <h3 className="text-lg font-semibold">{notebook.title}</h3>
+                    <h3 className="text-lg font-semibold">{notebook.title}</h3> 
                   </div>
                   <div className="flex gap-1">
                     <button 
@@ -218,4 +218,4 @@ export const NotebookList: React.FC<NotebookListProps> = ({ onSelectNotebook }) 
       )}
     </div>
   );
-}; 
+};

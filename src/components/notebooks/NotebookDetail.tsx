@@ -148,6 +148,7 @@ export const NotebookDetail: React.FC<NotebookDetailProps> = ({ notebookId, onBa
               onClick={() => setEditingTitle(true)}
             >
               <BookOpen size={22} className="text-primary" />
+              {/* Revert back to using title, as store should now be consistent */}
               {selectedNotebook.title}
               {selectedNotebook.isFavorite && (
                 <Star size={16} className="fill-yellow-400 text-yellow-400" />
@@ -446,4 +447,4 @@ export const NotebookDetail: React.FC<NotebookDetailProps> = ({ notebookId, onBa
       )}
     </div>
   );
-}; 
+};

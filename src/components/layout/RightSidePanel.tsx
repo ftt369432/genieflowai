@@ -1,16 +1,33 @@
 import React from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
-import { SwarmPanel } from '@/components/swarm/SwarmPanel'; // Try path relative to src
-// Import KnowledgePanel or its content if it's a separate component
-// import { KnowledgePanel } from '@/components/knowledge/KnowledgePanel'; 
+import { SwarmPanel } from '@/components/swarm/SwarmPanel';
+import { Switch } from "@/components/ui/Switch"; // Import Switch
+import { Label } from "@/components/ui/Label"; // Import Label
 
 interface RightSidePanelProps {
-  // Add any necessary props, e.g., selectedDocs, systemPrompt for KnowledgePanel
+  isAutoHideEnabled: boolean;
+  onToggleAutoHide: (enabled: boolean) => void;
+  // Add any other necessary props
 }
 
-export function RightSidePanel({ /* props */ }: RightSidePanelProps) {
+export function RightSidePanel({ 
+  isAutoHideEnabled,
+  onToggleAutoHide,
+  /* other props */ 
+}: RightSidePanelProps) {
   return (
     <div className="h-full flex flex-col border-l border-border/50 bg-muted/30 p-4">
+      {/* Add Auto-Hide Toggle */}
+      <div className="flex items-center justify-between mb-4 px-1">
+        <Label htmlFor="right-auto-hide-switch" className="text-xs text-muted-foreground">Auto-hide Panel</Label>
+        <Switch
+          id="right-auto-hide-switch"
+          checked={isAutoHideEnabled}
+          onCheckedChange={onToggleAutoHide}
+          className="[&>span]:h-3 [&>span]:w-3 data-[state=checked]:bg-primary"
+        />
+      </div>
+
       <Tabs defaultValue="knowledge" className="flex-1 flex flex-col">
         <TabsList className="w-full justify-start mb-4">
           <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
