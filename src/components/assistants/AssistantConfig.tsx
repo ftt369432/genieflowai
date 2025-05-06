@@ -8,7 +8,7 @@ import { Card } from '../ui/Card';
 import { Checkbox } from '../ui/Checkbox';
 import { Label } from '../ui/Label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
-import { FolderOpen, Search, Send, MessageSquare, Bot, User, BarChart2, Wand, Settings, Image as ImageIcon } from 'lucide-react';
+import { FolderOpen, Search, Send, MessageSquare, Bot, User, BarChart2, Wand, Settings, Image as ImageIcon, Upload } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { ScrollArea } from '../ui/ScrollArea';
 import { v4 as uuidv4 } from 'uuid';
@@ -332,6 +332,28 @@ export function AssistantConfig({ assistantId, onSave, onCancel }: AssistantConf
     setMessages(prev => [...prev, imageMessage]);
   };
   
+  // Add handler for file uploads
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      // TODO: Implement actual file upload logic
+      // - Upload files to storage (e.g., AI Drive)
+      // - Potentially create a new knowledge folder or add to existing
+      // - Link the new/updated folder to the assistant (update selectedFolders state)
+      console.log('Uploaded files:', files);
+      // Example: Add a system message
+      const uploadMessage: Message = {
+        id: uuidv4(),
+        content: `Successfully uploaded ${files.length} file(s). You may need to select the folder they were added to.`,
+        role: 'system',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, uploadMessage]);
+    }
+    // Reset the input value to allow uploading the same file again
+    event.target.value = ''; 
+  };
+  
   return (
     <Card className="p-6">
       <h2 className="text-2xl font-bold mb-4">
@@ -402,16 +424,36 @@ export function AssistantConfig({ assistantId, onSave, onCancel }: AssistantConf
             <div className="space-y-2">
               <div className="flex justify-between items-center mb-2">
                 <Label>Knowledge Folders</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowFolderSelector(!showFolderSelector)}
-                >
-                  <FolderOpen className="h-4 w-4 mr-2" />
-                  {showFolderSelector ? 'Hide Folders' : 'Browse Folders'}
-                </Button>
+                <div className="flex gap-2">
+                  {/* Add Upload File Button */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('assistant-file-upload')?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload File
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowFolderSelector(!showFolderSelector)}
+                  >
+                    <FolderOpen className="h-4 w-4 mr-2" />
+                    {showFolderSelector ? 'Hide Folders' : 'Browse Folders'}
+                  </Button>
+                </div>
               </div>
+              {/* Hidden File Input */}
+              <input 
+                type="file" 
+                id="assistant-file-upload" 
+                className="hidden" 
+                onChange={handleFileUpload} 
+                multiple // Allow multiple files if desired
+              />
               
               <div className="flex flex-wrap gap-2">
                 {selectedFolders.length > 0 ? (

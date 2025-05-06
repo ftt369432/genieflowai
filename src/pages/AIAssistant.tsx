@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
-import { Bot, Send, Settings, Plus, MessageSquare, Users, Menu, PanelRightOpen, PanelRightClose, BookOpen, Users as UsersIcon, Mic, Paperclip, Image as ImageIconLucide, Folder } from 'lucide-react';
-import type { Message, AIAssistant, Conversation, AIDocument } from '../types/ai';
+import { Bot, Send, Settings, Plus, MessageSquare, Users, Menu, PanelRightOpen, PanelRightClose, BookOpen, Users as UsersIcon, Mic, Paperclip, Image as ImageIconLucide, Folder, Upload, ChevronLeft, Camera } from 'lucide-react';
+import type { Message, AIAssistant, Conversation } from '../types/ai';
 import { Button } from '../components/ui/Button';
 import { Textarea } from '../components/ui/Textarea';
 import { Tooltip, TooltipProvider } from '../components/ui/Tooltip';
@@ -19,6 +19,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { RightSidePanel } from '../components/layout/RightSidePanel';
 import { useRightPanelState } from '../hooks/useRightPanelState';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
+import { Switch } from "@/components/ui/Switch";
+import { Label } from "@/components/ui/Label";
 
 export function AIAssistantPage() {
   const navigate = useNavigate();
@@ -34,6 +36,8 @@ export function AIAssistantPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<string | null>(null);
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
+  const manuallyCollapsedLeft = useRef(false); // Track manual state
+
   const {
     isRightPanelCollapsed,
     openRightPanel,
@@ -42,6 +46,20 @@ export function AIAssistantPage() {
   } = useRightPanelState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isLeftPanelAutoHideEnabled, setIsLeftPanelAutoHideEnabled] = useState(true);
+  const [isLeftPanelHovered, setIsLeftPanelHovered] = useState(false);
+  const leftPanelCollapseTimer = useRef<NodeJS.Timeout | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+
+  const manuallyCollapsedRight = useRef(false); // Track manual state for right panel
+
+  // Add state for right panel auto-hide
+  const [isRightPanelAutoHideEnabled, setIsRightPanelAutoHideEnabled] = useState(true); // Default to enabled
+  const [isRightPanelHovered, setIsRightPanelHovered] = useState(false);
+  const rightPanelCollapseTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Add state for drag-and-drop
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const { assistants } = useAssistantStore();
   const [showAssistantsDialog, setShowAssistantsDialog] = useState<boolean>(false);
@@ -75,6 +93,111 @@ export function AIAssistantPage() {
       setChatMessages([]);
     }
   }, [currentConversation, conversations]);
+
+  useEffect(() => {
+    return () => {
+      if (leftPanelCollapseTimer.current) {
+        clearTimeout(leftPanelCollapseTimer.current);
+      }
+      // Add cleanup for right panel timer
+      if (rightPanelCollapseTimer.current) {
+        clearTimeout(rightPanelCollapseTimer.current);
+      }
+    };
+  }, []);
+
+  const handleLeftPanelMouseEnter = () => {
+    if (isLeftPanelAutoHideEnabled) {
+      if (leftPanelCollapseTimer.current) {
+        clearTimeout(leftPanelCollapseTimer.current);
+        leftPanelCollapseTimer.current = null;
+      }
+      setIsLeftPanelHovered(true);
+      // Expand only if it was collapsed *automatically*
+      if (isLeftPanelCollapsed && !manuallyCollapsedLeft.current) {
+         setIsLeftPanelCollapsed(false);
+      }
+    }
+  };
+
+  const handleLeftPanelMouseLeave = () => {
+    if (isLeftPanelAutoHideEnabled) {
+      setIsLeftPanelHovered(false);
+      // Clear any previous timer
+      if (leftPanelCollapseTimer.current) {
+        clearTimeout(leftPanelCollapseTimer.current);
+      }
+      // Set timer to collapse only if the panel is currently open
+      if (!isLeftPanelCollapsed) {
+        leftPanelCollapseTimer.current = setTimeout(() => {
+          // Check conditions again when timer fires
+          if (isLeftPanelAutoHideEnabled && !isLeftPanelHovered) {
+             manuallyCollapsedLeft.current = false; // Reset manual flag as this is an auto-collapse
+             setIsLeftPanelCollapsed(true);
+          }
+        }, 700); // 700ms delay
+      }
+    }
+  };
+
+  const toggleLeftPanelManually = (collapse: boolean) => {
+    if (leftPanelCollapseTimer.current) {
+      clearTimeout(leftPanelCollapseTimer.current);
+      leftPanelCollapseTimer.current = null;
+    }
+    manuallyCollapsedLeft.current = collapse; // Set manual flag based on action
+    setIsLeftPanelCollapsed(collapse);
+    setIsLeftPanelHovered(false); // Ensure hover state is reset
+  };
+
+  const handleRightPanelMouseEnter = () => {
+    if (isRightPanelAutoHideEnabled) {
+      if (rightPanelCollapseTimer.current) {
+        clearTimeout(rightPanelCollapseTimer.current);
+        rightPanelCollapseTimer.current = null;
+      }
+      setIsRightPanelHovered(true);
+      // Expand only if it was collapsed automatically
+      if (isRightPanelCollapsed && !manuallyCollapsedRight.current) {
+        openRightPanel(); // Use hook function to open
+        manuallyCollapsedRight.current = false; // Ensure manual flag is reset on auto-expand
+      }
+    }
+  };
+
+  const handleRightPanelMouseLeave = () => {
+    if (isRightPanelAutoHideEnabled) {
+      setIsRightPanelHovered(false);
+      // Clear any previous timer
+      if (rightPanelCollapseTimer.current) {
+        clearTimeout(rightPanelCollapseTimer.current);
+      }
+      // Set timer ONLY if the panel is currently open
+      if (!isRightPanelCollapsed) {
+        rightPanelCollapseTimer.current = setTimeout(() => {
+          // Check conditions again when timer fires
+          if (isRightPanelAutoHideEnabled && !isRightPanelHovered) {
+            manuallyCollapsedRight.current = false; // Reset manual flag
+            closeRightPanel(); // Use hook function to close
+          }
+        }, 700); 
+      }
+    }
+  };
+
+  const toggleRightPanelManually = (collapse: boolean) => {
+    if (rightPanelCollapseTimer.current) {
+      clearTimeout(rightPanelCollapseTimer.current);
+      rightPanelCollapseTimer.current = null;
+    }
+    manuallyCollapsedRight.current = collapse; // Set manual flag
+    if (collapse) {
+      closeRightPanel();
+    } else {
+      openRightPanel();
+    }
+    setIsRightPanelHovered(false); // Reset hover state
+  };
 
   const updateConversationTitle = (id: string, title: string) => {
     setConversations((prev) =>
@@ -208,12 +331,93 @@ export function AIAssistantPage() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('File selected:', e.target.files);
+  const handleFiles = (files: FileList | null) => {
+    if (files) {
+      console.log('Processing files:', files);
+      const uploadMessage: Message = {
+        id: uuidv4(),
+        content: `Processing ${files.length} file(s)... (Upload/OCR/Drive integration needed)`,
+        role: 'system',
+        timestamp: new Date(),
+      };
+      setChatMessages(prev => [...prev, uploadMessage]);
+    }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    handleFiles(event.target.files);
+    event.target.value = ''; 
+  };
+
+  const handleGeneralFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Log selected files to the console
+    if (event.target.files) {
+      console.log('General files selected:', event.target.files);
+      setUploadedFiles(Array.from(event.target.files));
+      handleFiles(event.target.files);
+    }
+    event.target.value = ''; 
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const relatedTarget = e.relatedTarget as Node;
+    if (!e.currentTarget.contains(relatedTarget)) {
+      setIsDraggingOver(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      console.log('Dropped files:', files);
+      handleFiles(files);
+    }
   };
 
   const toggleListening = () => {
     setIsListening((prev) => !prev);
+  };
+
+  // Capability Handlers
+  const handleUploadFile = () => {
+    console.log('Upload File selected');
+    const fileInput = document.getElementById('general-file-input-hidden') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.click();
+    }
+  };
+
+  const handleRecordAudio = () => {
+    console.log('Record Audio selected');
+    // Implement record audio logic here
+  };
+
+  const handleCamera = () => {
+    console.log('Camera selected');
+    // Implement camera logic here
+  };
+
+  const handleMyDrive = () => {
+    console.log('MyDrive selected');
+    // Implement MyDrive logic here
   };
 
   return (
@@ -233,9 +437,31 @@ export function AIAssistantPage() {
                 'border-r border-border/50 bg-muted/30 transition-all duration-300 overflow-hidden',
                 isLeftPanelCollapsed ? 'w-0' : 'w-64'
               )}
+              onMouseEnter={handleLeftPanelMouseEnter}
+              onMouseLeave={handleLeftPanelMouseLeave}
             >
               <div className="h-full flex flex-col">
                 <div className="p-4 border-b border-border/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8" 
+                      onClick={() => toggleLeftPanelManually(true)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="auto-hide-switch" className="text-xs text-muted-foreground">Auto-hide</Label>
+                      <Switch
+                        id="auto-hide-switch"
+                        checked={isLeftPanelAutoHideEnabled}
+                        onCheckedChange={setIsLeftPanelAutoHideEnabled}
+                        className="[&>span]:h-3 [&>span]:w-3 data-[state=checked]:bg-primary"
+                      />
+                    </div>
+                  </div>
+
                   <Link 
                     to="/assistants"
                     className="w-full justify-start gap-2 mb-2 gleaming-silver-button inline-flex items-center px-4 py-2 rounded-md text-sm font-medium"
@@ -256,7 +482,6 @@ export function AIAssistantPage() {
                     New Chat
                   </Button>
 
-                  {/* --- Recent Assistants Section --- */}
                   <div className="space-y-2">
                     <h4 className="text-xs font-semibold text-muted-foreground px-2">Recent Assistants</h4>
                     <div className="flex space-x-2 px-2">
@@ -286,7 +511,6 @@ export function AIAssistantPage() {
                       )}
                     </div>
                   </div>
-                  {/* --- End Recent Assistants Section --- */}
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
@@ -320,9 +544,13 @@ export function AIAssistantPage() {
               </div>
             </div>
 
-            {/* Main Content Area */}
-            <div className="flex-1 flex flex-col h-full">
-              {/* Header */}
+            <div 
+              className="flex-1 flex flex-col h-full relative"
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
               <header className="flex items-center justify-between p-3 border-b bg-background/95 backdrop-blur-md ai-header z-10">
                 <div className="flex items-center gap-2">
                   {isLeftPanelCollapsed && (
@@ -330,12 +558,12 @@ export function AIAssistantPage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => setIsLeftPanelCollapsed(false)}
+                      onClick={() => toggleLeftPanelManually(false)}
                     >
                       <Menu className="h-4 w-4 interactive-icon" />
                     </Button>
                   )}
-
+                  
                   <h1 className="text-lg font-semibold">
                     {currentConversation
                       ? conversations.find((c) => c.id === currentConversation)
@@ -360,17 +588,16 @@ export function AIAssistantPage() {
                 </div>
               </header>
 
-              {/* Chat Area - Add bottom padding */}
-              <div className="flex-1 overflow-y-auto chat-container pb-32"> {/* Increased bottom padding significantly */}
+              <div className="flex-1 overflow-y-auto chat-container pb-32">
                 {chatMessages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-8"> {/* Keep padding for empty state */}
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8">
                     <Bot className="h-12 w-12 mb-4 text-muted-foreground interactive-icon" />
                     <h2 className="text-2xl font-semibold mb-2">
                       How can I help you today?
                     </h2>
                   </div>
                 ) : (
-                  <div className="space-y-6 p-4"> {/* Add padding here for message spacing */}
+                  <div className="space-y-6 p-4">
                     {chatMessages.map((message) => (
                       <div
                         key={message.id}
@@ -411,26 +638,73 @@ export function AIAssistantPage() {
                 )}
               </div>
 
-              {/* Input Area - Lifted floating styles */}
-              <div className="sticky bottom-16 px-4 pt-4 pb-4 bg-gradient-to-t from-background via-background/90 to-transparent mt-auto"> {/* Changed bottom-8 to bottom-16 */}
-                 {/* Centering and Max Width Wrapper */}
+              <div className="sticky bottom-8 px-4 pt-4 pb-4 bg-gradient-to-t from-background via-background/90 to-transparent mt-auto">
                  <div className="relative max-w-3xl mx-auto">
                    <form onSubmit={handleSubmit} className="relative flex items-end gap-2 bg-background border border-border/50 rounded-xl shadow-lg p-2">
-                     {/* Attachment Button Popover */}
                      <Popover>
                        <PopoverTrigger asChild>
-                         {/* Position button inside the form area */}
                          <Button variant="ghost" size="icon" className="h-9 w-9 flex-shrink-0">
                            <Paperclip className="h-4 w-4 interactive-icon" />
                          </Button>
                        </PopoverTrigger>
                        <PopoverContent className="w-48 p-2 mb-1">
-                         {/* ... Popover content ... */}
+                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleUploadFile}>
+                           <Folder className="h-4 w-4 interactive-icon" />
+                           Upload File
+                         </Button>
+                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleRecordAudio}>
+                           <Mic className="h-4 w-4 interactive-icon" />
+                           Record Audio
+                         </Button>
+                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleCamera}>
+                           <Camera className="h-4 w-4 interactive-icon" />
+                           Camera
+                         </Button>
+                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleMyDrive}>
+                           <Upload className="h-4 w-4 interactive-icon" />
+                           MyDrive
+                         </Button>
                        </PopoverContent>
                      </Popover>
-                     {/* Hidden file inputs (keep outside form or handle differently if needed) */}
+                     {/* Display uploaded files */}
+                     {uploadedFiles.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs text-muted-foreground">Uploaded Files:</p>
+                        <ul>
+                          {uploadedFiles.map((file) => (
+                            <li key={file.name} className="text-xs">{file.name}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                      
-                     {/* Mic Button */}
+                     {/* Add Capabilities Button */}
+                     <Popover>
+                       <PopoverTrigger asChild>
+                         <Button variant="ghost" size="icon" className="h-9 w-9 flex-shrink-0">
+                           <Plus className="h-4 w-4 interactive-icon" />
+                         </Button>
+                       </PopoverTrigger>
+                       <PopoverContent className="w-48 p-2 mb-1">
+                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleUploadFile}>
+                           <Folder className="h-4 w-4 interactive-icon" />
+                           Upload File
+                         </Button>
+                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleRecordAudio}>
+                           <Mic className="h-4 w-4 interactive-icon" />
+                           Record Audio
+                         </Button>
+                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleCamera}>
+                           <Camera className="h-4 w-4 interactive-icon" />
+                           Camera
+                         </Button>
+                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleMyDrive}>
+                           <Upload className="h-4 w-4 interactive-icon" />
+                           MyDrive
+                         </Button>
+                       </PopoverContent>
+                     </Popover>
+                     
                      <Button 
                        type="button" 
                        variant="ghost" 
@@ -446,34 +720,48 @@ export function AIAssistantPage() {
                        onChange={(e) => setInput(e.target.value)}
                        onKeyDown={handleKeyDown}
                        placeholder="Message AI Assistant..."
-                       className="flex-1 resize-none chat-input bg-transparent border-none focus:ring-0 focus:outline-none p-0 pl-2 pr-10" /* Simplified styles, adjust padding */
+                       className="flex-1 resize-none chat-input bg-transparent border-none focus:ring-0 focus:outline-none p-0 pl-2 pr-10"
                        rows={1}
                      />
-                     {/* Send Button */}
                      <Button 
                        type="submit" 
                        size="icon" 
-                       className="h-9 w-9 primary flex-shrink-0" /* Use flex-shrink-0 */
+                       className="h-9 w-9 primary flex-shrink-0"
                        disabled={isProcessing || !input.trim()}
                      >
                        <Send className="h-4 w-4 interactive-icon" />
                      </Button>
                    </form>
                  </div>
-                 {/* Hidden file inputs moved outside form if needed, or handle via state */}
                  <input type="file" id="file-input-hidden" className="hidden" onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.txt,.md" />
                  <input type="file" id="image-input-hidden" className="hidden" onChange={handleFileChange} multiple accept="image/*" />
+                 <input type="file" id="general-file-input-hidden" className="hidden" onChange={handleGeneralFileChange} multiple />
               </div>
+
+              {isDraggingOver && (
+                <div className="absolute inset-0 bg-primary/10 backdrop-blur-sm flex items-center justify-center z-40 pointer-events-none">
+                  <div className="border-2 border-dashed border-primary p-12 rounded-lg text-center">
+                    <Upload className="h-12 w-12 mx-auto text-primary mb-4" />
+                    <p className="font-semibold text-primary">Drop files here</p>
+                    <p className="text-sm text-muted-foreground">Upload documents, images, etc.</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div
+          <div 
             className={cn(
-              'absolute top-0 right-0 h-full w-80 bg-background shadow-lg transition-transform duration-300 ease-in-out z-20',
-              isRightPanelCollapsed ? 'translate-x-full' : 'translate-x-0'
+              "absolute top-0 right-0 h-full w-80 bg-background shadow-lg transition-transform duration-300 ease-in-out z-20",
+              isRightPanelCollapsed ? "translate-x-full" : "translate-x-0"
             )}
+            onMouseEnter={handleRightPanelMouseEnter}
+            onMouseLeave={handleRightPanelMouseLeave}
           >
-            <RightSidePanel />
+            <RightSidePanel 
+              isAutoHideEnabled={isRightPanelAutoHideEnabled}
+              onToggleAutoHide={setIsRightPanelAutoHideEnabled}
+            />
           </div>
 
           <div
@@ -485,7 +773,7 @@ export function AIAssistantPage() {
             <Button
               variant="secondary"
               className="rounded-l-full rounded-r-none h-20 w-10 p-0 flex flex-col items-center justify-center space-y-2 bg-muted/80 backdrop-blur-sm hover:bg-muted"
-              onClick={openRightPanel}
+              onClick={() => toggleRightPanelManually(false)}
             >
               <BookOpen className="h-4 w-4 text-muted-foreground" />
               <UsersIcon className="h-4 w-4 text-muted-foreground" />
@@ -502,7 +790,7 @@ export function AIAssistantPage() {
               variant="ghost"
               size="icon"
               className="h-8 w-8 rounded-full bg-background/80 hover:bg-background"
-              onClick={closeRightPanel}
+              onClick={() => toggleRightPanelManually(true)}
             >
               <PanelRightClose className="h-4 w-4" />
             </Button>
@@ -511,11 +799,11 @@ export function AIAssistantPage() {
       </TooltipProvider>
 
       <Dialog open={showAssistantsDialog} onOpenChange={setShowAssistantsDialog}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl" aria-describedby="assistants-description">
           <DialogHeader className="flex flex-row items-center justify-between">
             <div>
               <DialogTitle>AI Assistants</DialogTitle>
-              <DialogDescription>
+              <DialogDescription id="assistants-description">
                 Select a trained assistant to use in your conversation. Chat
                 history will be preserved.
               </DialogDescription>
