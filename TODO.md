@@ -93,6 +93,8 @@
   - [ ] Add prefetching for common user journeys
   - [ ] Optimize Supabase queries
 
+- [ ] Utilize Vite and React best practices and leverage Gemini API capabilities for optimal performance and features
+
 ## Medium Priority
 
 - [ ] **Testing**
@@ -197,18 +199,30 @@
 ## AI Drive Implementation
 
 - [ ] **AI Drive Core Features**
-  - [ ] Complete file upload/download functionality
+  - [x] Complete file upload/download functionality (basic in place, needs review for OCR flow)
   - [ ] Implement file organization system
   - [ ] Create semantic search for documents
   - [ ] Add version history tracking
   - [ ] Implement file sharing capabilities
+  - [ ] Refine file processing pipeline for on-demand OCR
+    - [x] Implement on-demand OCR for image files in AI Drive (`getOcrTextForFile`)
+    - [ ] Implement strategy for OCRing scanned PDFs (e.g., PDF to image conversion then OCR)
+    - [ ] Ensure chat context loading utilizes on-demand OCR for relevant file types
+  - [ ] Ensure AI processing (summaries, topics, embeddings) uses full extracted text (including OCR results when available)
 
 - [ ] **AI Document Analysis**
-  - [ ] Implement document summarization
-  - [ ] Create content analysis with key topics extraction
-  - [ ] Add question answering about document content
+  - [ ] Implement document summarization (ensure it uses full text, incl. OCR)
+  - [ ] Create content analysis with key topics extraction (ensure it uses full text, incl. OCR)
+  - [ ] Add question answering about document content (ensure it uses full text, incl. OCR - initial update done)
   - [ ] Build smart collections based on content
   - [ ] Implement document visualization tools
+  - [ ] Integrate AI Drive documents into Assistant Knowledge Bases
+    - [ ] Define mechanism for selecting AI Drive files/folders for an assistant's knowledge base
+    - [ ] Ensure full text (including on-demand OCR) is extracted and processed for knowledge base ingestion
+    - [ ] Update assistant retrieval logic to use its specific knowledge base derived from AI Drive
+  - [ ] General Knowledge Base Population from AI Drive
+    - [ ] Determine criteria/process for promoting AI Drive content to a general knowledge base
+    - [ ] Implement pipeline for extracting and indexing this content
 
 ## Project Clean-up and Consistency
 

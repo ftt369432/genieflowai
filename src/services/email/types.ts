@@ -131,15 +131,17 @@ export interface EmailMessage {
   subject: string;
   from: string;
   to: string | string[];
-  body: string;
-  snippet?: string;
   cc?: string[];
   bcc?: string[];
-  attachments?: any[];
+  date: string;
+  body: string;
+  snippet?: string;
   labels?: string[];
+  attachments?: any[];
   read?: boolean;
   starred?: boolean;
-  date: string;
+  important?: boolean;
+  analysis?: EmailAnalysis;
 }
 
 /**

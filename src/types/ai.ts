@@ -106,7 +106,7 @@ export interface AssistantResponse {
 export interface AIConversation {
   id: string;
   title: string;
-  messages: AIMessage[];
+  messages: Message[];
   assistant: AIAssistant;
   createdAt: Date;
   updatedAt: Date;
@@ -200,6 +200,8 @@ export interface Conversation {
   model: string;
   provider: string;
   systemPrompt?: string;
+  assistantId?: string;
+  assistantName?: string;
   category?: 'work' | 'learning' | 'productivity' | 'personal';
   tags?: string[];
   pinned?: boolean;

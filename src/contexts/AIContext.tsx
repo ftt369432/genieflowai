@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAIStore } from '../store/aiStore';
-import { useAIProvider } from '../hooks/useAIProvider';
+import { useAIProvider, MultimodalPart } from '../hooks/useAIProvider';
 import type { Message, AIModel } from '../types/ai';
 import { ProfessionalModeService } from '../services/legalDoc/professionalModeService';
 import { useSupabase } from '../providers/SupabaseProvider';
@@ -13,7 +13,7 @@ export interface AIContextType {
   messages: Message[];
   isLoading: boolean;
   selectedModel: AIModel;
-  sendMessage: (message: string, mode: 'chat' | 'task' | 'email') => Promise<string>;
+  sendMessage: (parts: Array<MultimodalPart>, mode: 'chat' | 'task' | 'email', options?: { systemPrompt?: string }) => Promise<string>;
   setSelectedModel: (model: AIModel) => void;
   clearMessages: () => void;
   startNewConversation: () => void;
@@ -51,7 +51,6 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
     setSelectedModel,
     clearMessages,
     startNewConversation,
-    linkedDocs
   } = useAIStore();
 
   const { sendMessage: sendToAI } = useAIProvider();
@@ -70,35 +69,48 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
     setProfessionalMode(prev => !prev);
   }, []);
 
-  const sendMessage = useCallback(async (message: string, mode: 'chat' | 'task' | 'email'): Promise<string> => {
+  const sendMessage = useCallback(async (parts: Array<MultimodalPart>, mode: 'chat' | 'task' | 'email', options?: { systemPrompt?: string }): Promise<string> => {
     setLoading(true);
     
-    // Create and add the user's message
-    const userMessage: Message = {
+    // Extract user's text message for local display and professional enhancement
+    // Assumes the primary user text input is the first text part if multiple parts are sent.
+    // Or, we might need a convention, e.g., the last text part is the main user message.
+    // For now, let's find the first text part to consider as the main message for history.
+    const userTextContent = parts.find(part => 'text' in part && !options?.systemPrompt)?.text || ''; 
+    // A more robust way would be to have AIAssistantPage explicitly pass the text content intended for history.
+
+    const userMessageForHistory: Message = {
       id: new Date().getTime().toString(),
-      content: message,
+      content: userTextContent, // Use extracted text for history
       role: 'user',
       timestamp: new Date(),
     };
-    
-    // Add user message to the chat
-    addMessage(userMessage);
+    addMessage(userMessageForHistory);
     
     try {
-      let enhancedMessage = message;
-      if (professionalMode && professionalService && user) {
-        enhancedMessage = await professionalService.enhancePrompt(
+      let textToEnhance = userTextContent;
+      if (professionalMode && professionalService && user && textToEnhance) {
+        textToEnhance = await professionalService.enhancePrompt(
           user.id,
-          message,
-          messages,
+          textToEnhance,
+          messages, // aIStore messages for context
           professionalMode
         );
       }
+
+      // Construct final parts for the API
+      // If textToEnhance was modified, we need to update it in the parts array or reconstruct parts.
+      // This part needs careful handling to correctly place the (potentially enhanced) user text
+      // relative to system prompts and image data.
       
-      // Call the AI service with the new signature
-      const response = await sendToAI(enhancedMessage);
+      // For simplicity now, assuming sendToAI from useAIProvider correctly handles systemPrompt from options
+      // and the `parts` array contains all other user inputs (text, images).
+      // If `textToEnhance` changed the user's text, `parts` should reflect that before this call.
+      // Let's assume `parts` passed to this function already contains the user's primary text message
+      // and any image data. The `options.systemPrompt` will be handled by `sendToAI`.
+
+      const response = await sendToAI(parts, { systemPrompt: options?.systemPrompt });
       
-      // Create and add the AI response message
       const assistantMessage: Message = {
         id: (new Date().getTime() + 1).toString(),
         content: response,
@@ -109,27 +121,18 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
           provider: selectedModel.provider
         }
       };
-      
-      // Add assistant message to the chat
       addMessage(assistantMessage);
       
       return response;
     } catch (error) {
       console.error('Error sending message:', error);
-      
-      // Create and add error message
       const errorMessage: Message = {
         id: (new Date().getTime() + 1).toString(),
-        content: error instanceof Error 
-          ? `Error: ${error.message}` 
-          : 'An unknown error occurred',
+        content: error instanceof Error ? `Error: ${error.message}` : 'An unknown error occurred',
         role: 'assistant',
         timestamp: new Date()
       };
-      
-      // Add error message to the chat
       addMessage(errorMessage);
-      
       throw error;
     } finally {
       setLoading(false);

@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
   DialogTitle,
+  DialogDescription,
   DialogFooter 
 } from '../ui/Dialog';
 import { Button } from '../ui/Button';
@@ -23,29 +24,47 @@ import {
   Trash2, 
   Send,
   Sparkles,
-  X
+  X,
+  ChevronDown,
+  ChevronUp,
+  Users
 } from 'lucide-react';
 import { useEmail } from '../../contexts/EmailContext';
 import { Card } from '../ui/Card';
 import { Spinner } from '../ui/Spinner';
-import { EmailDraft } from '../../services/email/types';
+import { EmailDraft, EmailAccount } from '../../services/email/types';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
+
+// Matching interfaces from EmailPage.tsx for clarity
+interface ComposerReplyData {
+  messageId: string;
+  subject: string;
+  to: string;
+  body: string;
+}
+
+interface ComposerForwardData {
+  messageId: string;
+  subject: string;
+  body: string;
+}
+
+interface ComposerReplyAllData {
+  messageId: string;
+  subject: string;
+  to: string[];
+  cc: string[];
+  body: string;
+}
 
 interface EmailComposerProps {
   isOpen: boolean;
   onClose: () => void;
-  replyTo?: {
-    messageId: string;
-    subject: string;
-    to: string;
-    body: string;
-  };
-  forwardFrom?: {
-    messageId: string;
-    subject: string;
-    body: string;
-  };
+  accountId?: string | null;
+  replyTo?: ComposerReplyData;
+  forwardFrom?: ComposerForwardData;
+  replyAllTo?: ComposerReplyAllData;
   draft?: EmailDraft;
   onSend?: (draft: EmailDraft) => void;
   onSaveDraft?: (draft: EmailDraft) => void;
@@ -54,566 +73,361 @@ interface EmailComposerProps {
 export function EmailComposer({
   isOpen,
   onClose,
+  accountId,
   replyTo,
   forwardFrom,
+  replyAllTo,
   draft,
   onSend,
-  onSaveDraft
+  onSaveDraft,
 }: EmailComposerProps) {
-  const { selectedAccountId, accounts } = useEmail();
+  console.log('[EmailComposer] Rendering FULL. isOpen:', isOpen, 'Props:', { accountId, replyTo, forwardFrom, replyAllTo, draft });
+  console.log('[EmailComposer] typeof onSend prop on render:', typeof onSend);
+  console.log('[EmailComposer] typeof onSaveDraft prop on render:', typeof onSaveDraft);
+
+  console.log('[EmailComposer] Before useEmail() call');
+  const emailContextValue = useEmail();
+  console.log('[EmailComposer] Value returned by useEmail():', emailContextValue);
+
+  const { selectedAccountId, accounts } = emailContextValue;
+  console.log('[EmailComposer] After destructuring. selectedAccountId:', selectedAccountId, 'accounts:', accounts);
+
+  const getAccountEmail = () => {
+    if (accounts && Array.isArray(accounts)) {
+      const account: EmailAccount | undefined = accounts.find(acc => acc.id === (accountId || selectedAccountId));
+      return account?.email || 'fallback@example.com';
+    } 
+    console.error('[EmailComposer] Accounts not available or not an array');
+    return 'error@example.com';
+  };
+  const accountEmail = getAccountEmail();
+  console.log('[EmailComposer] accountEmail:', accountEmail);
   
-  // Find the current account email address
-  const accountEmail = accounts.find(acc => acc.id === selectedAccountId)?.email || '';
+  const [to, setTo] = useState<string>('');
+  const [cc, setCc] = useState<string>('');
+  const [bcc, setBcc] = useState<string>('');
+  const [subject, setSubject] = useState<string>('');
+  const [body, setBody] = useState<string>('');
   
-  // Initialize state with draft, reply or forward data if provided
-  const [to, setTo] = useState<string>(
-    replyTo ? replyTo.to : (draft?.to || []).join(', ') || ''
-  );
-  const [cc, setCc] = useState<string>((draft?.cc || []).join(', ') || '');
-  const [bcc, setBcc] = useState<string>((draft?.bcc || []).join(', ') || '');
-  const [subject, setSubject] = useState<string>(
-    replyTo 
-      ? `Re: ${replyTo.subject}` 
-      : forwardFrom 
-        ? `Fwd: ${forwardFrom.subject}`
-        : draft?.subject || ''
-  );
-  
-  // Start with reply/forward content if applicable
-  const initialBody = replyTo 
-    ? `\n\n-------- Original Message --------\nFrom: ${replyTo.to}\n\n${replyTo.body}`
-    : forwardFrom
-      ? `\n\n-------- Forwarded Message --------\n\n${forwardFrom.body}`
-      : draft?.body || '';
-  
-  const [body, setBody] = useState<string>(initialBody);
   const [htmlMode, setHtmlMode] = useState<boolean>(true);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState<boolean>(false);
-  const [showCc, setShowCc] = useState<boolean>(!!cc);
-  const [showBcc, setShowBcc] = useState<boolean>(!!bcc);
+  const [showCc, setShowCc] = useState<boolean>(false);
+  const [showBcc, setShowBcc] = useState<boolean>(false);
+  const [recipientFieldsCollapsed, setRecipientFieldsCollapsed] = useState<boolean>(false);
   
-  // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
-  
-  // Handle formatting actions
-  const applyFormatting = (format: string) => {
-    if (!bodyTextareaRef.current) return;
-    
-    const textarea = bodyTextareaRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = body.substring(start, end);
-    
-    let formattedText = '';
-    let cursorAdjustment = 0;
-    
-    switch (format) {
-      case 'bold':
-        formattedText = `<strong>${selectedText}</strong>`;
-        cursorAdjustment = 17; // Length of opening and closing tags
-        break;
-      case 'italic':
-        formattedText = `<em>${selectedText}</em>`;
-        cursorAdjustment = 9;
-        break;
-      case 'underline':
-        formattedText = `<u>${selectedText}</u>`;
-        cursorAdjustment = 7;
-        break;
-      case 'bullet-list':
-        formattedText = `<ul>\n  <li>${selectedText}</li>\n</ul>`;
-        cursorAdjustment = 14;
-        break;
-      case 'ordered-list':
-        formattedText = `<ol>\n  <li>${selectedText}</li>\n</ol>`;
-        cursorAdjustment = 14;
-        break;
-      case 'align-left':
-        formattedText = `<div style="text-align: left;">${selectedText}</div>`;
-        cursorAdjustment = 36;
-        break;
-      case 'align-center':
-        formattedText = `<div style="text-align: center;">${selectedText}</div>`;
-        cursorAdjustment = 38;
-        break;
-      case 'align-right':
-        formattedText = `<div style="text-align: right;">${selectedText}</div>`;
-        cursorAdjustment = 37;
-        break;
-      case 'link':
-        const url = prompt('Enter URL:', 'https://');
-        if (url) {
-          formattedText = `<a href="${url}">${selectedText || url}</a>`;
-          cursorAdjustment = 15 + url.length;
-        } else {
-          return;
-        }
-        break;
-      default:
-        return;
+
+  useEffect(() => {
+    console.log('[EmailComposer] useEffect triggered. isOpen:', isOpen, 'Dependencies:', { replyTo, forwardFrom, replyAllTo, draft });
+    if (isOpen) {
+      console.log('[EmailComposer] useEffect - isOpen is true. Processing props.');
+      if (replyAllTo) {
+        console.log('[EmailComposer] useEffect - replyAllTo data:', replyAllTo);
+        setTo(replyAllTo.to.join(', '));
+        setCc(replyAllTo.cc.join(', '));
+        setSubject(replyAllTo.subject);
+        setBody(replyAllTo.body);
+        setShowCc(replyAllTo.cc.length > 0);
+        setShowBcc(false);
+      } else if (replyTo) {
+        console.log('[EmailComposer] useEffect - replyTo data:', replyTo);
+        setTo(replyTo.to);
+        setCc('');
+        setSubject(replyTo.subject);
+        setBody(replyTo.body);
+        setShowCc(false);
+        setShowBcc(false);
+      } else if (forwardFrom) {
+        console.log('[EmailComposer] useEffect - forwardFrom data:', forwardFrom);
+        setTo('');
+        setCc('');
+        setSubject(forwardFrom.subject);
+        setBody(forwardFrom.body);
+        setShowCc(false);
+        setShowBcc(false);
+      } else if (draft) {
+        console.log('[EmailComposer] useEffect - draft data:', draft);
+        setTo((draft.to || []).join(', '));
+        setCc((draft.cc || []).join(', '));
+        setBcc((draft.bcc || []).join(', '));
+        setSubject(draft.subject || '');
+        setBody(draft.body || '');
+        setShowCc(!!(draft.cc && draft.cc.length > 0));
+        setShowBcc(!!(draft.bcc && draft.bcc.length > 0));
+      } else {
+        console.log('[EmailComposer] useEffect - No specific action (new compose or cleared). Resetting fields.');
+        setTo('');
+        setCc('');
+        setBcc('');
+        setSubject('');
+        setBody('');
+        setShowCc(false);
+        setShowBcc(false);
+      }
+      setAttachments([]);
+      setAiSuggestion(null);
+      console.log('[EmailComposer] useEffect - Fields reset/populated.');
+    } else {
+      console.log('[EmailComposer] useEffect - isOpen is false.');
     }
-    
-    const newText = body.substring(0, start) + formattedText + body.substring(end);
-    setBody(newText);
-    
-    // Set cursor position after the formatting is applied
-    setTimeout(() => {
-      textarea.focus();
-      const newPosition = end + cursorAdjustment;
-      textarea.setSelectionRange(newPosition, newPosition);
-    }, 0);
+  }, [isOpen, replyTo, forwardFrom, replyAllTo, draft]);
+  
+  const applyFormatting = (command: string, value?: string) => {
+    if (bodyTextareaRef.current) {
+      document.execCommand(command, false, value);
+      bodyTextareaRef.current.focus();
+    }
   };
   
-  // Handle file uploads
   const handleFileSelect = () => {
     fileInputRef.current?.click();
   };
-  
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    setIsUploading(true);
-    
-    // Simulate file upload processing
-    setTimeout(() => {
-      setAttachments(prev => [...prev, ...Array.from(files)]);
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const files = Array.from(event.target.files);
+      const validFiles = files.filter(file => file.size < 10 * 1024 * 1024);
+      if (validFiles.length < files.length) {
+        toast.warning('Some files were too large (max 10MB) and were not added.');
       }
-    }, 1000);
+      setAttachments(prev => [...prev, ...validFiles]);
+    }
   };
-  
+
   const removeAttachment = (index: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
-  
-  // Handle sending email
-  const handleSendEmail = () => {
-    // Basic validation
-    if (!to.trim()) {
-      toast.error('Please specify at least one recipient');
-      return;
-    }
-    
-    if (!subject.trim()) {
-      const confirm = window.confirm('Send email without subject?');
-      if (!confirm) return;
-    }
-    
+
+  const handleSendEmail = async () => {
     setIsSending(true);
-    
-    // Create email draft object
-    const emailDraft: EmailDraft = {
-      id: draft?.id || uuidv4(),
-      accountId: selectedAccountId || 'default-account',
-      to: to.split(',').map(email => email.trim()),
-      subject: subject.trim(),
-      body: body,
-      lastModified: new Date()
-    };
-    
-    if (cc.trim()) {
-      emailDraft.cc = cc.split(',').map(email => email.trim());
-    }
-    
-    if (bcc.trim()) {
-      emailDraft.bcc = bcc.split(',').map(email => email.trim());
-    }
-    
-    if (replyTo?.messageId) {
-      emailDraft.inReplyTo = replyTo.messageId;
-    }
-    
-    // Simulate email sending
-    setTimeout(() => {
-      setIsSending(false);
-      if (onSend) {
-        onSend(emailDraft);
-      }
-      toast.success('Email sent successfully');
-      onClose();
-    }, 1500);
-  };
-  
-  // Save draft
-  const handleSaveDraft = () => {
-    const emailDraft: EmailDraft = {
-      id: draft?.id || uuidv4(),
-      accountId: selectedAccountId || 'default-account',
-      to: to.split(',').map(email => email.trim()),
-      subject: subject.trim(),
-      body: body,
-      lastModified: new Date()
-    };
-    
-    if (cc.trim()) {
-      emailDraft.cc = cc.split(',').map(email => email.trim());
-    }
-    
-    if (bcc.trim()) {
-      emailDraft.bcc = bcc.split(',').map(email => email.trim());
-    }
-    
-    if (onSaveDraft) {
-      onSaveDraft(emailDraft);
-    }
-    
-    toast.success('Draft saved');
-  };
-  
-  // Generate AI suggestion
-  const generateAiSuggestion = () => {
-    setIsGeneratingSuggestion(true);
-    
-    // Simulate AI processing
-    setTimeout(() => {
-      const context = subject + " " + (body.substring(0, 100));
-      let suggestion = '';
-      
-      if (context.toLowerCase().includes('meeting')) {
-        suggestion = "I'm available to meet on Tuesday or Wednesday afternoon. Let me know what works best for your schedule.";
-      } else if (context.toLowerCase().includes('proposal')) {
-        suggestion = "Thank you for considering our proposal. I've attached additional information that might help address your questions.";
-      } else if (context.toLowerCase().includes('question')) {
-        suggestion = "That's a great question. Based on our previous discussions, I believe the best approach would be to...";
-      } else {
-        suggestion = "Thank you for your email. I'll review this information and get back to you shortly with my thoughts.";
-      }
-      
-      setAiSuggestion(suggestion);
-      setIsGeneratingSuggestion(false);
-    }, 1500);
-  };
-  
-  const applyAiSuggestion = () => {
-    if (!aiSuggestion) return;
-    setBody(prev => prev + "\n\n" + aiSuggestion);
     setAiSuggestion(null);
+    const draftToSend: EmailDraft = {
+      id: draft?.id || uuidv4(),
+      accountId: accountId || selectedAccountId || '',
+      to: to.split(/[,;\s]+/).filter(Boolean),
+      cc: cc.split(/[,;\s]+/).filter(Boolean),
+      bcc: bcc.split(/[,;\s]+/).filter(Boolean),
+      subject: subject,
+      body: body,
+      lastModified: new Date(),
+    };
+    
+    console.log('[EmailComposer] Preparing to send:', draftToSend);
+    if (onSend) {
+      try {
+        await onSend(draftToSend);
+        toast.success('Email sent (mock)');
+        onClose();
+      } catch (error) {
+        console.error('[EmailComposer] onSend failed:', error);
+        toast.error('Failed to send email.');
+      }
+    } else {
+      console.warn('[EmailComposer] onSend prop is missing!');
+      toast.info('Send action configured (mock).');
+      setTimeout(() => onClose(), 500);
+    }
+    setIsSending(false);
   };
-  
+
+  const handleSaveDraft = async () => {
+    const draftToSave: EmailDraft = {
+      id: draft?.id || uuidv4(),
+      accountId: accountId || selectedAccountId || '',
+      to: to.split(/[,;\s]+/).filter(Boolean),
+      cc: cc.split(/[,;\s]+/).filter(Boolean),
+      bcc: bcc.split(/[,;\s]+/).filter(Boolean),
+      subject: subject,
+      body: body,
+      lastModified: new Date(),
+    };
+    console.log('[EmailComposer] Preparing to save draft:', draftToSave);
+    if (onSaveDraft) {
+      try {
+        await onSaveDraft(draftToSave);
+        toast.success('Draft saved (mock)');
+      } catch (error) {
+        console.error('[EmailComposer] onSaveDraft failed:', error);
+        toast.error('Failed to save draft.');
+      }
+    } else {
+      console.warn('[EmailComposer] onSaveDraft prop is missing!');
+      toast.info('Save draft action configured (mock).');
+    }
+  };
+
+  const generateAiSuggestion = async () => {
+    setIsGeneratingSuggestion(true);
+    setAiSuggestion(null);
+    console.log('[EmailComposer] Generating AI suggestion (mock)');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setAiSuggestion('This is a mock AI suggestion based on the current content.');
+    setIsGeneratingSuggestion(false);
+  };
+
+  const applyAiSuggestion = () => {
+    if (aiSuggestion) {
+      setBody(prevBody => prevBody + '\n\n' + aiSuggestion);
+      setAiSuggestion(null);
+    }
+  };
+
+  // Determine composer title dynamically
+  let dialogTitle = 'New Message';
+  if (replyTo) {
+    dialogTitle = `Reply: ${replyTo.subject.substring(0,50)}...`;
+  } else if (replyAllTo) {
+    dialogTitle = `Reply All: ${replyAllTo.subject.substring(0,50)}...`;
+  } else if (forwardFrom) {
+    dialogTitle = `Forward: ${forwardFrom.subject.substring(0,50)}...`;
+  } else if (draft?.subject) {
+    dialogTitle = `Draft: ${draft.subject.substring(0,50)}...`;
+  } else if (draft) {
+      dialogTitle = 'Edit Draft';
+  }
+
+  console.log('[EmailComposer] Before return statement FULL. Current state for render:', { to, subject, bodyLength: body.length });
+  const uniqueEmailComposerAriaDescId = "email-composer-dialog-description-unique-id"; 
+  console.log('[EmailComposer] uniqueEmailComposerAriaDescId for DialogContent:', uniqueEmailComposerAriaDescId);
+
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl flex flex-col h-[90vh]" aria-describedby={uniqueEmailComposerAriaDescId}>
         <DialogHeader>
-          <DialogTitle>Compose Email</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
+          <DialogDescription id={uniqueEmailComposerAriaDescId} className="sr-only">Email composer dialog for creating or replying to emails.</DialogDescription>
+          <button onClick={onClose} className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </button>
         </DialogHeader>
         
-        <div className="flex-1 overflow-y-auto py-2">
-          {/* Email header fields */}
-          <div className="space-y-2">
-            <div className="flex items-center">
-              <span className="w-16 text-sm">From:</span>
-              <Input value={accountEmail} readOnly className="bg-muted/50" />
-            </div>
-            
-            <div className="flex items-center">
-              <span className="w-16 text-sm">To:</span>
-              <div className="flex-1">
-                <Input 
-                  value={to} 
-                  onChange={e => setTo(e.target.value)} 
-                  placeholder="Recipients (comma separated)"
-                />
-              </div>
-            </div>
-            
-            <div className="flex items-center justify-end text-sm">
-              <button 
-                onClick={() => setShowCc(!showCc)} 
-                className="text-muted-foreground hover:text-foreground mr-3"
-              >
-                {showCc ? 'Hide Cc' : 'Show Cc'}
-              </button>
-              <button 
-                onClick={() => setShowBcc(!showBcc)} 
-                className="text-muted-foreground hover:text-foreground"
-              >
-                {showBcc ? 'Hide Bcc' : 'Show Bcc'}
-              </button>
-            </div>
-            
-            {showCc && (
-              <div className="flex items-center">
-                <span className="w-16 text-sm">Cc:</span>
-                <Input 
-                  value={cc} 
-                  onChange={e => setCc(e.target.value)} 
-                  placeholder="Cc recipients (comma separated)"
-                />
-              </div>
+        <div className="flex-1 flex flex-col min-h-0 px-6 pt-4">
+            {recipientFieldsCollapsed ? (
+                <div className="flex items-center space-x-2 py-2 border-b border-t cursor-pointer mb-3" onClick={() => setRecipientFieldsCollapsed(false)}>
+                    <Users className="h-4 w-4 mr-2 shrink-0 text-gray-500" />
+                    <div className="flex-1 min-w-0">
+                        <div className="text-sm text-muted-foreground truncate">
+                            <span className="font-medium text-foreground">To:</span> {to || '[No recipients]'} 
+                            {cc && <span className="ml-2"><span className="font-medium text-foreground">Cc:</span> {cc}</span>}
+                        </div>
+                        {subject && <div className="text-sm text-muted-foreground truncate"><span className="font-medium text-foreground">Subject:</span> {subject}</div>}
+                        {!subject && <div className="text-sm text-muted-foreground italic">No subject</div>}
+                    </div>
+                    <ChevronDown className="h-5 w-5 ml-auto shrink-0 text-gray-500" />
+                </div>
+            ) : (
+                <div className="border-b pb-3 space-y-3">
+                    <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-500 w-12 text-right shrink-0">From:</span>
+                        <Input value={accountEmail} readOnly className="flex-1 min-w-0" />
+                        <Button variant="ghost" size="icon" onClick={() => setRecipientFieldsCollapsed(true)} className="ml-auto shrink-0">
+                            <ChevronUp className="h-5 w-5" />
+                        </Button>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-500 w-12 text-right shrink-0">To:</span>
+                        <Input placeholder="Recipients" value={to} onChange={(e) => setTo(e.target.value)} className="flex-1 min-w-0" />
+                        <Button variant="ghost" size="sm" onClick={() => setShowCc(!showCc)} className="shrink-0">Cc</Button>
+                        <Button variant="ghost" size="sm" onClick={() => setShowBcc(!showBcc)} className="shrink-0">Bcc</Button>
+                    </div>
+                    {showCc && (
+                        <div className="flex items-center space-x-2 pl-[56px]"> {/* 48px (w-12) + 8px (space-x-2) = 56px */}
+                            <Input placeholder="Cc Recipients" value={cc} onChange={(e) => setCc(e.target.value)} className="flex-1 min-w-0" />
+                        </div>
+                    )}
+                    {showBcc && (
+                        <div className="flex items-center space-x-2 pl-[56px]">
+                            <Input placeholder="Bcc Recipients" value={bcc} onChange={(e) => setBcc(e.target.value)} className="flex-1 min-w-0" />
+                        </div>
+                    )}
+                    <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-500 w-12 text-right shrink-0">Subject:</span>
+                        <Input placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} className="flex-1 min-w-0" />
+                    </div>
+                </div>
             )}
-            
-            {showBcc && (
-              <div className="flex items-center">
-                <span className="w-16 text-sm">Bcc:</span>
-                <Input 
-                  value={bcc} 
-                  onChange={e => setBcc(e.target.value)} 
-                  placeholder="Bcc recipients (comma separated)"
+
+            <div className="border-t border-b py-2 px-0 flex items-center space-x-1 flex-wrap mt-3 mb-3">
+                <Button variant="ghost" size="sm" onClick={() => applyFormatting('bold')}><Bold className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => applyFormatting('italic')}><Italic className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => applyFormatting('underline')}><Underline className="h-4 w-4" /></Button>
+                <div className="border-l h-5 mx-1"></div>
+                <Button variant="ghost" size="sm" onClick={() => applyFormatting('insertUnorderedList')}><List className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => applyFormatting('insertOrderedList')}><ListOrdered className="h-4 w-4" /></Button>
+                <div className="border-l h-5 mx-1"></div>
+                <Button variant="ghost" size="sm" onClick={() => applyFormatting('justifyLeft')}><AlignLeft className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => applyFormatting('justifyCenter')}><AlignCenter className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => applyFormatting('justifyRight')}><AlignRight className="h-4 w-4" /></Button>
+                <div className="border-l h-5 mx-1"></div>
+                <Button variant="ghost" size="sm" onClick={handleFileSelect} disabled={isUploading}>
+                    <Paperclip className="h-4 w-4" />
+                </Button>
+                <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileChange} 
+                    multiple 
+                    style={{ display: 'none' }} 
                 />
-              </div>
-            )}
-            
-            <div className="flex items-center">
-              <span className="w-16 text-sm">Subject:</span>
-              <Input 
-                value={subject} 
-                onChange={e => setSubject(e.target.value)} 
-                placeholder="Subject"
-              />
             </div>
-            
-            <div className="h-px bg-border my-2"></div>
-            
-            {/* Formatting toolbar */}
-            <div className="flex items-center flex-wrap gap-1 p-1 bg-muted/40 rounded-md">
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('bold')}
-                className="h-8 w-8 p-0"
-              >
-                <Bold className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('italic')}
-                className="h-8 w-8 p-0"
-              >
-                <Italic className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('underline')}
-                className="h-8 w-8 p-0"
-              >
-                <Underline className="h-4 w-4" />
-              </Button>
-              <span className="mx-1 h-6 w-px bg-border"></span>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('bullet-list')}
-                className="h-8 w-8 p-0"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('ordered-list')}
-                className="h-8 w-8 p-0"
-              >
-                <ListOrdered className="h-4 w-4" />
-              </Button>
-              <span className="mx-1 h-6 w-px bg-border"></span>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('align-left')}
-                className="h-8 w-8 p-0"
-              >
-                <AlignLeft className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('align-center')}
-                className="h-8 w-8 p-0"
-              >
-                <AlignCenter className="h-4 w-4" />
-              </Button>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('align-right')}
-                className="h-8 w-8 p-0"
-              >
-                <AlignRight className="h-4 w-4" />
-              </Button>
-              <span className="mx-1 h-6 w-px bg-border"></span>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => applyFormatting('link')}
-                className="h-8 w-8 p-0"
-              >
-                <Link className="h-4 w-4" />
-              </Button>
-              <div className="flex-1"></div>
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setHtmlMode(!htmlMode)}
-                className="text-xs"
-              >
-                {htmlMode ? 'Plain Text' : 'HTML'}
-              </Button>
-            </div>
-            
-            {/* Email body */}
+
             <Textarea 
-              ref={bodyTextareaRef}
-              value={body} 
-              onChange={e => setBody(e.target.value)} 
-              placeholder="Write your message here..."
-              className="min-h-[200px] font-sans"
+                ref={bodyTextareaRef} 
+                placeholder="Compose your email..." 
+                className="flex-1 resize-none mt-3 mb-3" 
+                value={body} 
+                onChange={(e) => setBody(e.target.value)}
             />
-            
-            {/* AI suggestion */}
+
+            {attachments.length > 0 && (
+                <div className="text-sm mb-3">
+                    <h4 className="font-medium mb-1">Attachments:</h4>
+                    <ul className="space-y-1">
+                        {attachments.map((file, index) => (
+                            <li key={index} className="flex items-center justify-between bg-muted/50 p-1 rounded">
+                                <span className="truncate">{file.name} ({ (file.size / 1024).toFixed(1) } KB)</span>
+                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => removeAttachment(index)}>
+                                    <Trash2 className="h-3 w-3" />
+                                </Button>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {isGeneratingSuggestion && ( <Spinner> Generating AI suggestion...</Spinner> )}
             {aiSuggestion && (
-              <Card className="p-3 bg-primary/5 border-primary/20">
-                <div className="flex items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center mb-1">
-                      <Sparkles className="h-4 w-4 text-primary mr-2" />
-                      <span className="text-sm font-medium">AI Suggestion</span>
+                <Card className="p-3 bg-blue-50 dark:bg-blue-900/30 mb-3">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">{aiSuggestion}</p>
+                    <div className="mt-2 flex justify-end space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => setAiSuggestion(null)}>Dismiss</Button>
+                        <Button variant="default" size="sm" onClick={applyAiSuggestion}>Apply</Button>
                     </div>
-                    <p className="text-sm">{aiSuggestion}</p>
-                  </div>
-                  <div className="flex items-center">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setAiSuggestion(null)}
-                      className="h-8 w-8 p-0 mr-1"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={applyAiSuggestion}
-                    >
-                      Apply
-                    </Button>
-                  </div>
-                </div>
-              </Card>
+                </Card>
             )}
-            
-            {/* Attachments section */}
-            {(attachments.length > 0 || isUploading) && (
-              <div className="border rounded-md p-3 mt-4">
-                <h3 className="text-sm font-medium mb-2">Attachments</h3>
-                {isUploading && (
-                  <div className="flex items-center text-sm text-muted-foreground mb-2">
-                    <Spinner className="h-4 w-4 mr-2" />
-                    Uploading...
-                  </div>
-                )}
-                <div className="space-y-2">
-                  {attachments.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between bg-muted/50 p-2 rounded-md">
-                      <div className="flex items-center">
-                        <Paperclip className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <span className="text-sm truncate max-w-[300px]">{file.name}</span>
-                        <span className="text-xs text-muted-foreground ml-2">
-                          {(file.size / 1024).toFixed(0)} KB
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeAttachment(index)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              className="hidden" 
-              multiple 
-            />
-          </div>
         </div>
-        
-        <DialogFooter className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleFileSelect}
-              disabled={isUploading}
-            >
-              <Paperclip className="h-4 w-4 mr-2" />
-              Attach
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={generateAiSuggestion}
-              disabled={isGeneratingSuggestion}
-              className="ml-2"
-            >
-              {isGeneratingSuggestion ? (
-                <>
-                  <Spinner className="h-4 w-4 mr-2" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  AI Suggest
-                </>
-              )}
-            </Button>
-          </div>
-          <div>
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={handleSaveDraft} 
-              className="mr-2"
-            >
-              Save Draft
-            </Button>
-            <Button 
-              type="button"
-              onClick={handleSendEmail}
-              disabled={isSending}
-            >
-              {isSending ? (
-                <>
-                  <Spinner className="h-4 w-4 mr-2" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Send
-                </>
-              )}
-            </Button>
-          </div>
+
+        <DialogFooter className="px-6 pb-4 border-t flex justify-between items-center">
+             <div className="flex items-center space-x-2">
+                <Button variant="ghost" onClick={generateAiSuggestion} disabled={isGeneratingSuggestion || isSending}>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    AI Assist
+                </Button>
+                <Button variant="outline" onClick={handleSaveDraft} disabled={isSending}>Save Draft</Button>
+            </div>
+            <div className="flex items-center space-x-2">
+                <Button variant="outline" onClick={onClose}>Discard</Button>
+                <Button onClick={handleSendEmail} disabled={isSending || !to} className="btn-genie-primary">
+                    {isSending ? <Spinner className="h-4 w-4 mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                    Send
+                </Button>
+            </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

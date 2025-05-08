@@ -4,9 +4,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { AIService } from '../ai/aiService';
 import * as pdfjs from 'pdfjs-dist';
 import mammoth from 'mammoth';
+import { documentProcessingService } from '../documents/documentProcessingService';
 
 // Initialize PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+// pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+if (typeof window !== 'undefined') { // Ensure this runs only in the browser
+  pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+}
 
 // Types
 export interface AIDriveFile {
@@ -241,11 +245,11 @@ export class AIDriveService {
         .upload(storagePath, file, {
           cacheControl: '3600',
           upsert: false,
-          onUploadProgress: (event: { loadedBytes: number; totalBytes?: number }) => {
-            if (progressCallback && event.totalBytes) {
-              progressCallback((event.loadedBytes / event.totalBytes) * 50); // First 50% is upload
-            }
-          }
+          // onUploadProgress: (event: { loadedBytes: number; totalBytes?: number }) => {
+          //   if (progressCallback && event.totalBytes) {
+          //     progressCallback((event.loadedBytes / event.totalBytes) * 50); // First 50% is upload
+          //   }
+          // }
         });
       
       if (storageError) throw storageError;
@@ -461,7 +465,14 @@ export class AIDriveService {
     // Get file content if needed
     let fileContent: string;
     
-    if (file.content_preview && file.content_preview.length > 1000) {
+    if (file.mime_type.startsWith('image/')) {
+      // For images, try to get OCR text on demand
+      fileContent = await this.getOcrTextForFile(fileId);
+      if (!fileContent) {
+        // Fallback or if OCR failed
+        return 'Could not extract text from image to answer the question.';
+      }
+    } else if (file.content_preview && file.content_preview.length > 1000 && !file.content_preview.startsWith('Image file - OCR')) {
       fileContent = file.content_preview;
     } else {
       const { data, error } = await this.supabase.storage
@@ -472,8 +483,16 @@ export class AIDriveService {
       
       const fileBlob = new Blob([data]);
       const fileObj = new File([fileBlob], file.name, { type: file.mime_type });
+      // Use extractFileContent to get text, which respects no-OCR-on-upload for images
+      // but for other types it should give us the actual text.
       const { text } = await this.extractFileContent(fileObj);
       fileContent = text;
+      if (file.mime_type.startsWith('image/') && !fileContent) { // Double check for images if text is empty
+        fileContent = await this.getOcrTextForFile(fileId);
+        if (!fileContent) {
+          return 'Could not extract text from image to answer the question.';
+        }
+      }
     }
     
     // Create prompt
@@ -787,9 +806,23 @@ export class AIDriveService {
         label:ai_drive_labels(*)
       `)
       .eq('file_id', fileId);
-    
+
     if (error) throw error;
-    return data.map((item: { label: FileLabel }) => item.label);
+    if (!data) return [];
+
+    const labels: FileLabel[] = [];
+    for (const item of data) {
+      // item.label is expected to be FileLabel[] based on linter error context
+      // or it could be null if no related label is found by the join
+      if (item.label && Array.isArray(item.label) && item.label.length > 0) {
+        // Assuming the actual label object is the first element of the array
+        labels.push(item.label[0] as FileLabel); 
+      } else if (item.label && !Array.isArray(item.label)) {
+        // Fallback: if item.label is an object (not an array as error suggested), cast and push
+        labels.push(item.label as FileLabel);
+      }
+    }
+    return labels;
   }
   
   // Comments operations
@@ -914,39 +947,42 @@ export class AIDriveService {
   private async extractFileContent(file: File): Promise<{ text: string, preview: string }> {
     try {
       let text = '';
-      
-      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      let preview = '';
+
+      if (file.type.startsWith('image/')) {
+        text = ''; // No OCR at initial extraction
+        preview = 'Image file - OCR will be performed on demand.';
+      } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
         text = await this.extractPdfText(file);
+        preview = text.substring(0, 500).trim();
       } else if (
-        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
         file.name.endsWith('.docx')
       ) {
         text = await this.extractDocxText(file);
+        preview = text.substring(0, 500).trim();
       } else if (
-        file.type.includes('text/') || 
+        file.type.includes('text/') ||
         file.type === 'application/json' ||
-        file.name.endsWith('.txt') || 
-        file.name.endsWith('.md') || 
+        file.name.endsWith('.txt') ||
+        file.name.endsWith('.md') ||
         file.name.endsWith('.json')
       ) {
         text = await file.text();
+        preview = text.substring(0, 500).trim();
       } else if (
-        file.type.includes('spreadsheet') || 
-        file.name.endsWith('.xlsx') || 
+        file.type.includes('spreadsheet') ||
+        file.name.endsWith('.xlsx') ||
         file.name.endsWith('.xls')
       ) {
-        // For now we'll just return an empty string for spreadsheets
-        // as we've removed the office-text-extractor dependency
-        text = '';
+        text = ''; // No text extraction for spreadsheets for now
+        preview = 'Spreadsheet file - content extraction not fully supported.';
       }
-      
-      // Create preview (first ~500 chars)
-      const preview = text.substring(0, 500).trim();
-      
+
       return { text, preview };
     } catch (error) {
       console.error('Error extracting text from file:', error);
-      return { text: '', preview: '' };
+      return { text: '', preview: 'Error extracting content.' };
     }
   }
   
@@ -1021,5 +1057,67 @@ export class AIDriveService {
     return extension && extension in mimeTypes 
       ? mimeTypes[extension] 
       : 'application/octet-stream';
+  }
+
+  // New method for on-demand OCR
+  async getOcrTextForFile(fileId: string): Promise<string> {
+    try {
+      const fileMetadata = await this.getFile(fileId);
+
+      if (!fileMetadata.mime_type.startsWith('image/')) {
+        // Optionally, could attempt direct text extraction for non-images
+        // or assume OCR is only for images here.
+        // For now, only OCR images.
+        // If it's a PDF that might need OCR, that's a more complex scenario.
+        // We can try to extract text first, and if it's too short, then OCR.
+        if (fileMetadata.mime_type === 'application/pdf') {
+          // Attempt direct text extraction first
+          const { data: blobData, error: downloadError } = await this.supabase.storage
+            .from('ai-drive')
+            .download(fileMetadata.storage_path!);
+          if (downloadError) throw downloadError;
+          const pdfFile = new File([blobData!], fileMetadata.name, { type: fileMetadata.mime_type });
+          let pdfText = await this.extractPdfText(pdfFile);
+          // If PDF text is very short (e.g. scanned PDF), then attempt OCR
+          // This threshold is arbitrary and can be adjusted.
+          if (pdfText.length < 100) { 
+            console.log(`PDF ${fileId} has short text, attempting OCR as fallback.`);
+            // pdfjs itself doesn't do OCR. We need to treat PDF as an image for Tesseract.
+            // This requires converting PDF pages to images, which is complex here.
+            // For now, we will return the extracted text, or rely on user to upload images for OCR.
+            // A proper PDF OCR would involve a library like pdf-to-image then Tesseract.
+            // Let's just return the potentially short text for now.
+            // Consider adding a specific PDF OCR path if needed later.
+            // return await documentProcessingService.extractTextFromImage(pdfFile); // This won't work directly for PDF
+            return pdfText; // Returning initially extracted PDF text
+          } else {
+            return pdfText;
+          }
+        }
+        return ''; // Not an image, and not a PDF needing OCR fallback in this simplified path
+      }
+
+      if (!fileMetadata.storage_path) {
+        console.error('File has no storage path for OCR:', fileId);
+        return '';
+      }
+
+      const { data: blobData, error: downloadError } = await this.supabase.storage
+        .from('ai-drive')
+        .download(fileMetadata.storage_path);
+
+      if (downloadError) {
+        console.error('Error downloading file for OCR:', downloadError);
+        throw downloadError;
+      }
+
+      const imageFile = new File([blobData!], fileMetadata.name, { type: fileMetadata.mime_type });
+      const ocrText = await documentProcessingService.extractTextFromImage(imageFile);
+      return ocrText;
+
+    } catch (error) {
+      console.error(`Error performing OCR for file ${fileId}:`, error);
+      return ''; // Return empty string on error
+    }
   }
 } 

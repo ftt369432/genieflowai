@@ -232,13 +232,38 @@ function App() {
                     </ProtectedRoute>
                   } 
                 />
-                <Route 
+                {/* <Route 
                   path="/email/*" 
                   element={
                     <ProtectedRoute>
                       <EmailPage />
                     </ProtectedRoute>
                   } 
+                /> */}
+                {/* New Email Routes */}
+                <Route 
+                  path="/email"
+                  element={
+                    <ProtectedRoute>
+                      <EmailPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route 
+                  path="/email/folder/:accountId/:folderId"
+                  element={
+                    <ProtectedRoute>
+                      <EmailPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route 
+                  path="/email/message/:accountId/:messageId"
+                  element={
+                    <ProtectedRoute>
+                      <EmailPage />
+                    </ProtectedRoute>
+                  }
                 />
                 <Route 
                   path="/notifications" 
