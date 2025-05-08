@@ -373,8 +373,8 @@ export function AIDrivePage() {
             <div className="flex items-center gap-2">
               {currentFolder && (
                 <Button 
-                  variant="outline" 
                   size="sm"
+                  className="btn-genie-primary"
                   onClick={() => setIsAssistantLinkOpen(true)}
                 >
                   <Brain className="w-4 h-4 mr-2" />
@@ -405,8 +405,8 @@ export function AIDrivePage() {
                               <div className="text-xs text-muted-foreground">{assistant.description}</div>
                             </div>
                             <Button
-                              variant={linkedAssistants.some(a => a.id === assistant.id) ? "default" : "outline"}
                               size="sm"
+                              className={linkedAssistants.some(a => a.id === assistant.id) ? "" : "btn-genie-primary"}
                               onClick={() => handleLinkToAssistant(assistant.id)}
                               disabled={linkedAssistants.some(a => a.id === assistant.id)}
                             >
@@ -450,6 +450,7 @@ export function AIDrivePage() {
                     <Button 
                       onClick={handleCreateFolder}
                       disabled={!newFolderName.trim()}
+                      className="btn-genie-primary"
                     >
                       Create
                     </Button>

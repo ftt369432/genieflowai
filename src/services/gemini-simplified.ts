@@ -30,7 +30,7 @@ export class GeminiSimplifiedService {
   }
 
   // Add a getCompletion method that the legalAssistant service expects
-  async getCompletion(prompt: string, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+  async getCompletion(parts: Array<{text: string} | {inlineData: {mimeType: string, data: string}}>, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
     try {
       const model = this.client.getGenerativeModel({
         model: this.defaultModel,
@@ -40,7 +40,8 @@ export class GeminiSimplifiedService {
         }
       });
       
-      const result = await model.generateContent(prompt);
+      // Pass the array of parts to generateContent for multimodal input
+      const result = await model.generateContent(parts);
       const response = await result.response;
       return response.text() || '';
     } catch (error) {

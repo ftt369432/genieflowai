@@ -9,12 +9,14 @@ import {
   Intent,
   AssistantAction 
 } from '../types/assistant';
-import { WorkflowPattern } from '../types/workflow';
+import { WorkflowPattern, WorkflowSuggestion } from '../types/workflow';
+
+type CommunicationTone = 'formal' | 'casual' | 'friendly' | 'professional';
 
 export class AIAssistantService {
   private learningService: LearningService;
   private workflowLearner: WorkflowLearner;
-  private currentContext: AssistantContext = {
+  private currentContext: LocalAssistantContext = {
     recentInteractions: [],
     userState: 'neutral',
     timeOfDay: 'morning',
@@ -36,7 +38,7 @@ export class AIAssistantService {
     this.setupContinuousLearning();
   }
 
-  public async processInput(input: string): Promise<AssistantResponse> {
+  public async processInput(input: string): Promise<LocalAssistantResponse> {
     // Update context with new input
     this.updateContext(input);
 
@@ -48,12 +50,12 @@ export class AIAssistantService {
     const response = await this.generateResponse(input, intent, emotion);
 
     // Learn from interaction
-    this.learnFromInteraction(input, response, intent);
+    await this.learnFromInteraction(input, response, intent);
 
     return response;
   }
 
-  private async analyzeIntent(input: string): Promise<Intent> {
+  private async analyzeIntent(input: string): Promise<LocalIntent> {
     // Categorize user intent
     const intents = {
       task: /create|make|do|start|schedule/i,
@@ -78,9 +80,9 @@ export class AIAssistantService {
 
   private async generateResponse(
     input: string,
-    intent: Intent,
+    intent: LocalIntent,
     emotion: string
-  ): Promise<AssistantResponse> {
+  ): Promise<LocalAssistantResponse> {
     // Select appropriate personality based on context
     const personality = this.selectPersonality(intent, emotion);
     
@@ -102,7 +104,7 @@ export class AIAssistantService {
     };
   }
 
-  private selectPersonality(intent: Intent, emotion: string): PersonalityProfile {
+  private selectPersonality(intent: LocalIntent, emotion: string): PersonalityProfile {
     const timeOfDay = new Date().getHours();
     const workContext = this.determineWorkContext();
 
@@ -122,8 +124,8 @@ export class AIAssistantService {
 
   private async craftResponse(
     personality: PersonalityProfile,
-    intent: Intent,
-    context: AssistantContext
+    intent: LocalIntent,
+    context: LocalAssistantContext
   ): Promise<string> {
     let response = '';
 
@@ -147,7 +149,7 @@ export class AIAssistantService {
     return this.applyPersonalityStyle(response, personality);
   }
 
-  private calculateFormality(intent: Intent, emotion: string): number {
+  private calculateFormality(intent: LocalIntent, emotion: string): number {
     let formality = 0.5; // Default mid-level formality
 
     // Adjust based on intent
@@ -164,7 +166,7 @@ export class AIAssistantService {
     return Math.max(0, Math.min(1, formality));
   }
 
-  private calculateVerbosity(intent: Intent): number {
+  private calculateVerbosity(intent: LocalIntent): number {
     switch (intent.type) {
       case 'task':
         return 0.3; // Concise for tasks
@@ -177,11 +179,11 @@ export class AIAssistantService {
     }
   }
 
-  private selectTone(emotion: string, hour: number): string {
-    if (emotion === 'stressed') return 'calming';
-    if (emotion === 'confused') return 'explanatory';
-    if (hour < 12) return 'energetic';
-    if (hour > 20) return 'relaxed';
+  private selectTone(emotion: string, hour: number): CommunicationTone {
+    if (emotion === 'stressed') return 'friendly';
+    if (emotion === 'confused') return 'professional';
+    if (hour < 12) return 'friendly';
+    if (hour > 20) return 'casual';
     return 'professional';
   }
 
@@ -204,7 +206,7 @@ export class AIAssistantService {
     styledResponse = this.adjustVerbosity(styledResponse, communicationStyle.verbosity);
     
     // Add personality-specific elements
-    if (communicationStyle.humorLevel > 0.7) {
+    if (communicationStyle.tone === 'friendly') {
       styledResponse = this.addHumor(styledResponse);
     }
 
@@ -226,8 +228,8 @@ export class AIAssistantService {
     return response;
   }
 
-  private async determineActions(intent: Intent): Promise<AssistantAction[]> {
-    const actions: AssistantAction[] = [];
+  private async determineActions(intent: LocalIntent): Promise<LocalAssistantAction[]> {
+    const actions: LocalAssistantAction[] = [];
 
     if (intent.type === 'task') {
       actions.push({
@@ -247,19 +249,33 @@ export class AIAssistantService {
     return actions;
   }
 
-  private learnFromInteraction(
+  private async learnFromInteraction(
     input: string,
-    response: AssistantResponse,
-    intent: Intent
+    response: LocalAssistantResponse,
+    intent: LocalIntent
   ) {
-    this.learningService.recordBehavior({
+    const emotion = await this.analyzeEmotion(input);
+
+    const behaviorData = {
       type: 'interaction',
-      input,
-      response: response.text,
-      intent,
       timestamp: new Date(),
-      context: this.currentContext
-    });
+      context: { // UserBehavior.context is Record<string, any>
+        userInput: input,
+        userEmotion: emotion,
+        intentType: intent.type,
+        intentEntities: intent.entities,
+        assistantResponse: response.text,
+        activeWorkflow: this.currentContext.activeWorkflow,
+        userState: this.currentContext.userState
+      },
+      metadata: { // Required field from UserBehavior in learning.ts
+        frequency: 1,    // Placeholder
+        importance: 0.5, // Placeholder
+        duration: 0      // Placeholder
+      }
+    };
+
+    this.learningService.recordBehavior(behaviorData);
 
     // Update personality based on learning
     const adaptations = this.learningService.suggestAdaptations(this.personality);
@@ -270,23 +286,46 @@ export class AIAssistantService {
 
   private setupContinuousLearning() {
     // Monitor user patterns and adapt
-    setInterval(() => {
-      const patterns = this.workflowLearner.suggestAutomation();
-      if (patterns.length > 0) {
-        this.suggestWorkflowImprovements(patterns);
+    setInterval(async () => { // Made async just in case getPatterns or suggestAutomation becomes async
+      const agentSuggestions = this.workflowLearner.suggestAutomation();
+      if (agentSuggestions.length > 0) {
+        const allWorkflowPatterns = this.workflowLearner.getPatterns();
+        const relevantPatternIds = new Set(agentSuggestions.map(s => s.patternId));
+        const patternsToImprove = allWorkflowPatterns.filter(p => relevantPatternIds.has(p.id));
+
+        if (patternsToImprove.length > 0) {
+          // Now patternsToImprove is WorkflowPattern[]
+          await this.suggestWorkflowImprovements(patternsToImprove);
+        }
       }
     }, 3600000); // Check every hour
   }
 
   private async suggestWorkflowImprovements(patterns: WorkflowPattern[]) {
-    const personality = GENIE_ARCHETYPES.WISE_MENTOR;
-    const suggestions = patterns.map(pattern => ({
-      text: `I noticed you often ${pattern.description}. Would you like me to help automate this?`,
-      pattern
-    }));
+    // const personality = GENIE_ARCHETYPES.WISE_MENTOR; // This was unused, consider if needed
+
+    const newSuggestions: WorkflowSuggestion[] = patterns.map(pattern => {
+      const suggestedAgentName = `${pattern.name.replace(/\s+/g, '_')}AutomationAgent`;
+      // Attempt to derive capabilities from the actions in the pattern
+      // This is a simplified approach; real capability detection would be more complex.
+      const capabilities = pattern.actions.map(action => action.type) // Use action types as capabilities
+                                       .filter((value, index, self) => self.indexOf(value) === index); // Unique
+
+      return {
+        type: 'automation', // Defaulting to automation suggestion
+        description: `Based on the pattern '${pattern.name}' (you often ${pattern.description}), would you like to explore automating this sequence of actions?`,
+        confidence: pattern.confidence,
+        suggestedAgent: {
+          name: suggestedAgentName,
+          capabilities: capabilities.length > 0 ? capabilities : ['general_automation'], // Fallback capability
+          autonomyLevel: 'supervised', // Default autonomy level
+          triggers: [pattern.name] // Trigger based on pattern name
+        }
+      };
+    });
 
     // Store suggestions for next interaction
-    this.currentContext.pendingSuggestions = suggestions;
+    this.currentContext.pendingSuggestions = newSuggestions;
   }
 
   private async loadUserContext(): Promise<void> {
@@ -313,7 +352,7 @@ export class AIAssistantService {
     return [];
   }
 
-  private async generateSuggestions(intent: Intent): Promise<string[]> {
+  private async generateSuggestions(intent: LocalIntent): Promise<string[]> {
     // Implement suggestion generation
     return [];
   }
@@ -322,13 +361,43 @@ export class AIAssistantService {
     return responses[Math.floor(Math.random() * responses.length)];
   }
 
-  private personalizeResponse(baseResponse: string, context: AssistantContext): string {
+  private personalizeResponse(baseResponse: string, context: LocalAssistantContext): string {
     // Implement response personalization
     return baseResponse;
   }
+
+  private async generateTaskResponse(intent: LocalIntent, personality: PersonalityProfile): Promise<string> {
+    // TODO: Implement actual task response generation
+    console.log(`Generating task response for intent: ${intent.type}, personality: ${personality.name}`);
+    return `Placeholder response for task: ${intent.type}`;
+  }
+
+  private async generateQueryResponse(intent: LocalIntent, personality: PersonalityProfile): Promise<string> {
+    // TODO: Implement actual query response generation
+    console.log(`Generating query response for intent: ${intent.type}, personality: ${personality.name}`);
+    return `Placeholder response for query: ${intent.type}`;
+  }
+
+  private generateEmotionalResponse(intent: LocalIntent, personality: PersonalityProfile): string {
+    // TODO: Implement actual emotional response generation
+    console.log(`Generating emotional response for intent: ${intent.type}, personality: ${personality.name}`);
+    return `Placeholder response for emotion: ${intent.type}`;
+  }
+
+  private async generateWorkflowResponse(intent: LocalIntent, personality: PersonalityProfile): Promise<string> {
+    // TODO: Implement actual workflow response generation
+    console.log(`Generating workflow response for intent: ${intent.type}, personality: ${personality.name}`);
+    return `Placeholder response for workflow: ${intent.type}`;
+  }
+
+  private generateDefaultResponse(personality: PersonalityProfile): string {
+    // TODO: Implement actual default response generation
+    console.log(`Generating default response for personality: ${personality.name}`);
+    return `Placeholder default response`;
+  }
 }
 
-interface AssistantContext {
+interface LocalAssistantContext {
   recentInteractions: string[];
   userState: string;
   timeOfDay: string;
@@ -336,19 +405,19 @@ interface AssistantContext {
   pendingSuggestions?: WorkflowSuggestion[];
 }
 
-interface AssistantResponse {
+interface LocalAssistantResponse {
   text: string;
-  actions: AssistantAction[];
+  actions: LocalAssistantAction[];
   suggestions: string[];
-  personality: GeniePersonality;
+  personality: PersonalityProfile;
 }
 
-interface AssistantAction {
+interface LocalAssistantAction {
   type: string;
   parameters: any;
 }
 
-interface Intent {
+interface LocalIntent {
   type: IntentType;
   confidence: number;
   entities: any[];

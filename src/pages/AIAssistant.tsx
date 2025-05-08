@@ -21,6 +21,15 @@ import { useRightPanelState } from '../hooks/useRightPanelState';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 import { Switch } from "@/components/ui/Switch";
 import { Label } from "@/components/ui/Label";
+import type { MultimodalPart } from '../hooks/useAIProvider';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+
+// Configure the workerSrc for pdf.js
+// THIS REQUIRES YOU TO MANUALLY COPY 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs'
+// TO YOUR 'public/' FOLDER as 'public/pdf.worker.min.mjs'
+if (typeof window !== 'undefined') { // Ensure this runs only in the browser
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'; // Corrected extension to .mjs
+}
 
 export function AIAssistantPage() {
   const navigate = useNavigate();
@@ -50,6 +59,7 @@ export function AIAssistantPage() {
   const [isLeftPanelHovered, setIsLeftPanelHovered] = useState(false);
   const leftPanelCollapseTimer = useRef<NodeJS.Timeout | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [stagedFileParts, setStagedFileParts] = useState<MultimodalPart[]>([]);
 
   const manuallyCollapsedRight = useRef(false); // Track manual state for right panel
 
@@ -97,106 +107,137 @@ export function AIAssistantPage() {
   useEffect(() => {
     return () => {
       if (leftPanelCollapseTimer.current) {
+        console.log('LOG: Cleanup - Clearing leftPanelCollapseTimer');
         clearTimeout(leftPanelCollapseTimer.current);
       }
-      // Add cleanup for right panel timer
       if (rightPanelCollapseTimer.current) {
+        console.log('LOG: Cleanup - Clearing rightPanelCollapseTimer');
         clearTimeout(rightPanelCollapseTimer.current);
       }
     };
   }, []);
 
   const handleLeftPanelMouseEnter = () => {
+    console.log('LOG: [LP Enter]', 'AutoHide:', isLeftPanelAutoHideEnabled, 'Collapsed:', isLeftPanelCollapsed, 'Manual:', manuallyCollapsedLeft.current, 'Hovered:', isLeftPanelHovered);
     if (isLeftPanelAutoHideEnabled) {
       if (leftPanelCollapseTimer.current) {
+        console.log('LOG: [LP Enter] Clearing LPTimer');
         clearTimeout(leftPanelCollapseTimer.current);
         leftPanelCollapseTimer.current = null;
       }
       setIsLeftPanelHovered(true);
-      // Expand only if it was collapsed *automatically*
+      console.log('LOG: [LP Enter] Set Hovered TRUE');
       if (isLeftPanelCollapsed && !manuallyCollapsedLeft.current) {
+         console.log('LOG: [LP Enter] Auto-expanding LP');
          setIsLeftPanelCollapsed(false);
       }
     }
   };
 
   const handleLeftPanelMouseLeave = () => {
+    console.log('LOG: [LP Leave]', 'AutoHide:', isLeftPanelAutoHideEnabled, 'Collapsed:', isLeftPanelCollapsed, 'Manual:', manuallyCollapsedLeft.current, 'Hovered:', isLeftPanelHovered);
     if (isLeftPanelAutoHideEnabled) {
       setIsLeftPanelHovered(false);
-      // Clear any previous timer
+      console.log('LOG: [LP Leave] Set Hovered FALSE');
       if (leftPanelCollapseTimer.current) {
+        console.log('LOG: [LP Leave] Clearing existing LPTimer');
         clearTimeout(leftPanelCollapseTimer.current);
       }
-      // Set timer to collapse only if the panel is currently open
       if (!isLeftPanelCollapsed) {
+        console.log('LOG: [LP Leave] Setting LPTimer (700ms)');
         leftPanelCollapseTimer.current = setTimeout(() => {
-          // Check conditions again when timer fires
-          if (isLeftPanelAutoHideEnabled && !isLeftPanelHovered) {
-             manuallyCollapsedLeft.current = false; // Reset manual flag as this is an auto-collapse
+          console.log('LOG: [LPTimer CB]', 'AutoHide:', isLeftPanelAutoHideEnabled, 'Manual:', manuallyCollapsedLeft.current);
+          // If timer fires, it means mouse left and didn't re-enter to clear this timer.
+          // Collapse if AutoHide is still enabled.
+          if (isLeftPanelAutoHideEnabled) {
+             console.log('LOG: [LPTimer CB] Auto-collapsing LP, Reset Manual');
+             manuallyCollapsedLeft.current = false; 
              setIsLeftPanelCollapsed(true);
+          } else {
+            console.log('LOG: [LPTimer CB] AutoHide is OFF. Conditions NOT MET for collapse');
           }
-        }, 700); // 700ms delay
+        }, 700);
+      } else {
+        console.log('LOG: [LP Leave] LP already collapsed, NOT setting timer');
       }
     }
   };
 
   const toggleLeftPanelManually = (collapse: boolean) => {
+    console.log('LOG: [ToggleLPManual] ActionCollapse:', collapse, 'CurrentManual:', manuallyCollapsedLeft.current);
     if (leftPanelCollapseTimer.current) {
+      console.log('LOG: [ToggleLPManual] Clearing LPTimer');
       clearTimeout(leftPanelCollapseTimer.current);
       leftPanelCollapseTimer.current = null;
     }
-    manuallyCollapsedLeft.current = collapse; // Set manual flag based on action
+    manuallyCollapsedLeft.current = collapse; 
     setIsLeftPanelCollapsed(collapse);
-    setIsLeftPanelHovered(false); // Ensure hover state is reset
+    setIsLeftPanelHovered(false); 
+    console.log('LOG: [ToggleLPManual] Set Collapsed:', collapse, 'Manual:', manuallyCollapsedLeft.current, 'Hovered: FALSE');
   };
 
   const handleRightPanelMouseEnter = () => {
+    console.log('LOG: [RP Enter]', 'AutoHide:', isRightPanelAutoHideEnabled, 'Collapsed:', isRightPanelCollapsed, 'Manual:', manuallyCollapsedRight.current, 'Hovered:', isRightPanelHovered);
     if (isRightPanelAutoHideEnabled) {
       if (rightPanelCollapseTimer.current) {
+        console.log('LOG: [RP Enter] Clearing RPTimer');
         clearTimeout(rightPanelCollapseTimer.current);
         rightPanelCollapseTimer.current = null;
       }
       setIsRightPanelHovered(true);
-      // Expand only if it was collapsed automatically
+      console.log('LOG: [RP Enter] Set Hovered TRUE');
       if (isRightPanelCollapsed && !manuallyCollapsedRight.current) {
-        openRightPanel(); // Use hook function to open
-        manuallyCollapsedRight.current = false; // Ensure manual flag is reset on auto-expand
+        console.log('LOG: [RP Enter] Auto-expanding RP');
+        openRightPanel(); 
+        manuallyCollapsedRight.current = false;
       }
     }
   };
 
   const handleRightPanelMouseLeave = () => {
+    console.log('LOG: [RP Leave]', 'AutoHide:', isRightPanelAutoHideEnabled, 'Collapsed:', isRightPanelCollapsed, 'Manual:', manuallyCollapsedRight.current, 'Hovered:', isRightPanelHovered);
     if (isRightPanelAutoHideEnabled) {
       setIsRightPanelHovered(false);
-      // Clear any previous timer
+      console.log('LOG: [RP Leave] Set Hovered FALSE');
       if (rightPanelCollapseTimer.current) {
+        console.log('LOG: [RP Leave] Clearing existing RPTimer');
         clearTimeout(rightPanelCollapseTimer.current);
       }
-      // Set timer ONLY if the panel is currently open
       if (!isRightPanelCollapsed) {
+        console.log('LOG: [RP Leave] Setting RPTimer (700ms)');
         rightPanelCollapseTimer.current = setTimeout(() => {
-          // Check conditions again when timer fires
-          if (isRightPanelAutoHideEnabled && !isRightPanelHovered) {
-            manuallyCollapsedRight.current = false; // Reset manual flag
-            closeRightPanel(); // Use hook function to close
+          console.log('LOG: [RPTimer CB]', 'AutoHide:', isRightPanelAutoHideEnabled, 'Manual:', manuallyCollapsedRight.current);
+          // If timer fires, it means mouse left and didn't re-enter to clear this timer.
+          // Collapse if AutoHide is still enabled.
+          if (isRightPanelAutoHideEnabled) {
+            console.log('LOG: [RPTimer CB] Auto-collapsing RP, Reset Manual');
+            manuallyCollapsedRight.current = false; 
+            closeRightPanel(); 
+          } else {
+            console.log('LOG: [RPTimer CB] AutoHide is OFF. Conditions NOT MET for collapse');
           }
-        }, 700); 
+        }, 700);
+      } else {
+        console.log('LOG: [RP Leave] RP already collapsed, NOT setting timer');
       }
     }
   };
 
   const toggleRightPanelManually = (collapse: boolean) => {
+    console.log('LOG: [ToggleRPManual] ActionCollapse:', collapse, 'CurrentManual:', manuallyCollapsedRight.current);
     if (rightPanelCollapseTimer.current) {
+      console.log('LOG: [ToggleRPManual] Clearing RPTimer');
       clearTimeout(rightPanelCollapseTimer.current);
       rightPanelCollapseTimer.current = null;
     }
-    manuallyCollapsedRight.current = collapse; // Set manual flag
+    manuallyCollapsedRight.current = collapse; 
     if (collapse) {
       closeRightPanel();
     } else {
       openRightPanel();
     }
-    setIsRightPanelHovered(false); // Reset hover state
+    setIsRightPanelHovered(false); 
+    console.log('LOG: [ToggleRPManual] Called hook. Set Manual:', manuallyCollapsedRight.current, 'Hovered: FALSE');
   };
 
   const updateConversationTitle = (id: string, title: string) => {
@@ -208,18 +249,24 @@ export function AIAssistantPage() {
   };
 
   const handleNewChat = () => {
+    console.log("LOG: Starting new General Chat");
+    setSelectedAssistant(null); 
+
     const newConversation: Conversation = {
       id: uuidv4(),
-      title: 'New Chat',
+      title: 'New Chat', 
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
       model: 'gemini-2.0-flash',
       provider: 'google',
+      systemPrompt: '', 
+      assistantId: undefined, 
+      assistantName: undefined, 
     };
     setConversations((prev) => [newConversation, ...prev]);
     setCurrentConversation(newConversation.id);
-    setChatMessages([]);
+    // setChatMessages([]); // This will be handled by the useEffect watching currentConversation
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -249,7 +296,37 @@ export function AIAssistantPage() {
     setChatMessages((prev) => [...prev, typingIndicatorMessage]);
 
     try {
-      const response = await sendMessage(currentInput, 'chat');
+      const currentConv = conversations.find(c => c.id === currentConversation);
+      const systemPromptForAPI = currentConv?.systemPrompt;
+
+      // Prepare parts for multimodal message
+      const partsToSend: MultimodalPart[] = [];
+      
+      // Add user text input if present
+      if (currentInput.trim()) {
+        partsToSend.push({ text: currentInput.trim() });
+      }
+
+      // Add staged file parts (images)
+      if (stagedFileParts.length > 0) {
+        partsToSend.push(...stagedFileParts);
+      }
+
+      if (partsToSend.length === 0 && !systemPromptForAPI) {
+        // Avoid sending completely empty messages if there's no text, no files, and no system prompt
+        console.log("Skipping empty message send");
+        setIsProcessing(false);
+        setChatMessages((prev) => prev.filter((msg) => msg.id !== typingIndicatorId));
+        return;
+      }
+      
+      // Pass the parts array and systemPrompt option to sendMessage
+      // useAIProvider.sendMessage will handle prepending the systemPrompt to the parts if it exists.
+      const response = await sendMessage(partsToSend, 'chat', { systemPrompt: systemPromptForAPI });
+
+      // Clear staged files after successful send
+      setStagedFileParts([]);
+      setUploadedFiles([]); // Also clear the preview files
 
       setChatMessages((prev) => {
         const messagesWithoutIndicator = prev.filter(
@@ -331,17 +408,93 @@ export function AIAssistantPage() {
     }
   };
 
-  const handleFiles = (files: FileList | null) => {
-    if (files) {
-      console.log('Processing files:', files);
-      const uploadMessage: Message = {
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const newFileParts: MultimodalPart[] = [];
+    const filePreviews: File[] = Array.from(files);
+    let processedFileCount = 0;
+
+    for (const file of filePreviews) {
+      if (file.type.startsWith('image/')) {
+        try {
+          const base64String = await readFileAsBase64(file);
+          newFileParts.push({ 
+            inlineData: { 
+              mimeType: file.type, 
+              data: base64String.split(',')[1]
+            }
+          });
+          processedFileCount++;
+        } catch (error) {
+          console.error("Error reading image file as base64:", error);
+        }
+      } else if (file.type === 'application/pdf') {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+          let fullText = '';
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            fullText += textContent.items.map((item: any) => item.str).join(' \n'); // item is TextItem
+            fullText += '\n\n'; // Page separator
+          }
+          if (fullText.trim()) {
+            newFileParts.push({ text: `PDF Content: ${file.name}\n\n${fullText.trim()}` });
+            processedFileCount++;
+          }
+        } catch (error) {
+          console.error("Error processing PDF file:", error);
+        }
+      } else if (file.type === 'text/plain' || file.type === 'text/markdown') {
+        try {
+          const textContent = await file.text();
+          if (textContent.trim()) {
+            newFileParts.push({ text: `Text File Content: ${file.name}\n\n${textContent.trim()}` });
+            processedFileCount++;
+          }
+        } catch (error) {
+          console.error("Error reading text file:", error);
+        }
+      }
+      // TODO: Add handling for other file types if necessary
+    }
+
+    if (newFileParts.length > 0) {
+      setStagedFileParts(prevParts => [...prevParts, ...newFileParts]);
+      // We only add successfully processed files to the preview that results in a part
+      // This logic might need refinement if we want to show all selected files even if some fail processing.
+      setUploadedFiles(prev => [...prev, ...filePreviews.slice(0, processedFileCount)]); 
+
+      const systemMessageContent = `Processed ${processedFileCount} file(s) (images, PDFs, text). Ready to send with your next message.`;
+      const systemMessage: Message = {
         id: uuidv4(),
-        content: `Processing ${files.length} file(s)... (Upload/OCR/Drive integration needed)`,
+        content: systemMessageContent,
         role: 'system',
         timestamp: new Date(),
       };
-      setChatMessages(prev => [...prev, uploadMessage]);
+      setChatMessages(prev => [...prev, systemMessage]);
+    } else if (files.length > 0) {
+      // If files were selected but none were processed into parts (e.g., all unsupported types or errors)
+      const systemMessage: Message = {
+        id: uuidv4(),
+        content: `Selected ${files.length} file(s), but none could be processed for sending (supported: images, PDF, .txt, .md).`,
+        role: 'system',
+        timestamp: new Date(),
+      };
+      setChatMessages(prev => [...prev, systemMessage]);
     }
+  };
+
+  // Helper function to read file as Base64
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -420,6 +573,29 @@ export function AIAssistantPage() {
     // Implement MyDrive logic here
   };
 
+  const handleStartChatWithAssistant = (assistant: AIAssistant) => {
+    console.log("LOG: Starting chat with assistant:", assistant.name, assistant.id);
+    setSelectedAssistant(assistant); 
+
+    const newConversation: Conversation = {
+      id: uuidv4(),
+      title: assistant.name, // Use assistant's name as the primary title
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      // Example for model: use assistant's specific model if defined, else a default
+      // You might need a more sophisticated way to determine the model based on assistant.type or capabilities
+      model: assistant.systemPrompt ? 'custom-prompt-model' : 'gemini-2.0-flash', // Placeholder logic
+      provider: 'google', 
+      assistantId: assistant.id,
+      assistantName: assistant.name,
+      systemPrompt: assistant.systemPrompt || '', 
+    };
+    setConversations((prev) => [newConversation, ...prev]);
+    setCurrentConversation(newConversation.id);
+    // setChatMessages([]); // This will be handled by the useEffect watching currentConversation
+  };
+
   return (
     <AIErrorBoundary>
       <TooltipProvider>
@@ -456,7 +632,22 @@ export function AIAssistantPage() {
                       <Switch
                         id="auto-hide-switch"
                         checked={isLeftPanelAutoHideEnabled}
-                        onCheckedChange={setIsLeftPanelAutoHideEnabled}
+                        onCheckedChange={(checked) => {
+                          console.log('LOG: [LP AutoHide Switch] Value changed to:', checked);
+                          setIsLeftPanelAutoHideEnabled(checked);
+                          if (!checked) {
+                            if (leftPanelCollapseTimer.current) {
+                              console.log('LOG: [LP AutoHide Switch] Auto-hide disabled, clearing LPTimer');
+                              clearTimeout(leftPanelCollapseTimer.current);
+                              leftPanelCollapseTimer.current = null;
+                            }
+                          } else {
+                            if (!isLeftPanelCollapsed && !isLeftPanelHovered) {
+                                console.log('LOG: [LP AutoHide Switch] Auto-hide enabled, re-evaluating mouse leave for potential collapse');
+                                handleLeftPanelMouseLeave(); 
+                            }
+                          }
+                        }}
                         className="[&>span]:h-3 [&>span]:w-3 data-[state=checked]:bg-primary"
                       />
                     </div>
@@ -514,32 +705,71 @@ export function AIAssistantPage() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
-                  {conversations.map((conversation) => (
-                    <div
-                      key={conversation.id}
-                      className={cn(
-                        'flex items-start gap-2 p-3 cursor-pointer hover:bg-muted/80 transition-colors sidebar-item',
-                        currentConversation === conversation.id
-                          ? 'bg-muted active'
-                          : ''
-                      )}
-                      onClick={() => {
-                        if (currentConversation !== conversation.id) {
-                          setCurrentConversation(conversation.id);
-                        }
-                      }}
-                    >
-                      <MessageSquare className="h-4 w-4 mt-1 interactive-icon" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">
-                          {conversation.title || 'New Chat'}
+                  <div className="p-3 border-b border-border/50">
+                    <h4 className="text-xs font-semibold text-muted-foreground px-1 mb-2">My Assistants</h4>
+                    <div className="space-y-1">
+                      {assistants.map((assistant) => (
+                        <div
+                          key={assistant.id}
+                          className={cn(
+                            'flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/80 transition-colors sidebar-item',
+                            selectedAssistant?.id === assistant.id ? 'bg-muted active font-medium' : 'text-muted-foreground'
+                          )}
+                          onClick={() => {
+                            console.log('LOG: Assistant selected in new list:', assistant.name, assistant.id);
+                            handleStartChatWithAssistant(assistant);
+                          }}
+                          title={assistant.description || assistant.name} // Show description on hover
+                        >
+                          {assistant.avatar ? (
+                            <img src={assistant.avatar} alt={assistant.name} className="h-6 w-6 rounded-full object-cover" />
+                          ) : (
+                            <Bot className="h-5 w-5" /> 
+                          )}
+                          <span className="sidebar-item-text text-sm truncate">{assistant.name}</span>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(conversation.createdAt).toLocaleDateString()}
+                      ))}
+                      {assistants.length === 0 && (
+                        <p className="text-xs text-muted-foreground px-3 py-2">No assistants defined yet.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-3">
+                    <h4 className="text-xs font-semibold text-muted-foreground px-1 mb-2">Recent Chats</h4>
+                    {conversations.map((conversation) => (
+                      <div
+                        key={conversation.id}
+                        className={cn(
+                          'flex items-start gap-2 p-3 cursor-pointer hover:bg-muted/80 transition-colors sidebar-item',
+                          currentConversation === conversation.id
+                            ? 'bg-muted active'
+                            : ''
+                        )}
+                        onClick={() => {
+                          if (currentConversation !== conversation.id) {
+                            console.log("LOG: Selecting existing conversation:", conversation.title, "ID:", conversation.id);
+                            setCurrentConversation(conversation.id);
+                            // When selecting an old conversation, also set the selectedAssistant
+                            const linkedAssistant = conversation.assistantId ? assistants.find(a => a.id === conversation.assistantId) : null;
+                            setSelectedAssistant(linkedAssistant || null); 
+                            console.log("LOG: Switched to conversation, active assistant:", linkedAssistant?.name || "General Chat");
+                            // chatMessages will be updated by the useEffect watching currentConversation
+                          }
+                        }}
+                      >
+                        <MessageSquare className="h-4 w-4 mt-1 interactive-icon" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">
+                            {conversation.title || 'New Chat'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(conversation.createdAt).toLocaleDateString()}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -552,7 +782,7 @@ export function AIAssistantPage() {
               onDrop={handleDrop}
             >
               <header className="flex items-center justify-between p-3 border-b bg-background/95 backdrop-blur-md ai-header z-10">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   {isLeftPanelCollapsed && (
                     <Button
                       variant="ghost"
@@ -563,12 +793,23 @@ export function AIAssistantPage() {
                       <Menu className="h-4 w-4 interactive-icon" />
                     </Button>
                   )}
+
+                  {selectedAssistant ? (
+                    selectedAssistant.avatar ? (
+                      <img src={selectedAssistant.avatar} alt={selectedAssistant.name} className="h-7 w-7 rounded-full object-cover" />
+                    ) : (
+                      <Bot className="h-6 w-6 text-muted-foreground" />
+                    )
+                  ) : (
+                    <MessageSquare className="h-6 w-6 text-muted-foreground" />
+                  )}
                   
-                  <h1 className="text-lg font-semibold">
-                    {currentConversation
-                      ? conversations.find((c) => c.id === currentConversation)
-                          ?.title || 'Chat'
-                      : 'New Chat'}
+                  <h1 className="text-lg font-semibold truncate">
+                    {selectedAssistant 
+                      ? selectedAssistant.name 
+                      : currentConversation
+                        ? conversations.find((c) => c.id === currentConversation)?.title || 'Chat'
+                        : 'New Chat'}
                   </h1>
                 </div>
 
@@ -603,15 +844,30 @@ export function AIAssistantPage() {
                         key={message.id}
                         id={`message-${message.id}`}
                         className={cn(
-                          'flex',
+                          'flex items-end',
                           message.role === 'user'
                             ? 'justify-end'
-                            : 'justify-start'
+                            : 'justify-start gap-2'
                         )}
                       >
+                        {/* Conditional Avatar for Assistant Messages */}
+                        {message.role === 'assistant' && (
+                          <>
+                            {selectedAssistant && selectedAssistant.avatar ? (
+                              <img 
+                                src={selectedAssistant.avatar} 
+                                alt={selectedAssistant.name} 
+                                className="h-8 w-8 rounded-full object-cover mb-1"
+                              />
+                            ) : (
+                              <Bot className="h-8 w-8 text-muted-foreground mb-1" />
+                            )}
+                          </>
+                        )}
+
                         <div
                           className={cn(
-                            'max-w-3xl rounded-lg p-4',
+                            'max-w-3xl rounded-lg p-3',
                             message.role === 'user'
                               ? 'bg-primary text-primary-foreground message-user'
                               : 'bg-muted message-assistant'
@@ -641,58 +897,21 @@ export function AIAssistantPage() {
               <div className="sticky bottom-8 px-4 pt-4 pb-4 bg-gradient-to-t from-background via-background/90 to-transparent mt-auto">
                  <div className="relative max-w-3xl mx-auto">
                    <form onSubmit={handleSubmit} className="relative flex items-end gap-2 bg-background border border-border/50 rounded-xl shadow-lg p-2">
-                     <Popover>
-                       <PopoverTrigger asChild>
-                         <Button variant="ghost" size="icon" className="h-9 w-9 flex-shrink-0">
-                           <Paperclip className="h-4 w-4 interactive-icon" />
-                         </Button>
-                       </PopoverTrigger>
-                       <PopoverContent className="w-48 p-2 mb-1">
-                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleUploadFile}>
-                           <Folder className="h-4 w-4 interactive-icon" />
-                           Upload File
-                         </Button>
-                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleRecordAudio}>
-                           <Mic className="h-4 w-4 interactive-icon" />
-                           Record Audio
-                         </Button>
-                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleCamera}>
-                           <Camera className="h-4 w-4 interactive-icon" />
-                           Camera
-                         </Button>
-                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleMyDrive}>
-                           <Upload className="h-4 w-4 interactive-icon" />
-                           MyDrive
-                         </Button>
-                       </PopoverContent>
-                     </Popover>
-                     {/* Display uploaded files */}
-                     {uploadedFiles.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs text-muted-foreground">Uploaded Files:</p>
-                        <ul>
-                          {uploadedFiles.map((file) => (
-                            <li key={file.name} className="text-xs">{file.name}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                     
-                     {/* Add Capabilities Button */}
+                     {/* ADD CAPABILITIES POPOVER (PLUS BUTTON) */}
                      <Popover>
                        <PopoverTrigger asChild>
                          <Button variant="ghost" size="icon" className="h-9 w-9 flex-shrink-0">
                            <Plus className="h-4 w-4 interactive-icon" />
                          </Button>
                        </PopoverTrigger>
-                       <PopoverContent className="w-48 p-2 mb-1">
+                       <PopoverContent className="w-52 p-2 mb-1"> {/* Made popover slightly wider */}
                          <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleUploadFile}>
                            <Folder className="h-4 w-4 interactive-icon" />
                            Upload File
                          </Button>
-                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleRecordAudio}>
-                           <Mic className="h-4 w-4 interactive-icon" />
-                           Record Audio
+                         <Button variant="ghost" className="w-full justify-start gap-2" onClick={toggleListening}> {/* Changed to toggleListening */}
+                           <Mic className={cn("h-4 w-4 interactive-icon", isListening ? "text-red-500" : "")} />
+                           {isListening ? "Stop Listening" : "Record Audio"}
                          </Button>
                          <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleCamera}>
                            <Camera className="h-4 w-4 interactive-icon" />
@@ -705,29 +924,21 @@ export function AIAssistantPage() {
                        </PopoverContent>
                      </Popover>
                      
-                     <Button 
-                       type="button" 
-                       variant="ghost" 
-                       size="icon" 
-                       className="h-9 w-9 flex-shrink-0" 
-                       onClick={toggleListening} 
-                     >
-                       <Mic className={cn("h-4 w-4 interactive-icon", isListening ? "text-red-500" : "")} />
-                     </Button>
+                     {/* REMOVED standalone Mic Button */}
 
                      <Textarea
                        value={input}
                        onChange={(e) => setInput(e.target.value)}
                        onKeyDown={handleKeyDown}
                        placeholder="Message AI Assistant..."
-                       className="flex-1 resize-none chat-input bg-transparent border-none focus:ring-0 focus:outline-none p-0 pl-2 pr-10"
+                       className="flex-1 resize-none chat-input bg-transparent border-none focus:ring-0 focus:outline-none p-0 pl-2 pr-2" // Added pr-2 for spacing from send
                        rows={1}
                      />
                      <Button 
                        type="submit" 
                        size="icon" 
                        className="h-9 w-9 primary flex-shrink-0"
-                       disabled={isProcessing || !input.trim()}
+                       disabled={isProcessing || !input.trim() && stagedFileParts.length === 0}
                      >
                        <Send className="h-4 w-4 interactive-icon" />
                      </Button>
@@ -752,15 +963,30 @@ export function AIAssistantPage() {
 
           <div 
             className={cn(
-              "absolute top-0 right-0 h-full w-80 bg-background shadow-lg transition-transform duration-300 ease-in-out z-20",
-              isRightPanelCollapsed ? "translate-x-full" : "translate-x-0"
+              "absolute top-0 right-0 h-full bg-background shadow-lg transition-all duration-300 ease-in-out z-20 overflow-hidden",
+              isRightPanelCollapsed ? "w-0" : "w-80"
             )}
             onMouseEnter={handleRightPanelMouseEnter}
             onMouseLeave={handleRightPanelMouseLeave}
           >
             <RightSidePanel 
               isAutoHideEnabled={isRightPanelAutoHideEnabled}
-              onToggleAutoHide={setIsRightPanelAutoHideEnabled}
+              onToggleAutoHide={(checked) => {
+                console.log('LOG: [RP AutoHide Switch] Value changed to:', checked);
+                setIsRightPanelAutoHideEnabled(checked);
+                if (!checked) {
+                  if (rightPanelCollapseTimer.current) {
+                    console.log('LOG: [RP AutoHide Switch] Auto-hide disabled, clearing RPTimer');
+                    clearTimeout(rightPanelCollapseTimer.current);
+                    rightPanelCollapseTimer.current = null;
+                  }
+                } else {
+                  if (!isRightPanelCollapsed && !isRightPanelHovered) {
+                    console.log('LOG: [RP AutoHide Switch] Auto-hide enabled, re-evaluating mouse leave for potential collapse');
+                    handleRightPanelMouseLeave();
+                  }
+                }
+              }}
             />
           </div>
 
@@ -772,11 +998,11 @@ export function AIAssistantPage() {
           >
             <Button
               variant="secondary"
-              className="rounded-l-full rounded-r-none h-20 w-10 p-0 flex flex-col items-center justify-center space-y-2 bg-muted/80 backdrop-blur-sm hover:bg-muted"
+              className="rounded-l-full rounded-r-none h-20 w-10 p-0 flex flex-col items-center justify-center space-y-2 bg-gray-600/70 text-gray-100 shadow-lg backdrop-blur-sm hover:bg-gray-500/70"
               onClick={() => toggleRightPanelManually(false)}
             >
-              <BookOpen className="h-4 w-4 text-muted-foreground" />
-              <UsersIcon className="h-4 w-4 text-muted-foreground" />
+              <BookOpen className="h-4 w-4" />
+              <UsersIcon className="h-4 w-4" />
             </Button>
           </div>
 

@@ -58,7 +58,7 @@ export function FileUpload({ onUpload, accept = '.pdf,.doc,.txt,.md', maxSize = 
         onChange={handleFileChange}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
       />
-      <Button variant="outline" className="pointer-events-none">
+      <Button /*variant="outline"*/ className="pointer-events-none btn-genie-primary">
         <Upload className="w-4 h-4 mr-2" />
         Upload
       </Button>

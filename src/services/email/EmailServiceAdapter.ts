@@ -13,12 +13,9 @@ import {
   EmailQuery, 
   IMAPConfig,
   EmailFilter,
-  EmailPreferences
+  EmailPreferences,
+  EmailMessage
 } from './types';
-
-import { 
-  EmailMessage 
-} from './emailService';
 
 import emailService from './emailService';
 
@@ -74,7 +71,7 @@ export class EmailService {
       id: `imap-${Date.now()}`,
       provider: 'imap',
       email: config.email,
-      name: config.name || config.email,
+      name: config.email,
       connected: true,
       lastSynced: new Date()
     };
@@ -90,11 +87,11 @@ export class EmailService {
     // Return mock folders
     return {
       folders: [
-        { id: 'inbox', name: 'Inbox', unreadCount: 10 },
-        { id: 'sent', name: 'Sent', unreadCount: 0 },
-        { id: 'drafts', name: 'Drafts', unreadCount: 0 },
-        { id: 'trash', name: 'Trash', unreadCount: 0 },
-        { id: 'spam', name: 'Spam', unreadCount: 5 }
+        { id: 'inbox', name: 'Inbox', unreadCount: 10, type: 'system', totalCount: 100 },
+        { id: 'sent', name: 'Sent', unreadCount: 0, type: 'system', totalCount: 50 },
+        { id: 'drafts', name: 'Drafts', unreadCount: 0, type: 'system', totalCount: 5 },
+        { id: 'trash', name: 'Trash', unreadCount: 0, type: 'system', totalCount: 20 },
+        { id: 'spam', name: 'Spam', unreadCount: 5, type: 'system', totalCount: 5 }
       ]
     };
   }
@@ -103,9 +100,9 @@ export class EmailService {
     // Return mock labels
     return {
       labels: [
-        { id: 'important', name: 'Important', color: 'red' },
-        { id: 'work', name: 'Work', color: 'blue' },
-        { id: 'personal', name: 'Personal', color: 'green' }
+        { id: 'important', name: 'Important', type: 'user', color: { backgroundColor: 'red' } },
+        { id: 'work', name: 'Work', type: 'user', color: { backgroundColor: 'blue' } },
+        { id: 'personal', name: 'Personal', type: 'user', color: { backgroundColor: 'green' } }
       ]
     };
   }
@@ -115,9 +112,10 @@ export class EmailService {
     // Use our new emailService to get real messages
     try {
       const result = await emailService.getEmails({
-        maxResults: query.limit || 20,
-        labelIds: query.folders || ['INBOX'],
-        q: query.query
+        pageSize: query.pageSize || 20,
+        folderId: query.folderId,
+        labelId: query.labelId,
+        search: query.search
       });
       
       return { messages: result.messages };
@@ -163,6 +161,14 @@ export class EmailService {
     console.log(`Deleting message ${messageId}`);
   }
   
+  async archiveMessage(accountId: string, messageId: string): Promise<void> {
+    // TODO: Implement actual archive logic, e.g., by moving to an archive folder or managing labels
+    console.log(`Archiving message ${messageId} in account ${accountId}`);
+    // For Gmail, this might involve removing the 'INBOX' label.
+    // For other systems, it might be moving to a specific 'Archive' folder.
+    // Example: await emailService.modifyMessageLabels(messageId, [], ['INBOX']); // Remove INBOX
+  }
+  
   async sendMessage(accountId: string, message: Partial<EmailMessage>): Promise<void> {
     console.log(`Sending message from account ${accountId}:`, message);
   }
@@ -182,10 +188,10 @@ export class EmailService {
         body: draft.body || '',
         snippet: draft.snippet || '',
         labels: ['DRAFT'],
-        attachments: false,
-        isRead: true,
-        isStarred: false,
-        isImportant: false
+        attachments: undefined,
+        read: true,
+        starred: false,
+        important: false
       }
     };
   }

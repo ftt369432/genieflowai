@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { EmailService } from '../services/email';
+import { EmailAccount } from '../services/email/types';
 
 const EmailConnectSuccess = () => {
   const [searchParams] = useSearchParams();
@@ -18,7 +19,7 @@ const EmailConnectSuccess = () => {
         
         const emailService = new EmailService();
         const accounts = await emailService.getAccounts();
-        const account = accounts.find(acc => acc.id === accountId);
+        const account = accounts.find((acc: EmailAccount) => acc.id === accountId);
         
         if (!account) {
           throw new Error('Account not found');
