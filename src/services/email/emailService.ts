@@ -7,10 +7,11 @@
 import { getEnv } from '../../config/env';
 import { GoogleAPIClient } from '../google/GoogleAPIClient';
 import googleAuthService from '../auth/googleAuth';
-import { EmailAccount, EmailMessage, EmailQuery, EmailAnalysis } from './types';
+import { EmailAccount, EmailMessage, EmailQuery, EmailAnalysis, EmailAnalysisMeetingDetails } from './types';
 import { supabase } from '@/lib/supabase';
 import { AIServiceFactory } from '../ai/aiServiceFactory';
 import { AIService } from '../ai/baseAIService';
+import { googleApiClient } from '../google/GoogleAPIClient';
 
 // Email fetch options
 export interface EmailOptions {
@@ -72,11 +73,9 @@ export class EmailService {
    * Get emails with pagination
    */
   async getEmails(options: EmailQuery = {}): Promise<EmailResponse> {
-    const { useMock } = getEnv();
-    
     console.log('EmailService: Fetching emails with options:', options);
     
-    if (useMock) {
+    if (this.googleClient.isUsingMockData()) {
       console.log('EmailService: Using mock data');
       return this.getMockEmails(options);
     }
@@ -155,9 +154,8 @@ export class EmailService {
    */
   async getEmail(id: string): Promise<EmailMessage | null> {
     console.log('EmailService: getEmail called with ID:', id);
-    const { useMock } = getEnv();
     
-    if (useMock) {
+    if (this.googleClient.isUsingMockData()) {
       return this.getMockEmailDetails(id);
     }
     
@@ -180,9 +178,13 @@ export class EmailService {
       );
       
       if (!message || !message.payload) {
+        console.error(`EmailService: No message payload for ID ${id}`);
         return null;
       }
       
+      // Log the raw payload for debugging, especially for attachment issues
+      // console.log(`EmailService: Raw message payload for ${id}:`, JSON.stringify(message.payload, null, 2));
+
       const headers = message.payload.headers || [];
       const subject = this.findHeader(headers, 'Subject') || '(No Subject)';
       const from = this.findHeader(headers, 'From') || '';
@@ -190,17 +192,50 @@ export class EmailService {
       const date = this.findHeader(headers, 'Date') || '';
       const labels = message.labelIds || [];
       let body = '';
+      let bodyMimeType = 'text/plain'; // Default MIME type
 
       if (message.payload.parts) {
-          const textPart = message.payload.parts.find((part: any) => part.mimeType === 'text/plain');
           const htmlPart = message.payload.parts.find((part: any) => part.mimeType === 'text/html');
-          if (htmlPart?.body?.data) { body = this.decodeBase64(htmlPart.body.data); }
-          else if (textPart?.body?.data) { body = this.decodeBase64(textPart.body.data); }
+          const textPart = message.payload.parts.find((part: any) => part.mimeType === 'text/plain');
+          
+          if (htmlPart?.body?.data) { 
+            body = this.decodeBase64(htmlPart.body.data); 
+            bodyMimeType = 'text/html';
+          } else if (textPart?.body?.data) { 
+            body = this.decodeBase64(textPart.body.data); 
+            bodyMimeType = 'text/plain';
+          }
       } else if (message.payload.body?.data) {
+          // This case is usually for non-multipart messages or simple text emails
           body = this.decodeBase64(message.payload.body.data);
+          bodyMimeType = message.payload.mimeType || 'text/plain'; 
       }
 
       const attachmentsList = this.extractAttachments(message.payload);
+
+      // If body is still empty and there's an HTML attachment, try to use its content for analysis
+      if (!body && attachmentsList) {
+        const htmlAttachment = attachmentsList.find(att => att.mimeType === 'text/html' && att.attachmentId);
+        if (htmlAttachment) {
+          console.log(`EmailService: Body is empty for ${id}, attempting to use HTML attachment content.`);
+          // Log the raw payload specifically when we hit this condition to understand its structure
+          console.log(`EmailService: Raw message payload for ${id} (due to empty body with HTML attachment):`, JSON.stringify(message.payload, null, 2));
+          try {
+            // Fetch the attachment content
+            const attachmentPath = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/attachments/${htmlAttachment.attachmentId}`;
+            const attachmentResponse = await this.googleClient.request<{ data: string }>(attachmentPath, { method: 'GET' });
+            if (attachmentResponse && attachmentResponse.data) {
+              body = this.decodeBase64(attachmentResponse.data);
+              bodyMimeType = 'text/html'; // Assume it's HTML
+              console.log(`EmailService: Successfully used HTML attachment content as body for ${id}. Body length: ${body.length}`);
+            } else {
+              console.warn(`EmailService: Failed to fetch content for HTML attachment ${htmlAttachment.attachmentId} for email ${id}.`);
+            }
+          } catch (attFetchError) {
+            console.error(`EmailService: Error fetching HTML attachment ${htmlAttachment.attachmentId} for email ${id}:`, attFetchError);
+          }
+        }
+      }
       
       const emailMessage: EmailMessage = {
         id: message.id,
@@ -215,7 +250,8 @@ export class EmailService {
         attachments: attachmentsList,
         read: !labels.includes('UNREAD'),
         starred: labels.includes('STARRED'),
-        important: labels.includes('IMPORTANT')
+        important: labels.includes('IMPORTANT'),
+        bodyMimeType
       };
 
       // Analyze the email after fetching its details
@@ -251,10 +287,16 @@ export class EmailService {
    */
   private decodeBase64(data: string): string {
     try {
-      return Buffer.from(data, 'base64').toString('utf-8');
-    } catch (e) {
-      console.error('Error decoding base64 string:', e);
-      return '';
+      // MODIFIED: Use atob for browser environments
+      // Replace URL-safe characters just in case, then decode
+      const safeData = data.replace(/-/g, '+').replace(/_/g, '/');
+      return decodeURIComponent(escape(atob(safeData)));
+    } catch (error) {
+      console.error('Error decoding base64 string:', error, 'Input data:', data.substring(0, 100) + '...'); // Log part of the problematic data
+      // Fallback or re-throw, depending on desired behavior.
+      // Returning an empty string or a placeholder might be safer than throwing an error
+      // if some emails might have malformed base64 content.
+      return '[Error: Could not decode email content]'; 
     }
   }
   
@@ -281,22 +323,23 @@ export class EmailService {
    * Get mock emails for development
    */
   private getMockEmails(options: EmailQuery = {}): EmailResponse {
-    const { pageSize = this.maxResults } = options;
-    
+    const { pageSize = this.maxResults, folderId, search, labelId } = options;
+    const currentFolder = folderId || labelId || 'INBOX'; // Determine current folder for prefixing
+
     const mockMessages: EmailMessage[] = Array.from({ length: pageSize }).map((_, i) => ({
-      id: `mock_${i}_${Date.now()}`,
-      threadId: `thread_mock_${i}`,
-      subject: `Mock Subject ${i + 1}`,
-      from: `sender${i}@example.com`,
+      id: `mock_${currentFolder}_${i}_${Date.now()}`,
+      threadId: `thread_mock_${currentFolder}_${i}`,
+      subject: `[${currentFolder}] Mock Subject ${i + 1}`,
+      from: `${currentFolder.toLowerCase()}_sender${i}@example.com`,
       to: 'user@example.com',
       date: new Date(Date.now() - i * 3600000).toISOString(),
-      body: `This is the mock body for email ${i + 1}. Query: ${options.search || 'N/A'}`,
-      snippet: `Mock snippet ${i + 1}`,
-      labels: [options.folderId || options.labelId || 'INBOX', i % 3 === 0 ? 'UNREAD' : 'READ', i % 5 === 0 ? 'STARRED' : ''].filter(Boolean),
-      attachments: i % 4 === 0 ? [{ filename: 'mock.pdf'}] : undefined,
+      body: `This is the mock body for email ${i + 1} in folder ${currentFolder}. Query: ${search || 'N/A'}`,
+      snippet: `Mock snippet ${i + 1} from folder ${currentFolder}`,
+      labels: [currentFolder, i % 3 === 0 ? 'UNREAD' : 'READ', i % 5 === 0 ? 'STARRED' : ''].filter(Boolean),
+      attachments: i % 4 === 0 ? [{ filename: `mock_attachment_${currentFolder}_${i}.pdf`}] : undefined,
       read: i % 3 !== 0,
       starred: i % 5 === 0,
-      important: false
+      important: i % 7 === 0 
     }));
     
     return {
@@ -310,7 +353,9 @@ export class EmailService {
    * Get mock email details for development
    */
   private getMockEmailDetails(id: string): EmailMessage {
-    const i = parseInt(id.split('_')[1] || '0');
+    const parts = id.split('_');
+    const currentFolder = parts.length > 3 ? parts[1] : 'INBOX'; // Extract folder name, default to INBOX
+    const i = parseInt(parts.length > 3 ? parts[2] : (parts[1] || '0')); // Extract index
 
     // Define a mock analysis object
     const mockAnalysis: EmailAnalysis = {
@@ -320,41 +365,44 @@ export class EmailService {
       sentiment: i % 2 === 0 ? 'positive' : 'neutral',
       actionItems: [`Mock action for ${id} - item 1`, `Mock action for ${id} - item 2`],
       summary: `This is a generated mock summary for email ${id}. It highlights key mock points and suggests mock actions.`,
-      keywords: ['mock', 'email', `id-${i}`],
+      keywords: ['mock', 'email', `id-${i}`, currentFolder.toLowerCase()],
       isReplyRequired: i % 4 !== 0, // Mostly true, sometimes false
-      suggestedReply: i % 4 !== 0 ? `Thanks for the mock email ${id}!` : undefined,
+      suggestedReply: i % 4 !== 0 ? `Thanks for the mock email ${id} from ${currentFolder}!` : undefined,
       followUpDate: i % 5 === 0 ? new Date(Date.now() + 24 * 3600000).toISOString() : undefined, // Follow up tomorrow sometimes
       meetingDetails: i % 6 === 0 ? {
-        startTime: new Date(Date.now() + 2 * 24 * 3600000).toISOString(),
+        eventDate: new Date(Date.now() + 2 * 24 * 3600000).toISOString().split('T')[0],
+        eventTime: new Date(Date.now() + (2 * 24 + 1) * 3600000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
         endTime: new Date(Date.now() + (2 * 24 + 1) * 3600000).toISOString(),
         location: 'Mock Meeting Room',
         attendees: ['mock.attendee@example.com'],
-        description: 'Discuss mock project updates.'
+        description: `Discuss mock project updates for ${currentFolder}.`
       } : undefined
     };
 
      return {
         id: id,
-        threadId: `thread_mock_${i}`,
-        subject: `Mock Subject ${i + 1}`,
-        from: `sender${i}@example.com`,
+        threadId: `thread_mock_${currentFolder}_${i}`,
+        subject: `[${currentFolder}] Mock Subject ${i + 1}`, // Consistent subject
+        from: `${currentFolder.toLowerCase()}_sender${i}@example.com`, // Consistent sender
         to: 'user@example.com',
         date: new Date(Date.now() - i * 3600000).toISOString(),
-        body: `This is the detailed mock body for email ${id}. It might contain <strong>HTML</strong> content.`, 
-        snippet: `Mock snippet ${i + 1}`,
-        labels: ['INBOX', i % 3 === 0 ? 'UNREAD' : 'READ', i % 5 === 0 ? 'STARRED' : ''].filter(Boolean),
-        attachments: i % 4 === 0 ? [{ filename: 'mock.pdf'}] : undefined,
+        body: `This is the detailed mock body for email ${id} from folder ${currentFolder}. It might contain <strong>HTML</strong> content.`, 
+        snippet: `Mock snippet ${i + 1} from folder ${currentFolder}`,
+        labels: [currentFolder, i % 3 === 0 ? 'UNREAD' : 'READ', i % 5 === 0 ? 'STARRED' : ''].filter(Boolean), // Consistent labels
+        attachments: i % 4 === 0 ? [{ filename: `mock_attachment_${currentFolder}_${i}.pdf`}] : undefined, // Consistent attachments
         read: i % 3 !== 0,
         starred: i % 5 === 0,
-        important: false,
+        important: i % 7 === 0, // Consistent with list view if important was based on i % 7
         analysis: mockAnalysis // Add the mock analysis here
      };
   }
 
   async getAccounts(): Promise<EmailAccount[]> {
-    const { useMock } = getEnv();
+    // MODIFIED: Rely on googleClient's mock status
+    // const { useMock } = getEnv(); // REMOVED
     
-    if (useMock) {
+    // if (useMock) { // REPLACED
+    if (this.googleClient.isUsingMockData()) { // ADDED
       return [{
         id: 'mock-account-1',
         email: 'mock@example.com',
@@ -508,6 +556,7 @@ export class EmailService {
       return null;
     }
 
+    // Enhanced prompt for court document and calendar event extraction
     const prompt = `
 Given the following email content:
 
@@ -522,14 +571,28 @@ Please analyze this email and provide the following information in a VALID JSON 
   "summary": "A concise summary of the email content (2-3 sentences).",
   "actionItems": ["An array of distinct action items or tasks mentioned. If none, provide an empty array."],
   "sentiment": "The overall sentiment ('positive', 'negative', 'neutral', 'urgent').",
-  "keywords": ["An array of 5-7 most relevant keywords or key phrases."],
+  "keywords": ["An array of 5-7 most relevant keywords or key phrases extracted from the body and subject."],
   "priority": "A suggested priority ('low', 'medium', 'high') based on content and urgency.",
-  "isReplyRequired": "A boolean value (true or false) indicating if a reply appears to be requested."
+  "isReplyRequired": "A boolean value (true or false) indicating if a reply appears to be requested.",
+  "isCourtDocument": "boolean, true if this email appears to be an official court document (e.g., Notice of Hearing, Order, Adjudication notice), otherwise false.",
+  "category": "Categorize the email (e.g., 'Legal', 'Finance', 'Personal', 'Court Notice'). If it is a court document, use 'Court Notice'.",
+  "meetingDetails": {
+    "caseNumber": "The case number (e.g., ADJ1234567, WC012345) if present, especially for court documents. Null if not applicable.",
+    "eventType": "The type of event if this is a notice (e.g., 'Notice of Hearing', 'Order', 'Continuance', 'Filing Confirmation', 'General Court Document'). Null if not applicable.",
+    "eventDate": "The primary date for the event or document (YYYY-MM-DD format). Null if not applicable.",
+    "eventTime": "The primary time for the event (HH:MM AM/PM format). Null if not applicable.",
+    "location": "The location of the event, if specified (e.g., 'VNO', 'Courtroom 5', 'Telephonic'). Null if not applicable.",
+    "description": "A brief description of the event or the essence of the court document. Null if not applicable."
+  }
 }
 
 Ensure the output is ONLY the JSON object, with no other text before or after it.
-Action items should be specific and actionable.
-Keywords should be relevant and concise.
+If a field within meetingDetails is not applicable or not found, its value should be null.
+For 'isCourtDocument', be sure it is true if terms like 'Notice of Hearing', 'Adjudication', 'WC01', 'Order', 'Court' are prominent.
+Extract keywords from both subject and body.
+The eventDate should be the specific date mentioned for a hearing or deadline.
+The eventType should clearly state what kind of document or event it is.
+The caseNumber is critical for linking related court documents.
 `;
 
     try {
@@ -543,30 +606,41 @@ Keywords should be relevant and concise.
         return null;
       }
 
-      // Attempt to parse the JSON string from the AI response
       let parsedAnalysis: any;
       try {
-        // The AI might sometimes include markdown backticks around the JSON
-        const cleanedResponse = rawAnalysis.replace(/^```json\s*|\s*```$/g, '');
-        parsedAnalysis = JSON.parse(cleanedResponse);
+        const cleanedResponse = rawAnalysis.replace(/^```json\s*|\s*```$/g, '').trim();
+        // Attempt to extract JSON object if it's embedded
+        const jsonStart = cleanedResponse.indexOf('{');
+        const jsonEnd = cleanedResponse.lastIndexOf('}');
+        
+        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+          const jsonString = cleanedResponse.substring(jsonStart, jsonEnd + 1);
+          console.log('EmailService: Attempting to parse extracted JSON string:', jsonString); // Log the string we attempt to parse
+          parsedAnalysis = JSON.parse(jsonString);
+        } else {
+          console.error('EmailService: Could not find valid JSON block in AI response. Cleaned response:', cleanedResponse);
+          return null;
+        }
       } catch (parseError) {
         console.error('EmailService: Failed to parse AI analysis JSON for email ID', email.id, parseError);
-        console.error('Raw AI response was:', rawAnalysis); // Log the raw response for debugging
-        // Optionally, try to extract parts with regex if JSON is consistently malformed,
-        // or return null / a partial analysis object.
+        console.error('Raw AI response was:', rawAnalysis);
+        // console.error('Cleaned response before parse attempt was:', cleanedResponse); // This was the old log, replaced by the one in the if block
         return null;
       }
       
       // Validate and structure the parsed data into EmailAnalysis type
-      // Basic validation to ensure all expected fields are present
-      const requiredFields: Array<keyof EmailAnalysis> = ['summary', 'actionItems', 'sentiment', 'keywords', 'priority', 'isReplyRequired'];
+      const requiredFields: Array<keyof EmailAnalysis> = ['summary', 'actionItems', 'sentiment', 'keywords', 'priority', 'isReplyRequired', 'isCourtDocument', 'category'];
       for (const field of requiredFields) {
         if (parsedAnalysis[field] === undefined) {
           console.warn(`EmailService: AI analysis for email ID ${email.id} missing field: ${field}. Raw:`, parsedAnalysis);
-          // Decide how to handle missing fields: return null, or an analysis object with missing parts?
-          // For now, let's be strict and expect all fields.
+          // Setting default for isCourtDocument if missing, though prompt asks for it.
+          if (field === 'isCourtDocument') parsedAnalysis[field] = false; 
         }
       }
+      
+      // Ensure meetingDetails exists, even if empty, if isCourtDocument is true or if AI provides it.
+      // The prompt asks for null for sub-fields if not applicable.
+      const rawMd = parsedAnalysis.meetingDetails;
 
       const analysisResult: EmailAnalysis = {
         messageId: email.id,
@@ -576,18 +650,97 @@ Keywords should be relevant and concise.
         keywords: Array.isArray(parsedAnalysis.keywords) ? parsedAnalysis.keywords : [],
         priority: parsedAnalysis.priority || 'medium',
         isReplyRequired: typeof parsedAnalysis.isReplyRequired === 'boolean' ? parsedAnalysis.isReplyRequired : false,
-        // category, meetingDetails, suggestedReply, followUpDate would be new features or derived
-        category: parsedAnalysis.category || '', // If Gemini can provide this
-        // For meetingDetails, suggestedReply, followUpDate, Gemini might need more specific prompting
-        // or these could be derived/handled by separate logic post-analysis.
+        isCourtDocument: typeof parsedAnalysis.isCourtDocument === 'boolean' ? parsedAnalysis.isCourtDocument : false,
+        category: parsedAnalysis.category || (parsedAnalysis.isCourtDocument ? 'Court Notice' : 'General'),
+        meetingDetails: rawMd ? {
+          caseNumber: rawMd.caseNumber || undefined,
+          eventType: rawMd.eventType || undefined,
+          eventDate: rawMd.eventDate || undefined,
+          eventTime: rawMd.eventTime || undefined,
+          location: rawMd.location || undefined,
+          description: rawMd.description || undefined,
+          endTime: rawMd.endTime || undefined,
+          attendees: Array.isArray(rawMd.attendees) ? rawMd.attendees : [],
+        } : undefined, // If rawMd is falsy, meetingDetails is undefined
+        suggestedReply: parsedAnalysis.suggestedReply || undefined,
+        followUpDate: parsedAnalysis.followUpDate || undefined,
       };
       
-      console.log(`EmailService: Successfully analyzed email ID ${email.id}`);
+      console.log(`EmailService: Successfully analyzed email ID ${email.id}. Analysis:`, JSON.stringify(analysisResult, null, 2));
       return analysisResult;
 
     } catch (error) {
       console.error('EmailService: Error during AI email analysis for ID', email.id, error);
       return null;
+    }
+  }
+
+  async sendEmail(to: string, subject: string, htmlBody: string): Promise<any> {
+    console.log(`[EmailService] Attempting to send email to: ${to} with subject: ${subject}`);
+
+    // Ensure GoogleAPIClient is initialized. Initialize is idempotent.
+    // Provide a default onAuthChange or use one from your app's context if available.
+    await googleApiClient.initialize(() => {}); 
+
+    // Ensure user is signed in and has consented to necessary scopes (including gmail.send)
+    // signIn() will request token and trigger consent if needed, and is also idempotent if already signed in.
+    await googleApiClient.signIn();
+    
+    // Check again after attempting sign-in, as signIn itself doesn't throw an error on failure to get token,
+    // but updates isAuthenticated state which isSignedIn() reflects.
+    if (!googleApiClient.isSignedIn()) {
+        console.error('[EmailService] Google Sign-In failed or user not authenticated. Cannot send email.');
+        throw new Error('Google Sign-In/Authentication required to send email.');
+    }
+    
+    let fromEmail = 'me'; // Default to 'me' for the API user ID
+    try {
+        // Attempt to get the actual user email for the 'From' header for clarity, though Gmail API uses authenticated user.
+        const userInfo = await googleApiClient.getUserInfo();
+        if (userInfo && userInfo.email) {
+            fromEmail = userInfo.email; 
+        } else {
+            console.warn('[EmailService] Could not retrieve user email for From header. Gmail will use authenticated user.');
+        }
+    } catch (error) {
+        console.warn('[EmailService] Error fetching user info for From header. Gmail will use authenticated user.', error);
+    }
+
+    // Construct the raw email message (RFC 2822 format)
+    const emailLines = [];
+    // The From header should ideally be the authenticated user's email address.
+    // Using the variable `fromEmail` which defaults to 'me' if userInfo.email isn't fetched.
+    // For the Gmail API `users/me/messages/send` endpoint, the authenticated user is implied.
+    // Some strict RFC interpretations might want a full email here, but Gmail is often flexible.
+    emailLines.push(`From: <${fromEmail}>`); 
+    emailLines.push(`To: <${to}>`);
+    emailLines.push(`Subject: ${subject}`);
+    emailLines.push('Content-Type: text/html; charset=utf-8');
+    emailLines.push('MIME-Version: 1.0');
+    emailLines.push(''); // Blank line separates headers from body
+    emailLines.push(htmlBody);
+
+    const rawEmail = emailLines.join('\r\n');
+
+    const base64EncodedEmail = btoa(rawEmail)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    try {
+      console.log('[EmailService] Sending raw email via Gmail API.');
+      const response = await googleApiClient.request<any>(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        {
+          method: 'POST',
+          body: JSON.stringify({ raw: base64EncodedEmail }),
+        }
+      );
+      console.log('[EmailService] Email sent successfully. Response:', response);
+      return response;
+    } catch (error) {
+      console.error('[EmailService] Error sending email via Gmail API:', error);
+      throw error; 
     }
   }
 }

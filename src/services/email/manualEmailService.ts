@@ -1,37 +1,37 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { Email } from '../../types';
+import type { EmailMessage as Email } from './types';
 
 // Initial demo data
 const demoEmails: Email[] = [
   {
     id: uuidv4(),
+    threadId: uuidv4(),
     subject: 'Welcome to GenieflowAI',
     from: 'support@genieflow.ai',
     to: ['user@example.com'],
-    content: 'Thank you for trying GenieflowAI. Get started by exploring our features...',
-    date: new Date(),
+    body: 'Thank you for trying GenieflowAI. Get started by exploring our features...',
+    date: new Date().toISOString(),
     read: false,
-    category: 'inbox'
   },
   {
     id: uuidv4(),
+    threadId: uuidv4(),
     subject: 'Project Update: Q4 Goals',
     from: 'manager@company.com',
     to: ['user@example.com'],
-    content: 'Here are our key objectives for Q4...',
-    date: new Date(Date.now() - 86400000), // 1 day ago
+    body: 'Here are our key objectives for Q4...',
+    date: new Date(Date.now() - 86400000).toISOString(),
     read: true,
-    category: 'inbox'
   },
   {
     id: uuidv4(),
+    threadId: uuidv4(),
     subject: 'Meeting Notes: Product Review',
     from: 'team@company.com',
     to: ['user@example.com'],
-    content: 'Summary of today\'s product review meeting...',
-    date: new Date(Date.now() - 172800000), // 2 days ago
+    body: 'Summary of today\'s product review meeting...',
+    date: new Date(Date.now() - 172800000).toISOString(),
     read: false,
-    category: 'inbox'
   }
 ];
 
@@ -42,15 +42,15 @@ export async function fetchEmails(): Promise<Email[]> {
 }
 
 export async function sendEmail(email: Partial<Email>): Promise<boolean> {
-  const newEmail = {
+  const newEmail: Email = {
     id: uuidv4(),
+    threadId: email.threadId || uuidv4(),
     subject: email.subject || '',
     from: 'user@example.com',
     to: email.to || [],
-    content: email.content || '',
-    date: new Date(),
+    body: email.body || '',
+    date: new Date().toISOString(),
     read: true,
-    category: email.category || 'sent'
   };
 
   emails = [newEmail, ...emails];
@@ -64,23 +64,18 @@ export async function markEmailAsRead(emailId: string): Promise<void> {
 }
 
 export async function archiveEmail(emailId: string): Promise<void> {
-  emails = emails.map(email =>
-    email.id === emailId ? { ...email, category: 'archive' } : email
-  );
+  console.warn('archiveEmail needs to be adapted to use labels instead of categories.');
 }
 
 export async function deleteEmail(emailId: string): Promise<void> {
-  emails = emails.map(email =>
-    email.id === emailId ? { ...email, category: 'trash' } : email
-  );
+  console.warn('deleteEmail needs to be adapted to use labels/folders instead of categories.');
 }
 
 export async function moveEmail(emailId: string, category: string): Promise<void> {
-  emails = emails.map(email =>
-    email.id === emailId ? { ...email, category } : email
-  );
+  console.warn('moveEmail needs to be adapted to use labels/folders instead of categories.');
 }
 
 export async function getEmailsByCategory(category: string): Promise<Email[]> {
-  return emails.filter(email => email.category === category);
+  console.warn('getEmailsByCategory needs to be adapted to use labels/folders instead of categories.');
+  return [];
 }

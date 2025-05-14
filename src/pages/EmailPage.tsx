@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Plus, Search, Inbox, Send, Archive, Trash, Mail, RefreshCw, Folder as FolderIcon } from 'lucide-react';
 import { useEmail } from '../contexts/EmailContext';
 import { EmailComposer } from '../components/email/EmailComposer';
@@ -12,6 +12,8 @@ import { cn } from '../lib/utils';
 import { EmailMessage, EmailDraft, EmailAccount } from '../services/email/types';
 import emailServiceAdapter from '../services/email/EmailServiceAdapter';
 import { toast } from 'sonner';
+import { EmailToolbar } from '../components/email/EmailToolbar';
+// import { EmailEmptyState } from '../components/email/EmailEmptyState'; // Temporarily commented out
 
 // Define the type for replyTo data directly, matching EmailComposer's expectation
 interface ComposerReplyData {
@@ -41,7 +43,7 @@ export function EmailPage() {
   const navigate = useNavigate();
   const params = useParams<{ accountId?: string; folderId?: string; messageId?: string }>();
   const { accountId: routeAccountId, folderId: routeFolderId, messageId: routeMessageId } = params;
-  console.log('EmailPage: Route params:', params);
+  console.log('EmailPage: Route params destructured:', { routeAccountId, routeFolderId, routeMessageId });
 
   const { user, loading: authLoading } = useSupabase();
   const {
@@ -55,6 +57,12 @@ export function EmailPage() {
     selectAccount,
   } = useEmail();
 
+  // Store getMessages in a ref to keep a stable reference for the useEffect
+  const getMessagesRef = useRef(getMessages);
+  useEffect(() => {
+    getMessagesRef.current = getMessages;
+  }, [getMessages]);
+
   const [showCompose, setShowCompose] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentFolderId, setCurrentFolderId] = useState<string>((routeFolderId || 'INBOX').toUpperCase());
@@ -65,23 +73,18 @@ export function EmailPage() {
   const [composerForwardData, setComposerForwardData] = useState<ComposerForwardData | undefined>(undefined);
   const [composerReplyAllData, setComposerReplyAllData] = useState<ComposerReplyAllData | undefined>(undefined);
 
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    if (accounts.length === 0 && !emailContextLoading && !authLoading) { // ensure accounts are checked after auth
-      navigate('/email/connect');
-      return;
-    }
-
-    const accountIdToUse = routeAccountId || selectedAccountId;
-    if (accountIdToUse && getMessages && currentFolderId && !routeMessageId) {
-      console.log(`EmailPage: Initial message fetch for list. Account: ${accountIdToUse}, Folder: ${currentFolderId}`);
-      getMessages(accountIdToUse, { folderId: currentFolderId, pageSize: 25 });
-    }
-  }, [user, authLoading, accounts, routeAccountId, selectedAccountId, getMessages, currentFolderId, navigate, emailContextLoading, routeMessageId]);
+  // ADDED LOG START
+  console.log(
+    `%c[EmailPage] Attempting to render list for folder: ${currentFolderId}.%c Messages in context (%c${messages ? messages.length : 'N/A'}%c):`,
+    'color:MediumTurquoise; font-weight:bold;',
+    'color:default;',
+    'font-weight:bold;',
+    'color:default;',
+    messages && messages.length > 0
+      ? messages.slice(0, 5).map(m => ({ id: m.id, subject: m.subject, date: m.date }))
+      : (messages ? 'Context messages array is empty' : 'Context messages is null/undefined')
+  );
+  // ADDED LOG END
 
   useEffect(() => {
     if (routeFolderId) {
@@ -90,6 +93,27 @@ export function EmailPage() {
       setCurrentFolderId('INBOX');
     }
   }, [routeFolderId, routeMessageId]);
+
+  useEffect(() => {
+    if (!authLoading && user && accounts.length === 0 && !emailContextLoading) {
+      console.log('EmailPage: No accounts found, navigating to /email/connect');
+      navigate('/email/connect');
+    }
+  }, [user, authLoading, accounts, emailContextLoading, navigate]);
+
+  useEffect(() => {
+    if (authLoading || !user) return; // Wait for auth, ensure user exists
+
+    const accountIdToUse = routeAccountId || selectedAccountId;
+    const hasCurrentFolder = typeof currentFolderId === 'string' && currentFolderId !== '';
+    const isNotDetailView = typeof routeMessageId === 'undefined' || routeMessageId === '';
+
+    // Explicit checks for currentFolderId and routeMessageId
+    if (accountIdToUse && hasCurrentFolder && isNotDetailView) {
+      console.log(`EmailPage: Message fetch for list. Account: ${accountIdToUse}, Folder: ${currentFolderId}`);
+      getMessagesRef.current(accountIdToUse, { folderId: currentFolderId, pageSize: 25 }); // Restore fetch call
+    }
+  }, [user, authLoading, routeAccountId, selectedAccountId, currentFolderId, routeMessageId]);
 
   useEffect(() => {
     console.log('EmailPage: Detail fetch useEffect triggered. Params:', { routeAccountId, routeMessageId });
@@ -127,32 +151,32 @@ export function EmailPage() {
   const handleRefreshEmails = useCallback(() => {
     const accId = routeAccountId || selectedAccountId;
     if (accId && currentFolderId && !routeMessageId) { // Refresh list view only
-      getMessages(accId, { folderId: currentFolderId, pageSize: 25, search: searchQuery || undefined });
+      getMessagesRef.current(accId, { folderId: currentFolderId, pageSize: 25, search: searchQuery || undefined });
     } else if (accId && routeMessageId) { // Potentially re-fetch detail view if needed, or rely on cache
         // For now, detail view re-fetches via its own useEffect if routeMessageId changes.
         // Manual refresh for detail view could be added here if desired.
         toast.info("Email detail refreshed (or re-fetched if changed).")
     }
-  }, [routeAccountId, selectedAccountId, currentFolderId, getMessages, searchQuery, routeMessageId]);
+  }, [routeAccountId, selectedAccountId, currentFolderId, getMessagesRef, searchQuery, routeMessageId]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
     const accId = routeAccountId || selectedAccountId;
     if (accId && currentFolderId && !routeMessageId) { // Search only in list view
-      getMessages(accId, { folderId: currentFolderId, pageSize: 25, search: query || undefined });
+      getMessagesRef.current(accId, { folderId: currentFolderId, pageSize: 25, search: query || undefined });
     }
-  }, [routeAccountId, selectedAccountId, currentFolderId, getMessages, routeMessageId]);
+  }, [routeAccountId, selectedAccountId, currentFolderId, getMessagesRef, routeMessageId]);
 
   const handleFolderSelect = useCallback((folderId: string) => {
     const accId = routeAccountId || selectedAccountId;
     if (accId) {
       const normalizedFolderId = folderId.toUpperCase();
-      // No need to setCurrentFolderId here as navigate will trigger useEffect for folderId
-      setSearchQuery(''); // Clear search when changing folder
+      // setSearchQuery(''); // Temporarily remove to simplify
+      console.log(`[EmailPage] handleFolderSelect: Navigating to /email/folder/${accId}/${normalizedFolderId}`);
       navigate(`/email/folder/${accId}/${normalizedFolderId}`);
     }
   }, [routeAccountId, selectedAccountId, navigate]);
-  
+
   const handleCloseDetailView = () => {
     console.log('[EmailPage] handleCloseDetailView called');
     const accId = routeAccountId || selectedAccountId;
@@ -266,7 +290,7 @@ export function EmailPage() {
       console.error('Error invoking archiveMessage:', error);
       toast.error('An unexpected error occurred while trying to archive.');
     }
-  }, [detailedEmail, selectedAccountId, routeAccountId, navigate, currentFolderId, getMessages, handleCloseDetailView]);
+  }, [detailedEmail, selectedAccountId, routeAccountId, navigate, currentFolderId, getMessagesRef, handleCloseDetailView]);
 
   const handleDelete = useCallback(async () => {
     const accountIdToDelete = routeAccountId || selectedAccountId;
@@ -296,7 +320,7 @@ export function EmailPage() {
       console.error('Error invoking deleteMessage:', error);
       toast.error('An unexpected error occurred while trying to delete.');
     }
-  }, [detailedEmail, selectedAccountId, routeAccountId, navigate, currentFolderId, getMessages, handleCloseDetailView]);
+  }, [detailedEmail, selectedAccountId, routeAccountId, navigate, currentFolderId, getMessagesRef, handleCloseDetailView]);
 
   const handleComposerSend = useCallback(async (draft: EmailDraft) => {
     const accountIdToSendFrom = draft.accountId || routeAccountId || selectedAccountId;
@@ -310,12 +334,12 @@ export function EmailPage() {
           {
               loading: 'Sending email...',
               success: () => {
-                  setShowCompose(false);
-                  setComposerReplyData(undefined);
+    setShowCompose(false);
+    setComposerReplyData(undefined);
                   setComposerForwardData(undefined);
                   setComposerReplyAllData(undefined);
                   if (currentFolderId && !routeMessageId) { // Refresh list if in list view
-                     getMessages(accountIdToSendFrom, { folderId: currentFolderId, pageSize: 25 });
+                     getMessagesRef.current(accountIdToSendFrom, { folderId: currentFolderId, pageSize: 25 });
                   } else if (routeMessageId) { // If sending from detail view, perhaps refresh that specific email or related thread
                     // For now, just closes composer.
                   }
@@ -328,7 +352,7 @@ export function EmailPage() {
       console.error('Error invoking sendMessage:', error);
       toast.error('An unexpected error occurred while trying to send.');
     }
-  }, [selectedAccountId, routeAccountId, currentFolderId, getMessages, routeMessageId]);
+  }, [selectedAccountId, routeAccountId, currentFolderId, getMessagesRef, routeMessageId]);
 
   const handleComposerSaveDraft = useCallback(async (draft: EmailDraft) => {
       const accountIdToSaveTo = draft.accountId || routeAccountId || selectedAccountId;
@@ -485,26 +509,28 @@ export function EmailPage() {
               if (folder.id.toUpperCase() === 'ARCHIVE') IconComponent = Archive;
               if (folder.id.toUpperCase() === 'TRASH' || folder.name.toUpperCase() === 'TRASH' || folder.id.toUpperCase() === 'DELETED' ) IconComponent = Trash;
               
+              const isSelected = currentFolderId === folder.id.toUpperCase();
+              
               return (
-                <a
+                <button
                   key={folder.id}
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); handleFolderSelect(folder.id); }}
+                  type="button"
+                  onClick={() => handleFolderSelect(folder.id)}
                   className={cn(
-                    "flex items-center px-3 py-2 text-sm rounded-md",
-                    currentFolderId === folder.id.toUpperCase() // Ensure comparison is consistent
+                    "w-full flex items-center px-3 py-2 text-sm rounded-md text-left",
+                    isSelected
                       ? "bg-muted text-primary font-medium"
                       : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                   )}
                 >
-                  <IconComponent className="h-4 w-4 mr-3" />
-                  <span className="flex-1 truncate">{folder.name}</span>
+                  <IconComponent className="h-4 w-4 mr-3 flex-shrink-0" />
+                  <span className="flex-1 truncate mr-2">{folder.name}</span>
                   {folder.unreadCount > 0 && (
-                     <span className="ml-auto bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full">
+                     <span className="ml-auto bg-primary text-primary-foreground text-xs font-medium px-2 py-0.5 rounded-full">
                       {folder.unreadCount}
                     </span>
                   )}
-                </a>
+                </button>
               );
             })}
           </nav>
@@ -545,7 +571,7 @@ export function EmailPage() {
                     key={email.id} 
                     className={cn(
                         "flex items-start gap-4 p-4 hover:bg-muted/80 dark:hover:bg-muted/20 cursor-pointer",
-                        !email.isRead && "bg-muted/50 dark:bg-muted/10"
+                        !email.read && "bg-muted/50 dark:bg-muted/10"
                     )}
                     onClick={() => {
                       const accountToNavigate = selectedAccountId || routeAccountId || accounts[0]?.id;
@@ -557,17 +583,17 @@ export function EmailPage() {
                       }
                     }}
                   >
-                    <div className={cn("w-2 h-2 rounded-full mt-1.5", !email.isRead ? "bg-primary" : "bg-transparent")} />
+                    <div className={cn("w-2 h-2 rounded-full mt-1.5", !email.read ? "bg-primary" : "bg-transparent")} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between">
-                        <span className={cn("font-medium truncate max-w-[200px] sm:max-w-[300px]", !email.isRead ? 'text-foreground' : 'text-muted-foreground')}>
+                        <span className={cn("font-medium truncate max-w-[200px] sm:max-w-[300px]", !email.read ? 'text-foreground' : 'text-muted-foreground')}>
                           {email.from}
                         </span>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {new Date(email.date).toLocaleDateString()} {new Date(email.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <h4 className={cn("font-medium mt-0.5 truncate", !email.isRead ? 'text-foreground' : 'text-muted-foreground')}>
+                      <h4 className={cn("font-medium mt-0.5 truncate", !email.read ? 'text-foreground' : 'text-muted-foreground')}>
                         {email.subject || "(no subject)"}
                       </h4>
                       <p className="text-sm text-muted-foreground truncate">
@@ -588,6 +614,8 @@ export function EmailPage() {
                     ? `No emails found for "${searchQuery}" in ${folders.find(f => f.id.toUpperCase() === currentFolderId)?.name || 'this folder'}.`
                     : `Your ${folders.find(f => f.id.toUpperCase() === currentFolderId)?.name || 'folder'} is empty.`}
                 </p>
+                {/* <EmailEmptyState /> was likely here or part of this block, commenting out its direct usage if it was standalone */}
+                {/* If EmailEmptyState took props or was more integrated, this is a simplified commenting out */}
                 {emailContextError && <p className="text-sm text-destructive mt-2">Error: {emailContextError.message}</p>}
               </div>
             )}

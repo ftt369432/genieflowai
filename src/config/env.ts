@@ -17,7 +17,7 @@ export interface EnvironmentConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
   // AI-related configurations
-  aiProvider: 'google' | 'xai' | 'deepseek';
+  aiProvider: 'google' | 'xai' | 'deepseek' | 'gemini';
   aiModel: string;
   geminiApiKey: string;
   hasGeminiApiKey: boolean;
@@ -53,6 +53,15 @@ export function getEnv(): EnvironmentConfig {
   const isDevelopment = import.meta.env.MODE === 'development';
   const isProduction = import.meta.env.MODE === 'production';
   
+  // ############ DEBUG LOGGING START ############
+  console.error(
+    '[DEBUG_ENV_TS] VITE_USE_MOCK raw value:',
+    import.meta.env.VITE_USE_MOCK,
+    '| type:',
+    typeof import.meta.env.VITE_USE_MOCK
+  );
+  // ############ DEBUG LOGGING END ############
+
   // Set up the base URL depending on environment
   const baseUrl = isDevelopment
     ? 'http://localhost:3000'

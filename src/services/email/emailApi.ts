@@ -1,14 +1,13 @@
+import googleAuthService from '../auth/googleAuth';
 import { EmailResponse } from './types';
-import { mockAuthService } from '../auth/googleAuth';
 
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 export async function fetchWithAuth<T>(
+  token: string,
   endpoint: string,
   options: RequestInit = {}
 ): Promise<EmailResponse<T>> {
-  const token = mockAuthService.getAccessToken();
-  
   try {
     const response = await fetch(`${GMAIL_API_BASE}${endpoint}`, {
       ...options,
@@ -40,9 +39,7 @@ export async function fetchWithAuth<T>(
   }
 }
 
-export async function makeGmailApiCall(endpoint: string, options: RequestInit = {}) {
-  const token = mockAuthService.getAccessToken();
-  
+export async function makeGmailApiCall(token: string, endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${GMAIL_API_BASE}${endpoint}`, {
     ...options,
     headers: {

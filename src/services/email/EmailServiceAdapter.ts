@@ -40,17 +40,8 @@ export class EmailService {
   
   // Account methods
   async getAccounts(): Promise<EmailAccount[]> {
-    // For now, return mock accounts
-    return [
-      {
-        id: 'mock-account-1',
-        provider: 'gmail',
-        email: 'user@gmail.com',
-        name: 'Gmail Account',
-        connected: true,
-        lastSynced: new Date()
-      }
-    ];
+    // MODIFIED: Call the actual emailService for accounts
+    return emailService.getAccounts();
   }
   
   async addGoogleAccount(code?: string): Promise<EmailAccount> {
@@ -170,7 +161,43 @@ export class EmailService {
   }
   
   async sendMessage(accountId: string, message: Partial<EmailMessage>): Promise<void> {
-    console.log(`Sending message from account ${accountId}:`, message);
+    console.log(`[EmailServiceAdapter] sendMessage called for account ${accountId}:`, JSON.stringify(message));
+
+    const toRecipients = message.to;
+    const subject = message.subject;
+    const body = message.body;
+
+    let primaryTo: string;
+    if (Array.isArray(toRecipients)) {
+      primaryTo = toRecipients.join(', '); 
+    } else if (typeof toRecipients === 'string') {
+      primaryTo = toRecipients;
+    } else {
+      console.error('[EmailServiceAdapter] To field is missing or invalid in message object.');
+      throw new Error("Recipient (To) field is required to send an email.");
+    }
+
+    if (typeof subject !== 'string' || subject.trim() === '') {
+      console.error('[EmailServiceAdapter] Subject field is missing or empty in message object.');
+      throw new Error('Subject field is required to send an email.');
+    }
+
+    if (typeof body !== 'string') { // Body can be empty, but must be a string
+      console.error('[EmailServiceAdapter] Body field is missing or not a string in message object.');
+      throw new Error('Body field is required and must be a string to send an email.');
+    }
+
+    // Note: CC and BCC from message.cc and message.bcc are not yet handled by emailService.sendEmail.
+    // The current emailService.sendEmail only takes a single `to` string, `subject`, and `htmlBody`.
+
+    try {
+      // Calling the actual sendEmail method from the imported emailService instance
+      await emailService.sendEmail(primaryTo, subject, body);
+      console.log(`[EmailServiceAdapter] Email to ${primaryTo} sent successfully via emailService.`);
+    } catch (error) {
+      console.error(`[EmailServiceAdapter] Error calling emailService.sendEmail:`, error);
+      throw error; // Re-throw so UI can catch it
+    }
   }
   
   async saveDraft(accountId: string, draft: Partial<EmailMessage>): Promise<{ message: EmailMessage }> {

@@ -5,7 +5,9 @@
  */
 
 // Import the service class and instance from the refactored implementation
-import emailService, { EmailMessage, EmailOptions, EmailResponse } from './emailService';
+import emailService from './emailService';
+// MODIFIED: Import types directly from ./types.ts, replacing EmailOptions with EmailQuery
+import { EmailMessage, EmailQuery, EmailResponse, EmailFolder, EmailLabel, EmailAccount, EmailFilter, IMAPConfig, EmailPreferences, EmailAnalysis } from './types';
 
 // Create a reference to the EmailService class
 const EmailService = emailService.constructor as any;
@@ -16,21 +18,28 @@ export { EmailService };
 // Export types from the refactored service
 export type { 
   EmailMessage,
-  EmailOptions,
-  EmailResponse
-};
-
-// Re-export the types from the original EmailService for backward compatibility
-export type {
+  EmailQuery, // MODIFIED: Changed from EmailOptions to EmailQuery
+  EmailResponse,
   EmailFolder,
   EmailLabel,
   EmailAccount,
   EmailFilter,
-  EmailQuery,
   IMAPConfig,
   EmailPreferences,
-  EmailAnalysis,
-} from './types';
+  EmailAnalysis
+};
+
+// Re-export the types from the original EmailService for backward compatibility
+// export type { // This block can be removed if the above export type block covers all necessary re-exports
+//   EmailFolder,
+//   EmailLabel,
+//   EmailAccount,
+//   EmailFilter,
+//   EmailQuery,
+//   IMAPConfig,
+//   EmailPreferences,
+//   EmailAnalysis,
+// } from './types'; // This import is now redundant
 
 // Export the singleton instance
 export { emailService };

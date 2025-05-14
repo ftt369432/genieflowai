@@ -57,10 +57,10 @@ export class GoogleUserProfileService {
       }
 
       // Fetch the user's profile from Google
-      const userInfo = await this.googleApiClient.request<GoogleUserInfo>({
-        path: 'https://www.googleapis.com/oauth2/v3/userinfo',
-        method: 'GET'
-      });
+      const userInfo = await this.googleApiClient.request<GoogleUserInfo>(
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        { method: 'GET' }
+      );
 
       return userInfo;
     } catch (error) {
@@ -75,6 +75,10 @@ export class GoogleUserProfileService {
   async getProfilePictureUrl(): Promise<string> {
     try {
       const profile = await this.getUserProfile();
+      if (!profile.picture) {
+        console.warn('User profile picture not found.');
+        return '';
+      }
       return profile.picture;
     } catch (error) {
       console.error('Failed to fetch Google profile picture:', error);

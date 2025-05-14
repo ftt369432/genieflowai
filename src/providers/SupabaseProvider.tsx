@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { SupabaseClient, User, Session } from '@supabase/supabase-js';
 import { registerSupabaseUserSetter } from '../services/auth/authService';
 import { GoogleAPIClient } from '../services/google/GoogleAPIClient';
@@ -11,7 +11,7 @@ interface SupabaseContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  setMockUser: (userData: { id: string; email: string; fullName?: string }) => void;
+  setMockUser: (userData: { id: string; email: string; fullName?: string }) => void; // Reverted to synchronous
   clearSession: () => void;
 }
 
@@ -24,21 +24,40 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Function to set mock user for development
-  const setMockUser = (userData: { id: string; email: string; fullName?: string }) => {
-    const mockUser = {
+  // Function to set mock user for development - SIMPLIFIED
+  const setMockUser = (userData: { id: string; email: string; fullName?: string }): void => {
+    console.log('SupabaseProvider: setMockUser (simplified) called with:', userData);
+    const mockUserObject: User = {
       id: userData.id,
-      email: userData.email,
-      user_metadata: {
-        full_name: userData.fullName || 'Test User'
-      },
-      app_metadata: {},
       aud: 'authenticated',
-      created_at: new Date().toISOString()
-    } as User;
-    
-    setUser(mockUser);
-    setLoading(false);
+      role: 'authenticated',
+      email: userData.email,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      app_metadata: {
+        provider: 'mock',
+        providers: ['mock'],
+      },
+      user_metadata: {
+        full_name: userData.fullName || 'Test User',
+      },
+      email_confirmed_at: new Date().toISOString(),
+      last_sign_in_at: new Date().toISOString(),
+    };
+
+    const mockSessionObject: Session = {
+      access_token: 'mock-simplified-access-token', // No longer a complex JWT
+      refresh_token: 'mock-simplified-refresh-token',
+      user: mockUserObject,
+      expires_in: 3600,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      token_type: 'bearer',
+    };
+
+    setUser(mockUserObject);
+    setSession(mockSessionObject);
+    setLoading(false); // Set loading to false as this is a direct state update
+    console.log('SupabaseProvider: Internal user and session state updated with mock data (simplified).');
   };
   
   // Function to clear session data
@@ -62,35 +81,33 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     registerSupabaseUserSetter(setMockUser);
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      // Initialize Google API client with the provider token if available
-      if (session?.provider_token) {
-        const googleClient = GoogleAPIClient.getInstance();
-        googleClient.setAccessToken(session.provider_token);
-      }
-      
-      setLoading(false);
-      console.log('Supabase auth initialized:', session ? 'User authenticated' : 'No user');
-    });
-
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event);
+      console.log('SupabaseProvider: Auth state change (from SupabaseProvider):', event, 'Session:', session);
       
       if (event === 'SIGNED_OUT') {
         clearSession();
-      } else {
-        setSession(session);
-        setUser(session?.user ?? null);
+      } else if (event === 'USER_UPDATED' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        // Check if the session and user are different before setting state to avoid infinite loops
+        setSession(prevSession => {
+          if (JSON.stringify(prevSession) !== JSON.stringify(session)) {
+            return session;
+          }
+          return prevSession;
+        });
+        setUser(prevUser => {
+          if (JSON.stringify(prevUser) !== JSON.stringify(session?.user ?? null)) {
+            return session?.user ?? null;
+          }
+          return prevUser;
+        });
         
         // Update Google API client token when auth state changes
         if (session?.provider_token) {
           const googleClient = GoogleAPIClient.getInstance();
           googleClient.setAccessToken(session.provider_token);
         }
+      } else {
+        console.log('SupabaseProvider: Unhandled auth event in onAuthStateChange:', event);
       }
       
       setLoading(false);
@@ -109,10 +126,10 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 };
 
 // Hook to use Supabase context
-export const useSupabase = () => {
+export const useSupabase = (): SupabaseContextType => {
   const context = useContext(SupabaseContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useSupabase must be used within a SupabaseProvider');
   }
   return context;
-}; 
+};

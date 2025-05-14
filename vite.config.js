@@ -6,6 +6,19 @@ import { visualizer } from 'rollup-plugin-visualizer';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
+  // Moved logging here
+  console.log('\n Vite config function executing...');
+  console.log(` Command: ${command}, Mode: ${mode}`);
+  console.log('Vite loaded env variables (from process.env):');
+  for (const key in process.env) {
+    if (key.startsWith('VITE_')) {
+      console.log(`  ${key}: ${process.env[key]}`);
+    }
+  }
+  // Vite also exposes env variables on import.meta.env during the build process
+  // but for direct inspection like this, process.env is what's typically populated by .env files
+  // and plugins like vite-plugin-env-compatible.
+
   const isProd = mode === 'production';
   
   return {

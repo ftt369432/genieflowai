@@ -39,7 +39,6 @@ export * from './integration';
 
 // Other Services
 export * from './driveService';
-export * from './GoogleApiService';
 export * from './LearningService';
 export * from './MindfulnessService';
 export * from './MorningRoutineService';

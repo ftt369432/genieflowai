@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import emailServiceAdapter from '../services/email/EmailServiceAdapter';
 // import { getEnv } from '../config/env'; // Assuming getEnv might not be needed directly here now
-import { EmailAccount, EmailFolder, EmailLabel, EmailQuery } from '../services/email/types';
-import { EmailMessage } from '../services/email/emailService'; // Assuming EmailMessage is from here
+import { EmailAccount, EmailFolder, EmailLabel, EmailQuery, EmailMessage } from '../services/email/types';
+// import { EmailMessage } from '../services/email/emailService'; // Remove incorrect import
 import { toast } from 'sonner';
 
 interface EmailContextType {

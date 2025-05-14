@@ -135,6 +135,7 @@ export interface EmailMessage {
   bcc?: string[];
   date: string;
   body: string;
+  bodyMimeType?: string;
   snippet?: string;
   labels?: string[];
   attachments?: any[];
@@ -247,22 +248,28 @@ export interface IMAPConfig {
 /**
  * Email analysis structure
  */
+export interface EmailAnalysisMeetingDetails {
+  caseNumber?: string;
+  eventType?: string;
+  eventDate?: string;
+  eventTime?: string;
+  endTime?: string;
+  location?: string;
+  attendees?: string[];
+  description?: string;
+}
+
 export interface EmailAnalysis {
   messageId: string;
-  priority: 'low' | 'medium' | 'high';
+  priority: 'high' | 'medium' | 'low';
   category: string;
-  sentiment: string;
+  sentiment: 'positive' | 'negative' | 'neutral' | 'urgent';
   actionItems: string[];
   summary: string;
   keywords: string[];
-  meetingDetails?: {
-    startTime: Date | string;
-    endTime: Date | string;
-    location?: string;
-    attendees: string[];
-    description: string;
-  };
-  isReplyRequired: boolean;
+  isCourtDocument?: boolean;
+  isReplyRequired?: boolean;
   suggestedReply?: string;
-  followUpDate?: Date | string;
+  followUpDate?: string;
+  meetingDetails?: EmailAnalysisMeetingDetails;
 }

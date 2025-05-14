@@ -292,19 +292,17 @@ export function EmailComposer({
   }
 
   console.log('[EmailComposer] Before return statement FULL. Current state for render:', { to, subject, bodyLength: body.length });
-  const uniqueEmailComposerAriaDescId = "email-composer-dialog-description-unique-id"; 
-  console.log('[EmailComposer] uniqueEmailComposerAriaDescId for DialogContent:', uniqueEmailComposerAriaDescId);
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="sm:max-w-4xl flex flex-col h-[90vh]" aria-describedby={uniqueEmailComposerAriaDescId}>
+      <DialogContent className="sm:max-w-4xl flex flex-col">
         <DialogHeader>
-          <DialogTitle>{dialogTitle}</DialogTitle>
-          <DialogDescription id={uniqueEmailComposerAriaDescId} className="sr-only">Email composer dialog for creating or replying to emails.</DialogDescription>
-          <button onClick={onClose} className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </button>
+          <DialogTitle>
+            {dialogTitle}
+          </DialogTitle>
+          <DialogDescription>
+            {draft ? 'Edit and send your saved email draft.' : 'Compose and send a new email.'}
+          </DialogDescription>
         </DialogHeader>
         
         <div className="flex-1 flex flex-col min-h-0 px-6 pt-4">

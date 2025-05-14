@@ -7,13 +7,16 @@ import { useSupabase } from '../providers/SupabaseProvider';
 import { Spinner } from '../components/ui/Spinner';
 import { getEnv } from '../config/env';
 import { supabase } from '../lib/supabase';
+import { useAuth, MockAuthDetails } from '../contexts/AuthContext'; // Import useAuth and MockAuthDetails
+import { User, Session } from '@supabase/supabase-js'; // Import User and Session for mock objects
 
 export function AuthCallback() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('Initializing authentication...');
   const navigate = useNavigate();
   const location = useLocation();
-  const { setMockUser } = useSupabase();
+  const { setMockUser: setSupabaseMockUser } = useSupabase(); // Rename to avoid conflict
+  const { setMockAuth } = useAuth(); // Get setMockAuth from AuthContext
   const setUser = useUserStore(state => state.setUser);
   const setAuthToken = useUserStore(state => state.setAuthToken);
   const googleClient = GoogleAPIClient.getInstance();
@@ -138,7 +141,11 @@ export function AuthCallback() {
           setStatus('Processing in mock mode...');
           console.log('Auth callback processing in mock mode');
           
-          // Create mock user profile
+          const mockUserId = 'mock-user-id';
+          const mockUserEmail = 'mock-user@example.com';
+          const mockUserFullName = 'Mock User';
+
+          // Create mock user profile for Zustand store
           const subscription: UserSubscription = {
             plan: 'pro' as SubscriptionTier,
             type: 'individual',
@@ -147,9 +154,9 @@ export function AuthCallback() {
           };
           
           const userProfile: UserProfile = {
-            id: 'mock-user-id',
-            email: 'mock-user@example.com',
-            fullName: 'Mock User',
+            id: mockUserId,
+            email: mockUserEmail,
+            fullName: mockUserFullName,
             avatar: 'https://ui-avatars.com/api/?name=Mock+User&background=random',
             subscription
           };
@@ -157,12 +164,38 @@ export function AuthCallback() {
           // Set the user in global state
           setUser(userProfile);
           
-          // Set in Supabase context for protected routes
-          setMockUser({
-            id: 'mock-user-id',
-            email: 'mock-user@example.com',
-            fullName: 'Mock User'
+          // Set in SupabaseProvider's context (primarily for its own state if needed)
+          setSupabaseMockUser({
+            id: mockUserId,
+            email: mockUserEmail,
+            fullName: mockUserFullName
           });
+
+          // Construct mock User and Session objects for AuthContext
+          const mockAuthUser: User = {
+            id: mockUserId,
+            aud: 'authenticated',
+            role: 'authenticated',
+            email: mockUserEmail,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            app_metadata: { provider: 'mock', providers: ['mock'] },
+            user_metadata: { full_name: mockUserFullName },
+            email_confirmed_at: new Date().toISOString(),
+            last_sign_in_at: new Date().toISOString(),
+          };
+
+          const mockAuthSession: Session = {
+            access_token: 'mock-authcontext-access-token',
+            refresh_token: 'mock-authcontext-refresh-token',
+            user: mockAuthUser,
+            expires_in: 3600,
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+            token_type: 'bearer',
+          };
+
+          // Set mock authentication details in AuthContext
+          setMockAuth({ user: mockAuthUser, session: mockAuthSession });
           
           setStatus('Login successful! Redirecting...');
           
@@ -282,4 +315,4 @@ export function AuthCallback() {
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please wait while we complete your authentication</p>
     </div>
   );
-} 
+}
