@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Archive, Trash2, Reply, Forward, Users, Info, AlertTriangle, ListChecks, CalendarDays, Tags, MessageSquare } from 'lucide-react'; // Added new icons
+import { ArrowLeft, Archive, Trash2, Reply, Forward, Users, Info, AlertTriangle, ListChecks, CalendarDays, Tags, MessageSquare, FileText, Briefcase } from 'lucide-react'; // Added FileText, Briefcase
 import { format } from 'date-fns';
 import { EmailMessage, EmailAnalysisMeetingDetails } from '../../services/email/types'; // Ensure EmailAnalysisMeetingDetails is imported
 import { FollowUpReminder } from './FollowUpReminder';
@@ -13,16 +13,26 @@ interface EmailDetailProps {
   onArchive?: () => void;
   onDelete?: () => void;
   onSetFollowUp: (date: Date) => void;
+  onAnalyzeAndCalendar: (email: EmailMessage) => void;
 }
 
 // Helper function to render meeting details
-const renderMeetingDetails = (meeting?: EmailAnalysisMeetingDetails) => { // Made meeting optional
+const renderMeetingDetails = (meeting?: EmailAnalysisMeetingDetails) => {
   if (!meeting) return null;
+  
+  // Check if there's any actual meeting detail to display beyond attendees (which might be an empty array)
+  const hasDetails = meeting.caseNumber || meeting.eventType || meeting.eventDate || meeting.eventTime || meeting.location || meeting.description || meeting.endTime;
+
+  if (!hasDetails) return null; // Don't render the section if only empty attendees is present
+
   return (
     <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
       <h4 className="font-semibold text-sm flex items-center"><CalendarDays className="h-4 w-4 mr-2" /> Meeting Details:</h4>
-      {meeting.startTime && <p className="text-xs">Start: {format(new Date(meeting.startTime), 'PPP p')}</p>}
-      {meeting.endTime && <p className="text-xs">End: {format(new Date(meeting.endTime), 'PPP p')}</p>}
+      {meeting.caseNumber && <p className="text-xs">Case #: {meeting.caseNumber}</p>}
+      {meeting.eventType && <p className="text-xs">Event Type: {meeting.eventType}</p>}
+      {meeting.eventDate && <p className="text-xs">Date: {format(new Date(meeting.eventDate + 'T00:00:00'), 'PPP')}</p>} {/* Ensure date is parsed correctly by adding a time component if AI only gives YYYY-MM-DD */}
+      {meeting.eventTime && <p className="text-xs">Time: {meeting.eventTime}</p>}
+      {meeting.endTime && <p className="text-xs">End Time: {format(new Date(meeting.endTime), 'p')}</p>} {/* Assuming endTime is a full ISO string or timestamp */}
       {meeting.location && <p className="text-xs">Location: {meeting.location}</p>}
       {meeting.description && <p className="text-xs">Description: {meeting.description}</p>}
       {meeting.attendees && meeting.attendees.length > 0 && <p className="text-xs">Attendees: {meeting.attendees.join(', ')}</p>}
@@ -30,7 +40,7 @@ const renderMeetingDetails = (meeting?: EmailAnalysisMeetingDetails) => { // Mad
   );
 };
 
-export function EmailDetail({ email, onClose, onReply, onReplyAll, onForward, onArchive, onDelete, onSetFollowUp }: EmailDetailProps) {
+export function EmailDetail({ email, onClose, onReply, onReplyAll, onForward, onArchive, onDelete, onSetFollowUp, onAnalyzeAndCalendar }: EmailDetailProps) {
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-800">
       {/* Toolbar remains the same */}
@@ -72,6 +82,14 @@ export function EmailDetail({ email, onClose, onReply, onReplyAll, onForward, on
             <Archive className="h-5 w-5" />
           </button>
           <button
+            onClick={() => onAnalyzeAndCalendar(email)}
+            title="Analyze & Calendar Event"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-blue-600 dark:text-blue-400 flex items-center gap-1"
+          >
+            <CalendarDays className="h-5 w-5" />
+            <span className="hidden sm:inline">Analyze</span>
+          </button>
+          <button
             onClick={onDelete}
             title="Delete"
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-red-600 dark:text-red-400"
@@ -102,6 +120,12 @@ export function EmailDetail({ email, onClose, onReply, onReplyAll, onForward, on
           <div className="mb-6 p-4 border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-gray-900 rounded-lg shadow">
             <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-3 flex items-center"><Info className="h-5 w-5 mr-2" /> AI Insights</h3>
             
+            {email.analysis.isCourtDocument && (
+              <div className="mb-2 p-2 bg-yellow-100 dark:bg-yellow-700 border border-yellow-300 dark:border-yellow-600 rounded-md">
+                <p className="text-sm font-semibold text-yellow-700 dark:text-yellow-200 flex items-center"><FileText className="h-4 w-4 mr-2" /> This appears to be a Court Document.</p>
+              </div>
+            )}
+
             {email.analysis.summary && (
               <div className="mb-3">
                 <h4 className="font-semibold text-sm flex items-center"><MessageSquare className="h-4 w-4 mr-2" /> Summary:</h4>
@@ -114,6 +138,12 @@ export function EmailDetail({ email, onClose, onReply, onReplyAll, onForward, on
                 <div>
                   <h4 className="font-semibold text-sm flex items-center"><AlertTriangle className="h-4 w-4 mr-2" /> Priority:</h4>
                   <p className="text-sm capitalize text-gray-700 dark:text-gray-300">{email.analysis.priority}</p>
+                </div>
+              )}
+              {email.analysis.category && (
+                <div>
+                  <h4 className="font-semibold text-sm flex items-center"><Briefcase className="h-4 w-4 mr-2" /> Category:</h4>
+                  <p className="text-sm capitalize text-gray-700 dark:text-gray-300">{email.analysis.category}</p>
                 </div>
               )}
               {email.analysis.sentiment && (

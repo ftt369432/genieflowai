@@ -174,9 +174,8 @@ export function AgentConfig({ agent }: AgentConfigProps) {
                 <Select
                   value={config.type}
                   onValueChange={(value) => handleInputChange('type', value as AgentType)}
-                  disabled={!isEditing}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger disabled={!isEditing}>
                     <SelectValue placeholder="Select agent type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -194,9 +193,8 @@ export function AgentConfig({ agent }: AgentConfigProps) {
                 <Select
                   value={config.autonomyLevel}
                   onValueChange={(value) => handleInputChange('autonomyLevel', value as AutonomyLevel)}
-                  disabled={!isEditing}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger disabled={!isEditing}>
                     <SelectValue placeholder="Select autonomy level" />
                   </SelectTrigger>
                   <SelectContent>
@@ -224,9 +222,8 @@ export function AgentConfig({ agent }: AgentConfigProps) {
                 <Select
                   value={config.model}
                   onValueChange={(value) => handleInputChange('model', value)}
-                  disabled={!isEditing}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger disabled={!isEditing}>
                     <SelectValue placeholder="Select model" />
                   </SelectTrigger>
                   <SelectContent>

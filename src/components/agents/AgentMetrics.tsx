@@ -77,6 +77,23 @@ export function AgentMetrics({ agent }: AgentMetricsProps) {
     },
   };
 
+  const barChartOptions: ChartOptions<'bar'> = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: false,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+    },
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -121,7 +138,7 @@ export function AgentMetrics({ agent }: AgentMetricsProps) {
             <CardTitle>Task Completion</CardTitle>
           </CardHeader>
           <CardContent>
-            <Bar options={chartOptions} data={tasksData} />
+            <Bar options={barChartOptions} data={tasksData} />
           </CardContent>
         </Card>
       </div>

@@ -14,6 +14,9 @@ import emailServiceAdapter from '../services/email/EmailServiceAdapter';
 import { toast } from 'sonner';
 import { EmailToolbar } from '../components/email/EmailToolbar';
 // import { EmailEmptyState } from '../components/email/EmailEmptyState'; // Temporarily commented out
+// Import the main emailService
+import emailServiceInstance from '../services/email/emailService'; // Renamed to avoid conflict if adapter also exports 'emailService'
+import { useCalendarStore } from '../store/calendarStore'; // Added import
 
 // Define the type for replyTo data directly, matching EmailComposer's expectation
 interface ComposerReplyData {
@@ -56,6 +59,7 @@ export function EmailPage() {
     getMessages,
     selectAccount,
   } = useEmail();
+  const { addEvent: addCalendarEventToStore, updateEvent: updateCalendarEventInStore } = useCalendarStore(); // Get store functions
 
   // Store getMessages in a ref to keep a stable reference for the useEffect
   const getMessagesRef = useRef(getMessages);
@@ -369,6 +373,101 @@ export function EmailPage() {
       }
   }, [selectedAccountId, routeAccountId]);
 
+  const handleAnalyzeAndCalendar = async (emailToAnalyze: EmailMessage) => {
+    if (!emailToAnalyze) {
+      toast.error('No email selected for analysis.');
+      return;
+    }
+    console.log(`[EmailPage] Triggering analysis for email: ${emailToAnalyze.id} - Subject: ${emailToAnalyze.subject}`);
+    toast.info(`Analyzing email: "${emailToAnalyze.subject}"...`, { duration: 10000 }); // Extended duration
+
+    try {
+      // This now directly calls the instance method
+      const analysisResult = await emailServiceInstance.analyzeEmail(emailToAnalyze);
+      console.log('[EmailPage] Analysis Result:', analysisResult);
+
+      if (analysisResult && analysisResult.error) {
+        toast.error(`Analysis Error: ${analysisResult.error}`);
+      } else if (analysisResult && (analysisResult.calendarEventStatus === 'created' || analysisResult.calendarEventStatus === 'updated')) {
+        toast.success(
+          `Calendar event ${analysisResult.calendarEventStatus}: ${analysisResult.calendarEventDetails?.summary}`,
+          {
+            description: `Event ID: ${analysisResult.calendarEventId}`,
+            action: analysisResult.calendarEventDetails?.htmlLink
+              ? {
+                  label: 'View Event',
+                  onClick: () => window.open(analysisResult.calendarEventDetails.htmlLink, '_blank'),
+                }
+              : undefined,
+          }
+        );
+
+        // Update the Zustand calendar store
+        if (analysisResult.calendarEventDetails && analysisResult.calendarEventId) {
+          const googleEvent = analysisResult.calendarEventDetails; // This is the Google Calendar Event object
+          const storeEventPayload = {
+            // id: analysisResult.calendarEventId, // The store's addEvent generates ID, updateEvent uses it
+            title: googleEvent.summary || 'Untitled Event',
+            start: googleEvent.start?.dateTime ? new Date(googleEvent.start.dateTime) : new Date(),
+            end: googleEvent.end?.dateTime ? new Date(googleEvent.end.dateTime) : new Date(),
+            description: googleEvent.description || '',
+            location: googleEvent.location || '',
+            allDay: !!googleEvent.start?.date, // if only 'date' is present, it's an all-day event
+            sourceId: 'google-primary', // Assuming a source for Google Calendar events
+            url: googleEvent.htmlLink,
+            attendees: googleEvent.attendees?.map((att: any) => att.email).filter(Boolean) || [],
+            tags: ['email-analysis', `case-${googleEvent.extendedProperties?.private?.genieflowCaseNumber || 'unknown'}`],
+          };
+
+          if (analysisResult.calendarEventStatus === 'created') {
+            console.log('[EmailPage] Adding new event to calendar store:', storeEventPayload);
+            const newStoreEventId = addCalendarEventToStore({
+              ...storeEventPayload,
+              // For addEvent, we omit 'id' as the store generates it.
+              // However, we need to ensure the Google Event ID is stored somewhere if we need to map back later
+              // For now, the store's own ID will be primary for store operations.
+              // We could add googleEvent.id to a custom field in the store's CalendarEvent type if needed.
+            });
+            console.log('[EmailPage] Event added to store with new ID:', newStoreEventId);
+          } else if (analysisResult.calendarEventStatus === 'updated') {
+            // For updateEvent, the ID must be the store's ID if they differ.
+            // This assumes the event being updated was already in the store and we know its store ID.
+            // This is a GAP: If the event was updated in Google but wasn't in the store or we don't know its store ID,
+            // this update will fail or update the wrong event.
+            // For now, let's assume we'd need a lookup: find event in store by googleEvent.id (if stored) or by caseNumber, then update.
+            // As a simpler first step, if we have analysisResult.calendarEventId (which is the Google ID),
+            // and if the store also uses Google IDs, this could work.
+            // The current calendarStore.updateEvent takes its own internal ID.
+            // THIS PART NEEDS REFINEMENT based on how existing events are fetched/stored.
+            // For now, let's try to update if an event with this Google ID is found (hypothetically).
+            
+            // Let's try to update the event in the store using the Google Event ID.
+            // This requires that the store's 'id' field for Google events IS the Google event ID.
+            // If `calendarStore.ts` was modified to use Google's event ID for events synced from Google, this would work.
+            // Otherwise, we need a way to map Google event ID to store event ID.
+            
+            // TEMPORARY: For now, let's assume the ID is the Google Event ID for events coming from Google.
+            // This is a significant assumption about calendarStore's behavior for external events.
+            console.log(`[EmailPage] Updating event in calendar store (ID: ${analysisResult.calendarEventId}):`, storeEventPayload);
+            updateCalendarEventInStore(analysisResult.calendarEventId, {
+              ...storeEventPayload,
+              id: analysisResult.calendarEventId, // Explicitly pass the ID for update
+            });
+             console.log('[EmailPage] Store update call made for event ID:', analysisResult.calendarEventId);
+          }
+        }
+
+      } else if (analysisResult && analysisResult.isMeeting === false) {
+        toast.info('Email does not appear to be a meeting.');
+      } else {
+        toast.error('Could not analyze email or determine calendar action.');
+      }
+    } catch (error) {
+      console.error('[EmailPage] Error during manual analysis trigger:', error);
+      toast.error('Failed to analyze email. See console for details.');
+    }
+  };
+
   console.log('[EmailPage] Values JUST BEFORE RENDER LOGIC:', {
     showCompose, routeMessageId, detailedEmail: !!detailedEmail, detailLoading,
     emailContextLoading, messagesLength: messages.length, currentFolderId
@@ -414,6 +513,7 @@ export function EmailPage() {
           onDelete={handleDelete}
           onSetFollowUp={(date) => console.log('Set followup:', date)} // Placeholder
           onReplyAll={handleReplyAll}
+          onAnalyzeAndCalendar={handleAnalyzeAndCalendar}
         />
       );
     } else { // Fallback if no detail, no error, no loading (e.g., email not found after fetch)

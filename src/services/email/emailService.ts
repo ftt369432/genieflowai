@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { AIServiceFactory } from '../ai/aiServiceFactory';
 import { AIService } from '../ai/baseAIService';
 import { googleApiClient } from '../google/GoogleAPIClient';
+import { aiCalendarService } from '../calendar/AiCalendarService';
 
 // Email fetch options
 export interface EmailOptions {
@@ -184,7 +185,7 @@ export class EmailService {
       
       // Log the raw payload for debugging, especially for attachment issues
       // console.log(`EmailService: Raw message payload for ${id}:`, JSON.stringify(message.payload, null, 2));
-
+      
       const headers = message.payload.headers || [];
       const subject = this.findHeader(headers, 'Subject') || '(No Subject)';
       const from = this.findHeader(headers, 'From') || '';
@@ -254,18 +255,8 @@ export class EmailService {
         bodyMimeType
       };
 
-      // Analyze the email after fetching its details
-      try {
-        const analysis = await this.analyzeEmail(emailMessage);
-        if (analysis) {
-          emailMessage.analysis = analysis;
-        } else {
-          console.warn(`EmailService: Analysis returned null for email ID ${emailMessage.id}`);
-        }
-      } catch (analysisError) {
-        console.error(`EmailService: Error during email analysis integration for ID ${emailMessage.id}:`, analysisError);
-        // Decide if you want to return the email without analysis or null/throw error
-      }
+      // REMOVED the immediate call to this.analyzeEmail(emailMessage) from here.
+      // Analysis should be triggered by the caller of getEmailDetails if desired.
       
       return emailMessage;
     } catch (error) {
@@ -551,128 +542,177 @@ export class EmailService {
    * @returns A promise that resolves to an EmailAnalysis object or null if analysis fails.
    */
   public async analyzeEmail(email: EmailMessage): Promise<EmailAnalysis | null> {
-    if (!email || !email.body) {
-      console.error('EmailService: Cannot analyze email, no body content.');
-      return null;
+    if (!email || !email.id || !email.body) {
+      console.error('[EmailService] analyzeEmail: Cannot analyze email, missing id, or body content.');
+      // Return a structured error in EmailAnalysis format
+      return {
+        messageId: email?.id || 'unknown',
+        error: 'Cannot analyze email, missing id, or body content.',
+        priority: 'low',
+        category: 'error',
+        sentiment: 'neutral',
+        actionItems: [],
+        summary: 'Analysis failed due to missing email content.',
+        keywords: [],
+        calendarEventStatus: 'analysis_error',
+        isMeeting: false, 
+        isCourtDocument: undefined,
+        isReplyRequired: undefined,
+        suggestedReply: undefined,
+        followUpDate: undefined,
+        meetingDetails: undefined,
+        rawAiResponse: undefined,
+        calendarEventId: undefined,
+        calendarEventError: undefined,
+        calendarEventDetails: undefined,
+      };
     }
 
-    // Enhanced prompt for court document and calendar event extraction
-    const prompt = `
-Given the following email content:
+    console.log(`[EmailService] Analyzing email ID ${email.id} with subject "${email.subject}"`);
 
-Subject: ${email.subject}
-From: ${email.from}
-Date: ${email.date}
-Body:
-${email.body}
-
-Please analyze this email and provide the following information in a VALID JSON string format:
-{
-  "summary": "A concise summary of the email content (2-3 sentences).",
-  "actionItems": ["An array of distinct action items or tasks mentioned. If none, provide an empty array."],
-  "sentiment": "The overall sentiment ('positive', 'negative', 'neutral', 'urgent').",
-  "keywords": ["An array of 5-7 most relevant keywords or key phrases extracted from the body and subject."],
-  "priority": "A suggested priority ('low', 'medium', 'high') based on content and urgency.",
-  "isReplyRequired": "A boolean value (true or false) indicating if a reply appears to be requested.",
-  "isCourtDocument": "boolean, true if this email appears to be an official court document (e.g., Notice of Hearing, Order, Adjudication notice), otherwise false.",
-  "category": "Categorize the email (e.g., 'Legal', 'Finance', 'Personal', 'Court Notice'). If it is a court document, use 'Court Notice'.",
-  "meetingDetails": {
-    "caseNumber": "The case number (e.g., ADJ1234567, WC012345) if present, especially for court documents. Null if not applicable.",
-    "eventType": "The type of event if this is a notice (e.g., 'Notice of Hearing', 'Order', 'Continuance', 'Filing Confirmation', 'General Court Document'). Null if not applicable.",
-    "eventDate": "The primary date for the event or document (YYYY-MM-DD format). Null if not applicable.",
-    "eventTime": "The primary time for the event (HH:MM AM/PM format). Null if not applicable.",
-    "location": "The location of the event, if specified (e.g., 'VNO', 'Courtroom 5', 'Telephonic'). Null if not applicable.",
-    "description": "A brief description of the event or the essence of the court document. Null if not applicable."
-  }
-}
-
-Ensure the output is ONLY the JSON object, with no other text before or after it.
-If a field within meetingDetails is not applicable or not found, its value should be null.
-For 'isCourtDocument', be sure it is true if terms like 'Notice of Hearing', 'Adjudication', 'WC01', 'Order', 'Court' are prominent.
-Extract keywords from both subject and body.
-The eventDate should be the specific date mentioned for a hearing or deadline.
-The eventType should clearly state what kind of document or event it is.
-The caseNumber is critical for linking related court documents.
-`;
+    let analysisResult: EmailAnalysis = {
+      messageId: email.id,
+      priority: 'medium', 
+      category: 'uncategorized',
+      sentiment: 'neutral',
+      actionItems: [],
+      summary: '',
+      keywords: [],
+      isCourtDocument: undefined,
+      isReplyRequired: undefined,
+      suggestedReply: undefined,
+      followUpDate: undefined,
+      meetingDetails: undefined,
+      rawAiResponse: null,
+      calendarEventId: null,
+      calendarEventStatus: 'pending_analysis',
+      calendarEventError: null,
+      error: undefined,
+      calendarEventDetails: null,
+      isMeeting: false, 
+    };
 
     try {
-      console.log(`EmailService: Analyzing email ID ${email.id} with subject "${email.subject}"`);
-      const rawAnalysis = await this.aiService.getCompletion(prompt, {
-        // Consider adding options like maxTokens if needed, or model specification
-      });
+      // Use the now declared interface method
+      const aiCalendarAnalysis = await this.aiService.analyzeEmailForCalendarEvent(email);
 
-      if (!rawAnalysis) {
-        console.error('EmailService: AI analysis returned empty response for email ID', email.id);
-        return null;
+      if (!aiCalendarAnalysis) {
+        console.warn(`[EmailService] AI analysis for email ID ${email.id} returned null.`);
+        analysisResult.summary = 'AI analysis returned no data.';
+        analysisResult.error = 'AI analysis returned no data.';
+        analysisResult.calendarEventStatus = 'analysis_error';
+        return analysisResult;
       }
 
-      let parsedAnalysis: any;
-      try {
-        const cleanedResponse = rawAnalysis.replace(/^```json\s*|\s*```$/g, '').trim();
-        // Attempt to extract JSON object if it's embedded
-        const jsonStart = cleanedResponse.indexOf('{');
-        const jsonEnd = cleanedResponse.lastIndexOf('}');
-        
-        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-          const jsonString = cleanedResponse.substring(jsonStart, jsonEnd + 1);
-          console.log('EmailService: Attempting to parse extracted JSON string:', jsonString); // Log the string we attempt to parse
-          parsedAnalysis = JSON.parse(jsonString);
-        } else {
-          console.error('EmailService: Could not find valid JSON block in AI response. Cleaned response:', cleanedResponse);
-          return null;
-        }
-      } catch (parseError) {
-        console.error('EmailService: Failed to parse AI analysis JSON for email ID', email.id, parseError);
-        console.error('Raw AI response was:', rawAnalysis);
-        // console.error('Cleaned response before parse attempt was:', cleanedResponse); // This was the old log, replaced by the one in the if block
-        return null;
-      }
-      
-      // Validate and structure the parsed data into EmailAnalysis type
-      const requiredFields: Array<keyof EmailAnalysis> = ['summary', 'actionItems', 'sentiment', 'keywords', 'priority', 'isReplyRequired', 'isCourtDocument', 'category'];
-      for (const field of requiredFields) {
-        if (parsedAnalysis[field] === undefined) {
-          console.warn(`EmailService: AI analysis for email ID ${email.id} missing field: ${field}. Raw:`, parsedAnalysis);
-          // Setting default for isCourtDocument if missing, though prompt asks for it.
-          if (field === 'isCourtDocument') parsedAnalysis[field] = false; 
-        }
-      }
-      
-      // Ensure meetingDetails exists, even if empty, if isCourtDocument is true or if AI provides it.
-      // The prompt asks for null for sub-fields if not applicable.
-      const rawMd = parsedAnalysis.meetingDetails;
-
-      const analysisResult: EmailAnalysis = {
-        messageId: email.id,
-        summary: parsedAnalysis.summary || 'Summary not available.',
-        actionItems: Array.isArray(parsedAnalysis.actionItems) ? parsedAnalysis.actionItems : [],
-        sentiment: parsedAnalysis.sentiment || 'neutral',
-        keywords: Array.isArray(parsedAnalysis.keywords) ? parsedAnalysis.keywords : [],
-        priority: parsedAnalysis.priority || 'medium',
-        isReplyRequired: typeof parsedAnalysis.isReplyRequired === 'boolean' ? parsedAnalysis.isReplyRequired : false,
-        isCourtDocument: typeof parsedAnalysis.isCourtDocument === 'boolean' ? parsedAnalysis.isCourtDocument : false,
-        category: parsedAnalysis.category || (parsedAnalysis.isCourtDocument ? 'Court Notice' : 'General'),
-        meetingDetails: rawMd ? {
-          caseNumber: rawMd.caseNumber || undefined,
-          eventType: rawMd.eventType || undefined,
-          eventDate: rawMd.eventDate || undefined,
-          eventTime: rawMd.eventTime || undefined,
-          location: rawMd.location || undefined,
-          description: rawMd.description || undefined,
-          endTime: rawMd.endTime || undefined,
-          attendees: Array.isArray(rawMd.attendees) ? rawMd.attendees : [],
-        } : undefined, // If rawMd is falsy, meetingDetails is undefined
-        suggestedReply: parsedAnalysis.suggestedReply || undefined,
-        followUpDate: parsedAnalysis.followUpDate || undefined,
+      // Merge results from aiCalendarAnalysis into our main analysisResult
+      // Properties defined in EmailAnalysis that are returned by analyzeEmailForCalendarEvent should be directly assigned.
+      analysisResult = {
+        ...analysisResult, // Keep defaults for fields not in aiCalendarAnalysis
+        ...aiCalendarAnalysis, // Overwrite with actual analysis data
+        messageId: email.id, // Ensure messageId is always from the input email
+        isMeeting: !!(aiCalendarAnalysis.meetingDetails && aiCalendarAnalysis.meetingDetails.eventDate && aiCalendarAnalysis.meetingDetails.eventTime),
       };
-      
-      console.log(`EmailService: Successfully analyzed email ID ${email.id}. Analysis:`, JSON.stringify(analysisResult, null, 2));
-      return analysisResult;
+      analysisResult.rawAiResponse = aiCalendarAnalysis.rawAiResponse || aiCalendarAnalysis; // Store raw if available, else the object itself for now
 
-    } catch (error) {
-      console.error('EmailService: Error during AI email analysis for ID', email.id, error);
-      return null;
+      if (aiCalendarAnalysis.error) { // If the specialized AI method itself had an internal error it reported
+        analysisResult.error = aiCalendarAnalysis.error;
+        analysisResult.calendarEventStatus = 'analysis_error';
+        console.warn(`[EmailService] AI analysis for email ID ${email.id} reported an error: ${aiCalendarAnalysis.error}`);
+        return analysisResult;
+      }
+
+      if (!analysisResult.isMeeting) {
+        console.log(`[EmailService] Email ID ${email.id} is not identified as a meeting by AI.`);
+        analysisResult.calendarEventStatus = 'no_actionable_meeting';
+        return analysisResult; // Return early, no calendar operations needed
+      }
+
+      console.log(`[EmailService] Successfully performed AI analysis for email ID ${email.id}.`);
+      analysisResult.calendarEventStatus = 'ai_analysis_complete';
+
+      const meetingDetails = analysisResult.meetingDetails; // Should be populated from aiCalendarAnalysis
+
+      // Calendar operations logic (remains largely the same, but uses populated analysisResult)
+      if (meetingDetails && meetingDetails.eventDate && meetingDetails.eventTime) {
+        console.log(`[EmailService] Found meeting details for email ID ${email.id}. Proceeding with calendar logic.`);
+        const caseNumber = meetingDetails.caseNumber;
+        let existingEvent = null;
+
+        if (caseNumber) {
+          console.log(`[EmailService] Email ID ${email.id} has case number ${caseNumber}. Checking for existing event.`);
+          existingEvent = await aiCalendarService.findEventByCaseNumber(caseNumber);
+        }
+
+        if (existingEvent) {
+          console.log(`[EmailService] Found existing event ID ${existingEvent.id} for case ${caseNumber}. Attempting to update.`);
+          analysisResult.calendarEventStatus = 'pending_update';
+          try {
+            const updatedEvent = await aiCalendarService.updateEvent(
+              existingEvent.id,
+              meetingDetails,
+              email.subject || 'Updated Event',
+              email.id,
+              email.threadId
+            );
+            if (updatedEvent) {
+              console.log(`[EmailService] Successfully updated calendar event for email ID ${email.id}. Event ID: ${updatedEvent.id}`);
+              analysisResult.calendarEventId = updatedEvent.id;
+              analysisResult.calendarEventDetails = updatedEvent; 
+              analysisResult.calendarEventStatus = 'updated';
+            } else {
+              console.warn(`[EmailService] Failed to update calendar event for email ID ${email.id}. aiCalendarService.updateEvent returned null.`);
+              analysisResult.calendarEventError = 'Failed to update event in calendar (service returned null).';
+              analysisResult.calendarEventStatus = 'update_failed';
+            }
+          } catch (calendarUpdateError: any) {
+            console.error(`[EmailService] Error updating calendar event for email ID ${email.id}:`, calendarUpdateError);
+            analysisResult.calendarEventError = calendarUpdateError.message || 'Unknown error updating calendar event.';
+            analysisResult.calendarEventStatus = 'update_failed';
+          }
+        } else {
+          if (caseNumber) {
+            console.log(`[EmailService] No existing event found for case ${caseNumber}. Attempting to create new event.`);
+          } else {
+            console.log(`[EmailService] No case number found. Attempting to create new event for email ID ${email.id}.`);
+          }
+          analysisResult.calendarEventStatus = 'pending_creation';
+          try {
+            const newEvent = await aiCalendarService.createEventFromAnalysis(
+              meetingDetails,
+              email.subject || 'New Event from Email',
+              email.id,
+              email.threadId
+            );
+            if (newEvent) {
+              console.log(`[EmailService] Successfully created new calendar event for email ID ${email.id}. Event ID: ${newEvent.id}`);
+              analysisResult.calendarEventId = newEvent.id;
+              analysisResult.calendarEventDetails = newEvent; 
+              analysisResult.calendarEventStatus = 'created';
+            } else {
+              console.warn(`[EmailService] Could not create calendar event for email ID ${email.id}. aiCalendarService.createEventFromAnalysis returned null.`);
+              analysisResult.calendarEventError = 'Failed to create event in calendar (service returned null).';
+              analysisResult.calendarEventStatus = 'creation_failed';
+            }
+          } catch (calendarCreateError: any) {
+            console.error(`[EmailService] Error creating calendar event for email ID ${email.id}:`, calendarCreateError);
+            analysisResult.calendarEventError = calendarCreateError.message || 'Unknown error creating calendar event.';
+            analysisResult.calendarEventStatus = 'creation_failed';
+          }
+        }
+      } else {
+        console.log(`[EmailService] No actionable meeting details (eventDate, eventTime) found for email ID ${email.id}.`);
+        analysisResult.calendarEventStatus = 'no_actionable_meeting_details';
+        // This was already correctly setting isMeeting to false if details were missing, so this path is fine.
+      }
+    } catch (aiInterfaceError: any) {
+      // This catch block is for errors from the call to this.aiService.analyzeEmailForCalendarEvent itself (e.g., if the method throws)
+      console.error(`[EmailService] Error calling AI service analyzeEmailForCalendarEvent for email ID ${email.id}:`, aiInterfaceError);
+      analysisResult.error = aiInterfaceError.message || 'Error in AI service call.';
+      analysisResult.summary = analysisResult.summary || 'AI analysis service call failed.'; 
+      analysisResult.calendarEventStatus = 'analysis_error';
     }
+
+    return analysisResult;
   }
 
   async sendEmail(to: string, subject: string, htmlBody: string): Promise<any> {

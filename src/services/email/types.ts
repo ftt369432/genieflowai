@@ -272,4 +272,14 @@ export interface EmailAnalysis {
   suggestedReply?: string;
   followUpDate?: string;
   meetingDetails?: EmailAnalysisMeetingDetails;
+  
+  // Added fields for more comprehensive analysis and calendar sync status
+  rawAiResponse?: any; // Or string | null, depending on actual AI service response type
+  calendarEventId?: string | null;
+  calendarEventStatus?: string; // e.g., 'pending', 'created', 'updated', 'failed', 'no_actionable_meeting'
+  calendarEventError?: string | null; // Specific error related to calendar operation
+  // New fields to address linter errors and provide more info
+  error?: string; // General error during analysis or processing
+  calendarEventDetails?: any; // Full event object from calendar API after create/update
+  isMeeting?: boolean; // Was the email determined to be a meeting by AI?
 }

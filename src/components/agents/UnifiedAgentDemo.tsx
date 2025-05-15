@@ -171,7 +171,7 @@ export function UnifiedAgentDemo() {
                         <dt className="text-sm font-medium">Capabilities</dt>
                         <dd>
                           <ul className="list-disc pl-5 text-sm">
-                            {config.capabilities.map((capability) => (
+                            {config.capabilities.map((capability: string) => (
                               <li key={capability}>{capability}</li>
                             ))}
                           </ul>

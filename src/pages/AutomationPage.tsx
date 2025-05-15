@@ -15,7 +15,8 @@ import { Separator } from '../components/ui/Separator';
 import { 
   Play, Pause, Settings, File, Workflow, Clock, Calendar, CalendarClock, Bell, 
   BarChart2, Zap, Plus, ChevronRight, Sparkles, RefreshCw, Eye, Trash2, Settings2,
-  ArrowRight, CalendarDays, Mail, MessageSquare, Database, Search, Inbox, Filter
+  ArrowRight, CalendarDays, Mail, MessageSquare, Database, Search, Inbox, Filter,
+  Users
 } from 'lucide-react';
 
 export function AutomationPage() {
@@ -152,6 +153,10 @@ export function AutomationPage() {
           <Button onClick={() => navigate('/agent-wizard')}>
             <Sparkles className="h-4 w-4 mr-2" />
             AI Workflow Wizard
+          </Button>
+          <Button onClick={() => navigate('/swarm-hub')} className="bg-blue-600 hover:bg-blue-700 text-white"> 
+            <Users className="h-4 w-4 mr-2" />
+            Swarm Hub
           </Button>
         </div>
       </div>

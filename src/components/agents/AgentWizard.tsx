@@ -105,13 +105,17 @@ export function AgentWizard() {
     if (!notebookName.trim()) return;
     
     // Create a new notebook associated with this workflow
-    createNotebook({
-      name: notebookName,
-      description: `Documentation for the ${workflow.name} workflow`,
-      projectId: selectedProjectId || undefined,
-      icon: 'book',
-      color: 'blue'
-    });
+    createNotebook(
+      notebookName,
+      `Documentation for the ${workflow.name} workflow`,
+      {
+        metadata: {
+          projectId: selectedProjectId || undefined,
+          icon: 'book',
+          color: 'blue'
+        }
+      }
+    );
     
     // Close dialog and navigate
     setCreateNotebookOpen(false);

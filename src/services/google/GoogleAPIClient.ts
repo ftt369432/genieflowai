@@ -11,7 +11,16 @@
 import { supabase } from '../../lib/supabase';
 import { getEnv, updateEnvConfig } from '../../config/env';
 
-const DEFAULT_SCOPES = 'openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
+const DEFAULT_SCOPES = [
+  'openid',
+  'email',
+  'profile',
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/drive.metadata.readonly'
+];
 
 // Types for Google API responses and parameters
 export interface GoogleAuthResponse {
@@ -60,6 +69,10 @@ export class GoogleAPIClient {
   private signInPromiseResolve?: (value: void | PromiseLike<void>) => void;
   private signInPromiseReject?: (reason?: any) => void;
 
+  // Add promise resolvers for the refreshToken method
+  private refreshTokenPromiseResolve?: (value: string | null) => void; // Resolves with the new token or null
+  private refreshTokenPromiseReject?: (reason?: any) => void;
+
   private constructor() {}
 
   static getInstance(): GoogleAPIClient {
@@ -105,7 +118,7 @@ export class GoogleAPIClient {
    */
   public async initialize(
     onAuthChange?: (isAuthenticated: boolean, token?: string) => void,
-    scopes: string = DEFAULT_SCOPES,
+    scopes: string = DEFAULT_SCOPES.join(','),
     clientId?: string
   ): Promise<void> {
     if (onAuthChange) {
@@ -181,7 +194,7 @@ export class GoogleAPIClient {
         console.log('[GoogleAPIClient_INIT_NO_TOKEN_IN_SESSION] No Supabase provider_token in session.');
         // This means user is either not signed in with Supabase, or not with Google provider.
         // The GIS flow via signIn() will be the only way to get a Google token.
-         if (this.onAuthChangeCallback) {
+        if (this.onAuthChangeCallback) {
            // Reflect that, based on Supabase, no Google API ready token is available.
            // this.onAuthChangeCallback(false, undefined);
          }
@@ -189,18 +202,20 @@ export class GoogleAPIClient {
       
       await Promise.all([this.loadGapiScript(), this.loadGisScript()]);
 
-      if (!this.gis) {
+        if (!this.gis) {
         console.error('[GoogleAPIClient_INIT_LIVE_ERROR] Google Identity Services (GIS) library not loaded.');
         this.forceMockMode('GIS library not loaded'); // forceMockMode will log its reason
-        if (this.onAuthChangeCallback) this.onAuthChangeCallback(false);
+          if (this.onAuthChangeCallback) this.onAuthChangeCallback(false);
         return;
-      }
+        }
 
       // Initialize the GIS token client. This client is used by signIn() to request a token.
       console.log(`[GoogleAPIClient_INIT] Initializing GIS token client with scopes: ${scopes}`);
-      this.tokenClient = this.gis.initTokenClient({
+      
+      const tokenClientConfig = {
         client_id: this.gisClientId,
-        scope: scopes, // Uses the scopes passed to initialize (e.g., DEFAULT_SCOPES from signIn)
+        scope: scopes,
+        ux_mode: 'popup', // Explicitly set ux_mode
         callback: (tokenResponse: TokenClientResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             this.accessToken = tokenResponse.access_token;
@@ -216,8 +231,19 @@ export class GoogleAPIClient {
               this.signInPromiseResolve = undefined;
               this.signInPromiseReject = undefined;
             }
+            // Resolve refreshToken promise if it exists
+            if (this.refreshTokenPromiseResolve) {
+              console.log('[GoogleAPIClient_GIS_CALLBACK] Resolving active refreshToken promise.');
+              this.refreshTokenPromiseResolve(this.accessToken);
+              this.refreshTokenPromiseResolve = undefined;
+              this.refreshTokenPromiseReject = undefined;
+            }
           } else {
             console.error('[GoogleAPIClient_GIS_CALLBACK_ERROR] Failed to acquire token or error in GIS response.', tokenResponse);
+            // Add the error object to the log
+            if (tokenResponse && (tokenResponse as any).error) {
+              console.error('[GoogleAPIClient_GIS_CALLBACK_ERROR_DETAILS] Error details:', (tokenResponse as any).error);
+            }
             this.accessToken = null; // Clear any stale token
             this.isAuthenticated = false;
             if (this.onAuthChangeCallback) this.onAuthChangeCallback(false);
@@ -228,25 +254,42 @@ export class GoogleAPIClient {
               this.signInPromiseResolve = undefined;
               this.signInPromiseReject = undefined;
             }
+            // Reject refreshToken promise if it exists
+            if (this.refreshTokenPromiseReject) {
+              console.error('[GoogleAPIClient_GIS_CALLBACK_ERROR] Rejecting active refreshToken promise due to token acquisition failure.');
+              this.refreshTokenPromiseReject(new Error('Failed to acquire token from GIS callback for refresh.'));
+              this.refreshTokenPromiseResolve = undefined;
+              this.refreshTokenPromiseReject = undefined;
+            }
           }
         },
-        error_callback: (gisError: any) => {
-          console.error('[GoogleAPIClient_GIS_ERROR_CALLBACK] GIS Token Client error_callback:', gisError);
-          this.accessToken = null; // Clear any stale token
+        error_callback: (error: any) => { // Added error_callback for initTokenClient
+          console.error('[GoogleAPIClient_GIS_INIT_TOKEN_CLIENT_ERROR_CALLBACK] GIS initTokenClient() error_callback:', error);
+          this.accessToken = null;
           this.isAuthenticated = false;
           if (this.onAuthChangeCallback) this.onAuthChangeCallback(false);
+          
           // Reject signIn promise if it exists
           if (this.signInPromiseReject) {
-            console.error('[GoogleAPIClient_GIS_ERROR_CALLBACK] Rejecting active signIn promise due to GIS error.');
-            this.signInPromiseReject(gisError);
+            console.error('[GoogleAPIClient_GIS_INIT_TOKEN_CLIENT_ERROR_CALLBACK] Rejecting active signIn promise due to initTokenClient error.');
+            this.signInPromiseReject(error); // Reject with the error from GIS
             this.signInPromiseResolve = undefined;
             this.signInPromiseReject = undefined;
           }
-        },
-      });
-      console.log('[GoogleAPIClient_INIT_LIVE] GIS Token Client initialized.');
+           // Reject refreshToken promise if it exists
+           if (this.refreshTokenPromiseReject) {
+            console.error('[GoogleAPIClient_GIS_INIT_TOKEN_CLIENT_ERROR_CALLBACK] Rejecting active refreshToken promise due to initTokenClient error.');
+            this.refreshTokenPromiseReject(error);
+            this.refreshTokenPromiseResolve = undefined;
+            this.refreshTokenPromiseReject = undefined;
+          }
+        }
+      };
 
-      this.initialized = true; 
+      console.log('[GoogleAPIClient_INIT] GIS tokenClient config being used:', tokenClientConfig);
+      this.tokenClient = this.gis.initTokenClient(tokenClientConfig);
+
+      this.initialized = true;
       this.mockMode = false;  // Explicitly false if we reached here successfully
       // this.useMockData would have been set by envConfig.useMock. If it was 'hybrid', it stays 'hybrid'.
       // If it was false, it stays false. If live init failed and forced mock, forceMockMode handles useMockData.
@@ -264,122 +307,201 @@ export class GoogleAPIClient {
   }
 
   private handleAuthError(error: any): void {
-    // Fall back to mock mode rather than crashing
-    console.warn('Authentication error, falling back to mock mode:', error);
-    this.useMockData = true;
-    this.accessToken = 'mock-token';
-    this.initialized = true;
+    console.error('Authentication error:', error);
+    // Potentially clear token, update auth state, etc.
+    this.accessToken = null;
+    this.isAuthenticated = false;
+    if (this.onAuthChangeCallback) {
+      this.onAuthChangeCallback(false);
+    }
+    // Depending on the error, may trigger a re-authentication flow or guide user.
   }
 
-  private async refreshToken(): Promise<void> {
-    if (this.useMockData) {
-      this.accessToken = 'mock-token';
-      return;
+  private async refreshToken(): Promise<string | null> {
+    console.log('[GoogleAPIClient_REFRESH_TOKEN] Attempting to refresh token via GIS tokenClient.');
+    if (this.useMockData && !this.isHybridMode) {
+      this.accessToken = 'mock-refreshed-token';
+      console.log('[GoogleAPIClient_REFRESH_TOKEN_MOCK] Refreshed token (mock mode).');
+      return Promise.resolve(this.accessToken);
     }
 
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error || !session?.provider_token) {
-        console.warn('No provider token available in session, using mock data');
-        this.useMockData = true;
-        this.accessToken = 'mock-token';
-        return;
+    if (!this.tokenClient) {
+      console.error('[GoogleAPIClient_REFRESH_TOKEN_ERROR] Token client not available. Cannot refresh token.');
+      return Promise.reject(new Error('Token client not available for refresh.'));
+    }
+    
+    // Ensure not already trying to refresh or sign in
+    if (this.refreshTokenPromiseResolve || this.signInPromiseResolve) {
+        console.warn('[GoogleAPIClient_REFRESH_TOKEN] Another token operation (signIn or refreshToken) is already in progress.');
+        // Optionally, could return a promise that chains to the existing operation,
+        // or reject, or wait. For now, reject to prevent overlapping calls.
+        return Promise.reject(new Error('Another token operation is already in progress.'));
+    }
+
+    return new Promise<string | null>((resolve, reject) => {
+      this.refreshTokenPromiseResolve = resolve;
+      this.refreshTokenPromiseReject = reject;
+
+      try {
+        // Try to get a token, ideally silently. 
+        // The 'prompt' parameter behavior:
+        // - undefined (omitted): Google decides. Might show consent if needed, or if previous consent was minimal.
+        // - 'none': Fails if user interaction is required. Good for silent checks.
+        // - 'consent': Forces consent UI. Usually for initial signIn.
+        // We'll start with 'none' for a "silent" refresh attempt.
+        // If it fails often, we might need a strategy to then try with an undefined prompt
+        // or signal the app that user interaction is needed.
+        console.log('[GoogleAPIClient_REFRESH_TOKEN] Requesting access token via GIS token client (prompt: none).');
+        this.tokenClient.requestAccessToken({ prompt: 'none' });
+        // The promise (resolve/reject) is handled by the GIS callback in initialize()
+      } catch (error) {
+        console.error('[GoogleAPIClient_REFRESH_TOKEN_ERROR] Error calling requestAccessToken:', error);
+        if (this.refreshTokenPromiseReject) {
+            this.refreshTokenPromiseReject(error);
+        }
+        this.refreshTokenPromiseResolve = undefined;
+        this.refreshTokenPromiseReject = undefined;
       }
-
-      this.accessToken = session.provider_token;
-    } catch (error) {
-      console.error('Error refreshing token:', error);
-      this.handleAuthError(error);
-    }
+    });
   }
 
   async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    isRetry = false // Added for scope-related retry
   ): Promise<T> {
     if (!this.initialized) {
-      // Provide a default onAuthChange if not initialized through public entry point
       const defaultOnAuthChange = (auth: boolean, token?: string) => {
         console.log(`[GoogleAPIClient_INTERNAL_INIT] Auth state: ${auth}, token: ${token ? 'present' : 'absent'}`);
       };
       await this.initialize(this.onAuthChangeCallback || defaultOnAuthChange);
     }
 
-    // If we're in pure mock mode (not hybrid), return only mock data
     if (this.useMockData && !this.isHybridMode) {
       return this.getMockResponse<T>(endpoint);
     }
 
-    // For hybrid mode or live mode, try to get live data first
-    if (this.isHybridMode || this.accessToken) {
+    if (this.isHybridMode || this.accessToken || !this.useMockData) { // Ensure non-mock attempts if accessToken is null but not in full mock
       try {
-        if (!this.accessToken) {
-          console.warn('No access token available, attempting to refresh');
+        if (!this.accessToken && !(this.useMockData && this.isHybridMode)) { // Added check for useMockData in hybrid mode
+          console.warn('[GoogleAPIClient_REQUEST] No access token available, attempting to refresh/signIn.');
           try {
-            await this.refreshToken(); // Attempt to refresh the token
-          } catch (refreshError) {
-            console.error('Token refresh failed:', refreshError);
+            const newAccessToken = await this.refreshToken();
+            if (!newAccessToken) {
+              console.warn('[GoogleAPIClient_REQUEST] Token refresh did not yield a token. Attempting full sign-in.');
+              await this.signIn(); // Attempt a full sign-in, which should prompt consent if needed.
+              if (!this.accessToken) { // Check again after signIn
+                console.error('Still no access token after signIn attempt.');
+                if (this.isHybridMode) {
+                  console.warn('Hybrid mode: Falling back to mock data after signIn failure (no token).');
+                  this.useMockData = true;
+                  return this.getMockResponse<T>(endpoint);
+                } else {
+                  throw new Error('Authentication required and failed to obtain a token via refresh or sign-in.');
+                }
+              }
+            }
+            console.log('[GoogleAPIClient_REQUEST] Token obtained/refreshed, proceeding with request.');
+          } catch (authError) {
+            console.error('[GoogleAPIClient_REQUEST] Auth error during token acquisition:', authError);
             if (this.isHybridMode) {
-              console.warn('Hybrid mode: Falling back to mock data after refresh failure.');
-              this.useMockData = true; // Fallback to mock
+              console.warn('Hybrid mode: Falling back to mock data after auth error.');
+              this.useMockData = true;
               return this.getMockResponse<T>(endpoint);
             } else {
-              throw new Error('Authentication required and token refresh failed.');
+              throw new Error(`Authentication failed: ${authError}`);
             }
           }
         }
 
-        // MODIFIED URL construction
         let requestUrl = endpoint;
         if (!endpoint.toLowerCase().startsWith('http')) {
-          // Ensure we don't have leading slashes if endpoint is relative but starts with one
           const cleanedEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
           requestUrl = `https://www.googleapis.com/${cleanedEndpoint}`;
-        } else {
-          // If it's already a full URL, use it directly
-          // Potentially add a check here for the malformed 'https//' if it persists
-          // For now, assume 'endpoint' is either a relative path or a correct full URL
         }
         
-        console.log('[GoogleAPIClient_REQUEST] Making API call to:', requestUrl); // ADDED for debugging
+        console.log(`[GoogleAPIClient_REQUEST] Making API call to: ${requestUrl}, Retry: ${isRetry}`);
 
-        const response = await fetch(requestUrl, // MODIFIED to use requestUrl
-          {
+        const response = await fetch(requestUrl, {
             ...options,
             headers: {
               ...options.headers,
-              Authorization: `Bearer ${this.accessToken}`,
+            Authorization: `Bearer ${this.accessToken}`, // this.accessToken should be valid now or error thrown
               'Content-Type': 'application/json'
-            }
           }
-        );
+        });
 
         if (!response.ok) {
-          const errorBody = await response.text(); // Read error body as text
-          console.error(`Google API request failed with status ${response.status}: ${response.statusText}. Body: ${errorBody}`);
+          const errorBodyText = await response.text();
+          let errorBodyJson: any = null;
+          try {
+            errorBodyJson = JSON.parse(errorBodyText);
+          } catch (e) { /* ignore parsing error if body is not JSON */ }
+
+          console.error(`[GoogleAPIClient_REQUEST_FAIL_DETAIL] Google API request failed. Status: ${response.status}. URL: ${requestUrl}. Body: ${errorBodyText.substring(0, 500)}`);
+
+          // Check for insufficient scopes specifically
+          const isScopeError = response.status === 403 && (
+            errorBodyJson?.error?.details?.some(
+              (detail: any) => detail.reason === 'ACCESS_TOKEN_SCOPE_INSUFFICIENT'
+            ) ||
+            errorBodyJson?.error?.errors?.some(
+                (detail: any) => detail.reason === 'insufficientPermissions' // Broader check from Google's typical error structure
+            ) ||
+            (errorBodyJson?.error?.message?.toLowerCase().includes('insufficient authentication scopes'))
+          );
+
+          if (isScopeError && !isRetry) {
+            console.warn('[GoogleAPIClient_REQUEST_SCOPE_INSUFFICIENT] Insufficient scopes detected. Attempting sign-in with consent and retrying.');
+            try {
+              await this.signIn(); // This signIn now uses prompt: 'consent' by default
+              console.log('[GoogleAPIClient_REQUEST_SCOPE_INSUFFICIENT] Sign-in successful after scope issue, retrying request.');
+              return await this.request<T>(endpoint, options, true); // Retry the request once
+            } catch (signInError) {
+              console.error('[GoogleAPIClient_REQUEST_SIGN_IN_ERROR_ON_SCOPE_RETRY]', signInError);
+              // Fall through to throw the original error or a new one indicating signIn failure
+              throw new Error(`Google API request failed after scope refresh attempt: ${signInError}. Original error: ${errorBodyText.substring(0, 200)}`);
+            }
+          }
+
           if (this.isHybridMode) {
-            console.warn('Hybrid mode: API request failed, falling back to mock data.');
-            this.useMockData = true; // Fallback to mock
+            console.warn(`Hybrid mode: API request failed (Status: ${response.status}), falling back to mock data.`);
+            this.useMockData = true;
             return this.getMockResponse<T>(endpoint);
           } else {
-            throw new Error(`Google API request failed: ${response.statusText} - ${errorBody}`);
+            throw new Error(`Google API request failed: ${response.statusText} - ${errorBodyText.substring(0,500)}`);
           }
         }
+        
+        // Handle 204 No Content
+        if (response.status === 204 || response.headers.get('Content-Length') === '0') {
+            return undefined as T;
+        }
         return response.json() as Promise<T>;
-      } catch (error) {
-        console.error('Error during Google API request:', error);
-        if (this.isHybridMode) {
+      } catch (error: any) {
+        console.error('[GoogleAPIClient_REQUEST_CATCH_ERROR] Error during Google API request execution:', error.message, error.cause || error);
+        if (this.isHybridMode && !isRetry) { // Avoid falling back to mock on a retry that itself failed
           console.warn('Hybrid mode: Catching error, falling back to mock data.');
-          this.useMockData = true; // Fallback to mock
+          this.useMockData = true;
           return this.getMockResponse<T>(endpoint);
         }
-        throw error; // Re-throw if not in hybrid mode
+        // Ensure a proper error object is thrown
+        if (error instanceof Error) {
+            throw error;
+        } else {
+            throw new Error(`Unknown error during API request: ${String(error)}`);
+        }
       }
     }
 
-    // If not hybrid and no access token (should have been caught earlier, but as a safeguard)
-    throw new Error('Google API client not authenticated and not in hybrid/mock mode.');
+    // Fallback if not hybrid and no access token (should be caught by earlier logic)
+    if (!this.useMockData) { // Only throw if not supposed to use mock data at all
+        throw new Error('Google API client not authenticated and not in mock/hybrid mode.');
+    }
+    // If useMockData is true (either full mock or hybrid fallback), return mock.
+    // This path might be hit if initial checks pass but something unexpected happens before try/catch for API call.
+    console.warn('[GoogleAPIClient_REQUEST] Unexpected fallback to mock data. AccessToken might be null when not expected.');
+    return this.getMockResponse<T>(endpoint);
   }
 
   /**
@@ -651,14 +773,14 @@ export class GoogleAPIClient {
       this.signInPromiseReject = reject;
 
       try {
-        console.log(`[GoogleAPIClient_SIGN_IN] Calling initialize to ensure GIS client is ready with DEFAULT_SCOPES: ${DEFAULT_SCOPES}`);
-        await this.initialize(this.onAuthChangeCallback, DEFAULT_SCOPES, this.gisClientId);
+        console.log(`[GoogleAPIClient_SIGN_IN] Calling initialize to ensure GIS client is ready with DEFAULT_SCOPES: ${DEFAULT_SCOPES.join(',')}`);
+        await this.initialize(this.onAuthChangeCallback, DEFAULT_SCOPES.join(','), this.gisClientId);
 
-        if (this.tokenClient) {
-          console.log("[GoogleAPIClient_SIGN_IN] Requesting access token via GIS token client. Configured for scopes: ", DEFAULT_SCOPES);
+    if (this.tokenClient) {
+          console.log("[GoogleAPIClient_SIGN_IN] Requesting access token via GIS token client. Configured for scopes: ", DEFAULT_SCOPES.join(','));
           this.tokenClient.requestAccessToken({ prompt: 'consent' });
           // The promise (resolve/reject) will be handled by the GIS callback in initialize()
-        } else {
+    } else {
           console.error("[GoogleAPIClient_SIGN_IN_ERROR] Token client not available after initialize. Cannot initiate Google Sign-In.");
           this.isAuthenticated = false; 
           if (this.onAuthChangeCallback) this.onAuthChangeCallback(false);

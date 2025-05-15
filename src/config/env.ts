@@ -61,7 +61,7 @@ export function getEnv(): EnvironmentConfig {
     typeof import.meta.env.VITE_USE_MOCK
   );
   // ############ DEBUG LOGGING END ############
-
+  
   // Set up the base URL depending on environment
   const baseUrl = isDevelopment
     ? 'http://localhost:3000'

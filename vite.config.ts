@@ -4,6 +4,7 @@ import path from 'path';
 import svgr from 'vite-plugin-svgr';
 import envCompatible from 'vite-plugin-env-compatible';
 import checker from 'vite-plugin-checker'; // Import the checker plugin
+import { visualizer } from 'rollup-plugin-visualizer';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -29,6 +30,7 @@ export default defineConfig(({ mode }) => {
           lintCommand: 'eslint "./src/**/*.{ts,tsx}"', // Command to run ESLint
         },
       }),
+      visualizer(),
     ],
     resolve: {
       alias: {
@@ -39,26 +41,17 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
-        // You might also need COEP if you encounter issues with other APIs or SharedArrayBuffer
-        // 'Cross-Origin-Embedder-Policy': 'require-corp', // or 'unsafe-none'
+        'Cross-Origin-Embedder-Policy': 'require-corp', // Or 'unsafe-none' if this causes issues
       },
     },
     build: {
       sourcemap: true, // Enable source maps for production builds
+      outDir: 'build',
       rollupOptions: {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
-              // Example: Bundle all @mui modules into a single vendor-mui chunk
-              if (id.includes('@mui')) {
-                return 'vendor-mui';
-              }
-              // Example: Bundle react and react-dom into vendor-react
-              if (id.includes('react') || id.includes('react-dom')) {
-                return 'vendor-react';
-              }
-              // Generic vendor chunk for other node_modules
-              return 'vendor';
+              return id.toString().split('node_modules/')[1].split('/')[0].toString();
             }
           }
         }

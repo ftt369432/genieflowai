@@ -4,6 +4,7 @@ import { Task } from '../../types/task';
 import { Event } from '../../types/calendar';
 import { FollowUpQuestion, ScheduleAnalysisResult, ResponseWithSources, Source } from '../AIService';
 import type { Message, AIConfig, AIModel, AIPrompt } from '../../types/ai';
+import { EmailMessage, EmailAnalysis } from '../email/types';
 
 export interface AIService {
   // Core functionality
@@ -53,6 +54,9 @@ export interface AIService {
   getRelevantSources(query: string): Promise<Source[]>;
   getSourcesByType(type: string): Source[];
   getSourcesByConfidence(minConfidence: number): Source[];
+
+  // Method for email analysis to extract calendar event details
+  analyzeEmailForCalendarEvent(email: EmailMessage): Promise<EmailAnalysis | null>;
 }
 
 export abstract class BaseAIService implements AIService {
@@ -63,12 +67,24 @@ export abstract class BaseAIService implements AIService {
   protected sources: Source[] = [];
 
   constructor(providerId: string) {
-    const config = aiConfig.getProviderConfig(providerId);
-    if (!config) {
+    const providerSettings = aiConfig.getProviderConfig(providerId);
+    if (!providerSettings) {
       throw new Error(`No configuration found for provider: ${providerId}`);
     }
-    this.config = config;
-    this.model = config.defaultModel;
+
+    // Assuming providerSettings contains fields compatible with AIConfig, minus 'provider'
+    // and that AIModel is a type that can accept a string model ID.
+    const modelId = providerSettings.defaultModel;
+    if (!modelId) {
+        throw new Error(`No default model specified in provider settings for ${providerId}`);
+    }
+
+    this.config = {
+      ...(providerSettings as any), // Use 'as any' to bypass strict checking if AIProvider and AIConfig mostly overlap
+      provider: providerId,
+      defaultModel: modelId as AIModel, // Cast the string model ID to AIModel
+    };
+    this.model = modelId as AIModel; // Assign the model ID, casting to AIModel
   }
 
   async initialize(config: AIConfig): Promise<void> {
@@ -202,6 +218,9 @@ export abstract class BaseAIService implements AIService {
   async analyzeScheduleConflicts(events: Event[]): Promise<ResponseWithSources<ScheduleAnalysisResult>> {
     throw new Error('Method not implemented');
   }
+
+  // Abstract declaration for the new method, to be implemented by concrete services
+  abstract analyzeEmailForCalendarEvent(email: EmailMessage): Promise<EmailAnalysis | null>;
 
   // Source-related methods
   async getRelevantSources(query: string): Promise<Source[]> {

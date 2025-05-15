@@ -105,7 +105,7 @@ export function AgentLogs({ agent }: AgentLogsProps) {
       actionType: log.actionType,
       description: log.description,
       status: log.status,
-      metadata: log.metadata
+      details: log.details
     }));
     
     const jsonStr = JSON.stringify(exportData, null, 2);

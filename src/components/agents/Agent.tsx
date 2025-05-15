@@ -1,5 +1,5 @@
 import React from 'react';
-import { AgentConfig } from '../../types/agents';
+import { AgentConfig } from '../../types/agent';
 
 interface AgentProps {
   config: AgentConfig;
@@ -12,7 +12,7 @@ export function Agent({ config, onActivate, onDeactivate }: AgentProps) {
     <div className="agent">
       <h3>{config.name}</h3>
       <div className="agent-capabilities">
-        {config.capabilities?.map((cap, i) => (
+        {config.capabilities?.map((cap: string, i: number) => (
           <span key={i} className="capability-tag">{cap}</span>
         ))}
       </div>

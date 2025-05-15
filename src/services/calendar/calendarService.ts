@@ -2,6 +2,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { getEnv } from '../../config/env';
 import { EmailAnalysis } from '../email';
 import googleAuthService from '../auth/googleAuth';
+import { googleApiClient } from '../google/GoogleAPIClient';
+import { EmailAnalysisMeetingDetails } from '../email/types';
 
 // Calendar types
 export interface CalendarEvent {
@@ -36,6 +38,31 @@ export interface CalendarFilter {
   status?: 'confirmed' | 'tentative' | 'cancelled';
 }
 
+// Interface for the data needed to create a calendar event
+// This might evolve as we add more features
+export interface CalendarEventInput {
+  summary: string;
+  description?: string;
+  location?: string;
+  start: {
+    dateTime: string; // RFC3339 format, e.g., '2025-06-26T09:00:00-07:00'
+    timeZone?: string; // e.g., 'America/Los_Angeles'
+  };
+  end: {
+    dateTime: string; // RFC3339 format
+    timeZone?: string;
+  };
+  attendees?: Array<{ email: string }>;
+  // We can add more fields like recurrence, reminders, etc. later
+  source?: { // To link back to the email
+    title: string; // e.g., Email subject
+    url: string;   // e.g., A link to the email if possible (placeholder for now)
+  };
+  conferenceData?: any; // For Google Meet links if provided explicitly
+  caseNumber?: string; // For legal context
+  eventType?: string;  // For legal context
+}
+
 /**
  * Service for managing calendars and events
  */
@@ -44,6 +71,7 @@ export class CalendarService {
   private calendars: Calendar[] = [];
   private eventsStorageKey = 'genieflow_calendar_events';
   private calendarsStorageKey = 'genieflow_calendars';
+  private googleClient = googleApiClient;
 
   constructor() {
     this.loadFromStorage();
@@ -768,6 +796,148 @@ export class CalendarService {
       }
       return calendar;
     });
+  }
+
+  /**
+   * Parses an HH:MM AM/PM time string and a YYYY-MM-DD date string 
+   * into an ISO string.
+   * Note: This is a simplified parser and assumes valid inputs.
+   * It doesn't robustly handle timezones beyond assuming local if not specified.
+   * Google Calendar API is best with explicit timezones or UTC.
+   */
+  private parseDateTime(dateStr: string, timeStr: string): string | null {
+    if (!dateStr || !timeStr) return null;
+
+    const [year, month, day] = dateStr.split('-').map(Number);
+    let [time, modifier] = timeStr.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+
+    if (modifier) { // Handles AM/PM
+        modifier = modifier.toUpperCase();
+        if (modifier === 'PM' && hours < 12) {
+            hours += 12;
+        }
+        if (modifier === 'AM' && hours === 12) { // Midnight case
+            hours = 0;
+        }
+    } // If no modifier, assume 24-hour format (though our AI prompt specifies AM/PM)
+
+    if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
+        console.error('CalendarService: Invalid date or time components for parsing', { dateStr, timeStr });
+        return null;
+    }
+    
+    // Creates a date object in the local timezone of the server/browser running this.
+    // For Google Calendar, it's often better to send UTC or ensure the timeZone field is correctly set.
+    const date = new Date(year, month - 1, day, hours, minutes);
+    return date.toISOString(); // Converts to UTC ISO string e.g., "2025-06-26T15:30:00.000Z"
+  }
+
+  public async createEventFromAnalysis(meetingDetails: EmailAnalysisMeetingDetails, emailSubject: string): Promise<any | null> {
+    if (!meetingDetails.eventDate || !meetingDetails.eventTime) {
+      console.warn('[CalendarService] Missing eventDate or eventTime in meetingDetails. Cannot create calendar event.', meetingDetails);
+      return null;
+    }
+
+    const startTimeISO = this.parseDateTime(meetingDetails.eventDate, meetingDetails.eventTime);
+    if (!startTimeISO) {
+        console.error('[CalendarService] Failed to parse start date/time. Cannot create event.');
+        return null;
+    }
+
+    // For 'end' time, if AI provided 'endTime', use it. Otherwise, default to 1 hour duration.
+    // The AI's 'endTime' field in EmailAnalysisMeetingDetails is currently a string. 
+    // We'd need a similar parsing logic if it's not already an ISO string.
+    // For simplicity now, let's assume if endTime is provided by AI, it's also in a format that needs parsing or is an ISO string.
+    // Let's assume it's like eventTime for now if it exists.
+    
+    let endTimeISO: string | null = null;
+    if (meetingDetails.endTime && meetingDetails.eventDate) { // Assuming endTime is just a time like eventTime
+        // If AI gives endTime as "HH:MM AM/PM", we need to parse it with the eventDate.
+        // If AI gives endTime as a full ISO string, then parseDateTime logic would need adjustment or bypass.
+        // For now, let's test this path.
+        // This is a placeholder - if AI gives 'endTime' it might be a full timestamp or just a time.
+        // Current `EmailAnalysisMeetingDetails` just has `endTime?: string`.
+        // Let's assume for now it's also a time string relative to eventDate.
+        const parsedEndTime = this.parseDateTime(meetingDetails.eventDate, meetingDetails.endTime);
+        if(parsedEndTime) {
+            endTimeISO = parsedEndTime;
+        } else {
+            console.warn('[CalendarService] Provided endTime could not be parsed, defaulting to 1 hour duration from start time.');
+        }
+    }
+    
+    if (!endTimeISO) { // Default to 1 hour duration if endTime parsing failed or not provided
+        const startDate = new Date(startTimeISO);
+        startDate.setHours(startDate.getHours() + 1);
+        endTimeISO = startDate.toISOString();
+    }
+    
+    // Ensure startTime is before endTime
+    if (new Date(startTimeISO) >= new Date(endTimeISO)) {
+        console.warn('[CalendarService] Calculated start time is on or after end time. Defaulting end time to 1 hour after start.', {startTimeISO, endTimeISO});
+        const startDate = new Date(startTimeISO);
+        startDate.setHours(startDate.getHours() + 1);
+        endTimeISO = startDate.toISOString();
+    }
+
+
+    const eventInput: CalendarEventInput = {
+      summary: meetingDetails.eventType || emailSubject, // Use eventType if available, else email subject
+      description: meetingDetails.description || `Event based on email: "${emailSubject}"\nCase Number: ${meetingDetails.caseNumber || 'N/A'}`,
+      location: meetingDetails.location || undefined,
+      start: {
+        dateTime: startTimeISO,
+        // timeZone: 'America/Los_Angeles', // Example: Consider making this configurable or detecting user's timezone
+      },
+      end: {
+        dateTime: endTimeISO,
+        // timeZone: 'America/Los_Angeles',
+      },
+      attendees: meetingDetails.attendees?.map(email => ({ email })) || [],
+      source: {
+        title: `Original Email: ${emailSubject}`,
+        url: '' // Placeholder, ideally link to the email
+      },
+      caseNumber: meetingDetails.caseNumber,
+      eventType: meetingDetails.eventType,
+    };
+    
+    // Add Google Meet conference data if location hints at a video call
+    // This is a simple heuristic and might need to be more robust
+    if (meetingDetails.location && (meetingDetails.location.toLowerCase().includes('video:') || meetingDetails.location.toLowerCase().includes('meet.google.com'))) {
+        eventInput.conferenceData = {
+            createRequest: {
+                requestId: `genieflow-${Date.now()}`, // Unique ID for the request
+                conferenceSolutionKey: { type: "hangoutsMeet" } 
+            }
+        };
+    }
+
+
+    console.log('[CalendarService] Attempting to create calendar event with input:', JSON.stringify(eventInput, null, 2));
+
+    try {
+      const createdEvent = await this.googleClient.request<any>(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+        {
+          method: 'POST',
+          body: JSON.stringify(eventInput),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      console.log('[CalendarService] Successfully created calendar event:', createdEvent);
+      return createdEvent;
+    } catch (error) {
+      console.error('[CalendarService] Error creating calendar event:', error);
+      // Log the specific error from Google if available
+      if (error instanceof Error && (error as any).body) {
+        console.error('[CalendarService] Google API Error Body:', (error as any).body);
+      }
+      return null;
+    }
   }
 }
 
