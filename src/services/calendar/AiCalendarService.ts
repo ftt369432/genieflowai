@@ -78,6 +78,49 @@ export class AiCalendarService {
     } 
   }
 
+  /**
+   * Parses an HH:MM AM/PM time string and a YYYY-MM-DD date string
+   * into a local YYYY-MM-DDTHH:MM:SS formatted string.
+   */
+  private parseDateTimeToLocalStringFormat(dateStr: string, timeStr: string): string | null {
+    if (!dateStr || !timeStr) return null;
+
+    const [year, month, day] = dateStr.split('-').map(Number);
+    let [time, modifier] = timeStr.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+
+    // Basic validation (can be enhanced)
+    if (isNaN(year) || year < 1900 || year > 2200) return null;
+    if (isNaN(month) || month < 1 || month > 12) return null;
+    if (isNaN(day) || day < 1 || day > 31) return null;
+    if (isNaN(hours) || hours < 0 || hours > 23) { // Check before AM/PM adjustment
+      if (!(modifier && (hours === 12))) return null;
+    }
+    if (isNaN(minutes) || minutes < 0 || minutes > 59) return null;
+
+    if (modifier) {
+      modifier = modifier.toUpperCase();
+      if (modifier === 'PM' && hours >= 1 && hours < 12) {
+        hours += 12;
+      }
+      if (modifier === 'AM' && hours === 12) { // Midnight case: 12 AM is 00 hours
+        hours = 0;
+      }
+    }
+
+    if (hours < 0 || hours > 23) return null; // Double check hours
+
+    // Format to YYYY-MM-DDTHH:MM:SS
+    const HH = String(hours).padStart(2, '0');
+    const MM = String(minutes).padStart(2, '0');
+    const SS = '00'; // Assuming seconds are always 00
+    const YYYY = String(year);
+    const M = String(month).padStart(2, '0');
+    const D = String(day).padStart(2, '0');
+
+    return `${YYYY}-${M}-${D}T${HH}:${MM}:${SS}`;
+  }
+
   public async findEventByCaseNumber(caseNumber: string): Promise<any | null> {
     if (!caseNumber) {
       console.warn('[AiCalendarService] findEventByCaseNumber called with no caseNumber.');
@@ -129,49 +172,112 @@ export class AiCalendarService {
       return null;
     }
 
-    const startTimeISO = this.parseDateTimeToISO(meetingDetails.eventDate, meetingDetails.eventTime);
-    if (!startTimeISO) {
-        console.error('[AiCalendarService] Failed to parse start date/time:', {date: meetingDetails.eventDate, time: meetingDetails.eventTime });
-        return null;
+    const localStartTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, meetingDetails.eventTime);
+    if (!localStartTimeStr) {
+      console.error('[AiCalendarService] Failed to parse start date/time to local string format:', { date: meetingDetails.eventDate, time: meetingDetails.eventTime });
+      return null;
     }
 
-    let endTimeISO: string | null = null;
+    let localEndTimeStr: string | null = null;
     if (meetingDetails.endTime && meetingDetails.eventDate) {
-        // Try to parse endTime. It could be a time string like eventTime, or a full ISO string (less likely from current AI prompt).
-        // For now, assume it's a time string relative to eventDate if not already ISO.
-        if (meetingDetails.endTime.includes('T') && meetingDetails.endTime.includes('Z')) { // Basic check for ISO format
-            endTimeISO = meetingDetails.endTime;
-        } else {
-            endTimeISO = this.parseDateTimeToISO(meetingDetails.eventDate, meetingDetails.endTime);
+      // If endTime is a full ISO UTC string, this specific handling might need review based on expected format of meetingDetails.endTime
+      // For now, assuming if it's not explicitly UTC, it's a local time string like eventTime.
+      if (meetingDetails.endTime.includes('T') && meetingDetails.endTime.includes('Z')) {
+        console.warn('[AiCalendarService] meetingDetails.endTime appears to be a UTC ISO string. Attempting to parse as local time relative to eventDate for consistency. Review this logic if endTime can be UTC.', meetingDetails.endTime);
+        // This case is tricky: if it's a UTC string, we'd ideally convert it to a Pacific local time string.
+        // For now, we'll try to parse it as if it were a local time string related to eventDate, which might be incorrect if it's truly UTC.
+        // A better approach would be to convert this UTC string to 'America/Los_Angeles' local time string.
+        // As a simplification, let's assume if it's not parseable as local time string, we default to 1 hour duration.
+        const tempEndTime = meetingDetails.endTime.split('T')[1]?.substring(0,5); // try to extract HH:MM
+        if (tempEndTime) {
+            localEndTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, tempEndTime); // This assumes it's on the same date and the time part is local.
         }
-        if (!endTimeISO) {
-            console.warn('[AiCalendarService] Provided endTime could not be parsed, defaulting to 1 hour duration from start time.', {date: meetingDetails.eventDate, endTime: meetingDetails.endTime });
-        }
+      } else {
+        localEndTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, meetingDetails.endTime);
+      }
+      if (!localEndTimeStr) {
+        console.warn('[AiCalendarService] Provided endTime could not be parsed to local string format, defaulting to 1 hour duration from start time.', { date: meetingDetails.eventDate, endTime: meetingDetails.endTime });
+      }
     }
     
-    if (!endTimeISO) {
-        const startDate = new Date(startTimeISO);
-        startDate.setUTCHours(startDate.getUTCHours() + 1); // Add 1 hour in UTC
-        endTimeISO = startDate.toISOString();
+    if (!localEndTimeStr) {
+      const [datePart, timePart] = localStartTimeStr.split('T');
+      let [hours, minutes] = timePart.split(':').map(Number);
+      hours += 1; // Add 1 hour for default duration
+      let endDayOffset = 0;
+      if (hours >= 24) {
+        hours -= 24;
+        endDayOffset = 1; // Event ends on the next day
+      }
+      
+      let endDateStr = datePart;
+      if (endDayOffset > 0) {
+          // Basic date increment, for more complex date math a library is better
+          const startDateObj = new Date(datePart + "T00:00:00"); // Use a date object for reliable date increment
+          startDateObj.setDate(startDateObj.getDate() + endDayOffset);
+          endDateStr = startDateObj.toISOString().split('T')[0];
+      }
+
+      const endHH = String(hours).padStart(2, '0');
+      const endMM = String(minutes).padStart(2, '0');
+      localEndTimeStr = `${endDateStr}T${endHH}:${endMM}:00`;
     }
-    
-    if (new Date(startTimeISO) >= new Date(endTimeISO)) {
-        console.warn('[AiCalendarService] Start time is on or after end time. Defaulting end time to 1 hour after start.', {startTimeISO, endTimeISO});
-        const startDate = new Date(startTimeISO);
-        startDate.setUTCHours(startDate.getUTCHours() + 1);
-        endTimeISO = startDate.toISOString();
+
+    // Ensure startTime is before endTime
+    // Comparing local strings directly can be problematic if they cross midnight without date change in string.
+    // However, Google API will validate. For basic check:
+    if (localStartTimeStr >= localEndTimeStr && meetingDetails.eventDate === localEndTimeStr.substring(0,10) /* ensure same day for simple comparison or date was incremented */) {
+      console.warn('[AiCalendarService] Start time is on or after end time. Defaulting end time to 1 hour after start (re-evaluating).', { localStartTimeStr, localEndTimeStr });
+      const [datePart, timePart] = localStartTimeStr.split('T');
+      let [hours, minutes] = timePart.split(':').map(Number);
+      hours += 1;
+      let endDayOffset = 0;
+      if (hours >= 24) {
+        hours -= 24;
+        endDayOffset = 1;
+      }
+      let endDateStr = datePart;
+      if (endDayOffset > 0) {
+          const startDateObj = new Date(datePart + "T00:00:00");
+          startDateObj.setDate(startDateObj.getDate() + endDayOffset);
+          endDateStr = startDateObj.toISOString().split('T')[0];
+      }
+      const endHH = String(hours).padStart(2, '0');
+      const endMM = String(minutes).padStart(2, '0');
+      localEndTimeStr = `${endDateStr}T${endHH}:${endMM}:00`;
+    }
+
+    // Construct the new dynamic summary (event title)
+    let summaryParts: string[] = [];
+    const eventTypeForDisplay = meetingDetails.eventType || "Legal Event"; // Use placeholder if eventType is missing
+    summaryParts.push(eventTypeForDisplay);
+
+    if (meetingDetails.personInvolved) {
+      summaryParts.push(`for ${meetingDetails.personInvolved}`);
+    }
+    // Only add time if eventType or personInvolved is present (now summaryParts will always have at least eventTypeForDisplay)
+    if (meetingDetails.eventTime) { // Simplified condition as summaryParts will not be empty
+      summaryParts.push(`at ${meetingDetails.eventTime}`);
+    }
+    if (meetingDetails.judgeName) {
+      summaryParts.push(`w/ Judge ${meetingDetails.judgeName}`);
+    }
+
+    let newSummary = summaryParts.join(' ');
+    if (!newSummary) { // Fallback if all parts are missing
+      newSummary = meetingDetails.eventTitle || meetingDetails.description || emailSubject;
     }
 
     const eventInput: AiCalendarEventInput = {
-      summary: meetingDetails.eventType || meetingDetails.description || emailSubject,
-      description: `Event Details:\nCase Number: ${meetingDetails.caseNumber || 'N/A'}\nEvent Type: ${meetingDetails.eventType || 'N/A'}\nLocation: ${meetingDetails.location || 'N/A'}\nOriginal Description: ${meetingDetails.description || 'N/A'}\n\n(Created from email: "${emailSubject}")`,
+      summary: newSummary, // Use the new dynamically constructed summary
+      description: `Event Details:\nCase Number: ${meetingDetails.caseNumber || 'N/A'}\nEvent Type: ${meetingDetails.eventType || 'N/A'}\nPerson Involved: ${meetingDetails.personInvolved || 'N/A'}\nJudge: ${meetingDetails.judgeName || 'N/A'}\nTime: ${meetingDetails.eventTime || 'N/A'} (Date: ${meetingDetails.eventDate || 'N/A'})\nLocation: ${meetingDetails.location || 'N/A'}\nOriginal Description: ${meetingDetails.description || 'N/A'}\n\n(Created from email: "${emailSubject}")`,
       location: meetingDetails.location || undefined,
-      start: { dateTime: startTimeISO }, // Google Calendar API typically infers timezone from user's primary calendar if not specified
-      end: { dateTime: endTimeISO },
+      start: { dateTime: localStartTimeStr, timeZone: 'America/Los_Angeles' },
+      end: { dateTime: localEndTimeStr, timeZone: 'America/Los_Angeles' },
       attendees: meetingDetails.attendees?.map(email => ({ email })).filter(a => a.email) || [],
       source: {
         title: `Original Email: ${emailSubject}`,
-        url: emailMessageId ? `https://mail.google.com/mail/u/0/#inbox/${emailMessageId}` : '' // Example deep link
+        url: emailMessageId ? `https://mail.google.com/mail/u/0/#inbox/${emailMessageId}` : '' 
       },
       extendedProperties: (() => {
         const privateProps: { [key: string]: string } = {
@@ -182,6 +288,9 @@ export class AiCalendarService {
         if (emailThreadId) privateProps.emailThreadId = emailThreadId;
         if (meetingDetails.caseNumber) privateProps.genieflowCaseNumber = meetingDetails.caseNumber;
         if (meetingDetails.eventType) privateProps.genieflowEventType = meetingDetails.eventType;
+        // Add new fields to extended properties for querying/display if needed later
+        if (meetingDetails.personInvolved) privateProps.genieflowPersonInvolved = meetingDetails.personInvolved;
+        if (meetingDetails.judgeName) privateProps.genieflowJudgeName = meetingDetails.judgeName;
         return { private: privateProps };
       })()
     };
@@ -198,16 +307,8 @@ export class AiCalendarService {
     console.log('[AiCalendarService] Attempting to create calendar event with input:', JSON.stringify(eventInput, null, 2));
 
     try {
-      // The GoogleAPIClient.request method will handle token refresh if necessary.
-      // No need to explicitly call signIn() here as it might force a consent prompt
-      // when a silent refresh might have been possible or when a token is already available.
-      // if (!this.googleClient.isSignedIn()) {
-      //   console.log('[AiCalendarService] Google client not signed in. Attempting sign-in for calendar operation.');
-      //   await this.googleClient.signIn(); // This will prompt for consent if new scopes were added
-      // }
-
       const createdEvent = await this.googleClient.request<any>(
-        'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1', // Added conferenceDataVersion=1
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1',
         {
           method: 'POST',
           body: JSON.stringify(eventInput),
@@ -238,91 +339,149 @@ export class AiCalendarService {
     }
     console.log(`[AiCalendarService] Attempting to update event ID: ${eventId} with details:`, meetingDetails);
 
-    const startTimeISO = this.parseDateTimeToISO(meetingDetails.eventDate, meetingDetails.eventTime);
-    if (!startTimeISO) {
-        console.error('[AiCalendarService] updateEvent: Failed to parse start date/time:', {date: meetingDetails.eventDate, time: meetingDetails.eventTime });
-        return null;
+    const localStartTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, meetingDetails.eventTime);
+    if (!localStartTimeStr) {
+      console.error('[AiCalendarService] updateEvent: Failed to parse start date/time to local string format:', { date: meetingDetails.eventDate, time: meetingDetails.eventTime });
+      return null;
     }
 
-    let endTimeISO: string | null = null;
+    let localEndTimeStr: string | null = null;
     if (meetingDetails.endTime && meetingDetails.eventDate) {
-        if (meetingDetails.endTime.includes('T') && meetingDetails.endTime.includes('Z')) { 
-            endTimeISO = meetingDetails.endTime;
-        } else {
-            endTimeISO = this.parseDateTimeToISO(meetingDetails.eventDate, meetingDetails.endTime);
+      // Similar handling for endTime as in createEventFromAnalysis
+      if (meetingDetails.endTime.includes('T') && meetingDetails.endTime.includes('Z')) {
+        console.warn('[AiCalendarService] updateEvent: meetingDetails.endTime appears to be a UTC ISO string. Review this logic.', meetingDetails.endTime);
+        const tempEndTime = meetingDetails.endTime.split('T')[1]?.substring(0,5);
+        if (tempEndTime) {
+            localEndTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, tempEndTime);
         }
-        if (!endTimeISO) {
-            console.warn('[AiCalendarService] updateEvent: Provided endTime could not be parsed, defaulting to 1 hour duration from start time.', {date: meetingDetails.eventDate, endTime: meetingDetails.endTime });
-        }
-    }
-    
-    if (!endTimeISO) {
-        const startDate = new Date(startTimeISO);
-        startDate.setUTCHours(startDate.getUTCHours() + 1);
-        endTimeISO = startDate.toISOString();
-    }
-    
-    if (new Date(startTimeISO) >= new Date(endTimeISO)) {
-        console.warn('[AiCalendarService] updateEvent: Start time is on or after end time. Defaulting end time to 1 hour after start.', {startTimeISO, endTimeISO});
-        const startDate = new Date(startTimeISO);
-        startDate.setUTCHours(startDate.getUTCHours() + 1);
-        endTimeISO = startDate.toISOString();
+      } else {
+        localEndTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, meetingDetails.endTime);
+      }
+      if (!localEndTimeStr) {
+        console.warn('[AiCalendarService] updateEvent: Provided endTime could not be parsed, defaulting to 1 hour duration.');
+      }
     }
 
-    const eventInput: AiCalendarEventInput = {
-      summary: meetingDetails.eventType || meetingDetails.description || emailSubject,
-      // Modify description to indicate it's an update if desired, or keep similar structure
-      description: `EVENT UPDATED. New Details:\nCase Number: ${meetingDetails.caseNumber || 'N/A'}\nEvent Type: ${meetingDetails.eventType || 'N/A'}\nLocation: ${meetingDetails.location || 'N/A'}\nOriginal Description from update email: ${meetingDetails.description || 'N/A'}\n\n(Updated from email: "${emailSubject}")`,
+    if (!localEndTimeStr) {
+      const [datePart, timePart] = localStartTimeStr.split('T');
+      let [hours, minutes] = timePart.split(':').map(Number);
+      hours += 1; // Add 1 hour for default duration
+      let endDayOffset = 0;
+      if (hours >= 24) {
+        hours -= 24;
+        endDayOffset = 1; 
+      }
+      let endDateStr = datePart;
+      if (endDayOffset > 0) {
+          const startDateObj = new Date(datePart + "T00:00:00");
+          startDateObj.setDate(startDateObj.getDate() + endDayOffset);
+          endDateStr = startDateObj.toISOString().split('T')[0];
+      }
+      const endHH = String(hours).padStart(2, '0');
+      const endMM = String(minutes).padStart(2, '0');
+      localEndTimeStr = `${endDateStr}T${endHH}:${endMM}:00`;
+    }
+    
+    if (localStartTimeStr >= localEndTimeStr && meetingDetails.eventDate === localEndTimeStr.substring(0,10)) {
+        console.warn('[AiCalendarService] updateEvent: Start time is on or after end time. Defaulting end time to 1 hour after start (re-evaluating).');
+        const [datePart, timePart] = localStartTimeStr.split('T');
+        let [hours, minutes] = timePart.split(':').map(Number);
+        hours += 1;
+        let endDayOffset = 0;
+        if (hours >= 24) {
+            hours -= 24;
+            endDayOffset = 1;
+        }
+        let endDateStr = datePart;
+        if (endDayOffset > 0) {
+            const startDateObj = new Date(datePart + "T00:00:00");
+            startDateObj.setDate(startDateObj.getDate() + endDayOffset);
+            endDateStr = startDateObj.toISOString().split('T')[0];
+        }
+        const endHH = String(hours).padStart(2, '0');
+        const endMM = String(minutes).padStart(2, '0');
+        localEndTimeStr = `${endDateStr}T${endHH}:${endMM}:00`;
+    }
+
+    // Construct the new dynamic summary (event title) - REPLICATE LOGIC FROM createEventFromAnalysis
+    let summaryParts: string[] = [];
+    const eventTypeForDisplay = meetingDetails.eventType || "Legal Event"; // Use placeholder if eventType is missing
+    summaryParts.push(eventTypeForDisplay);
+
+    if (meetingDetails.personInvolved) {
+      summaryParts.push(`for ${meetingDetails.personInvolved}`);
+    }
+    // Only add time if eventType or personInvolved is present (now summaryParts will always have at least eventTypeForDisplay)
+    if (meetingDetails.eventTime) { // Simplified condition as summaryParts will not be empty
+      summaryParts.push(`at ${meetingDetails.eventTime}`);
+    }
+    if (meetingDetails.judgeName) {
+      summaryParts.push(`w/ Judge ${meetingDetails.judgeName}`);
+    }
+
+    let newSummary = summaryParts.join(' ');
+    if (!newSummary) {
+      newSummary = meetingDetails.eventTitle || meetingDetails.description || emailSubject;
+    }
+
+    // Also update description to include new fields
+    const updatedDescription = `Event Details:\nCase Number: ${meetingDetails.caseNumber || 'N/A'}\nEvent Type: ${meetingDetails.eventType || 'N/A'}\nPerson Involved: ${meetingDetails.personInvolved || 'N/A'}\nJudge: ${meetingDetails.judgeName || 'N/A'}\nTime: ${meetingDetails.eventTime || 'N/A'} (Date: ${meetingDetails.eventDate || 'N/A'})\nLocation: ${meetingDetails.location || 'N/A'}\nOriginal Description: ${meetingDetails.description || 'N/A'}\n\n(Updated from email: "${emailSubject}")`;
+
+    const eventPatch: Partial<AiCalendarEventInput> = {
+      summary: newSummary,
+      description: updatedDescription,
       location: meetingDetails.location || undefined,
-      start: { dateTime: startTimeISO },
-      end: { dateTime: endTimeISO },
+      start: { dateTime: localStartTimeStr, timeZone: 'America/Los_Angeles' },
+      end: { dateTime: localEndTimeStr, timeZone: 'America/Los_Angeles' },
       attendees: meetingDetails.attendees?.map(email => ({ email })).filter(a => a.email) || [],
-      source: {
-        title: `Updated from Email: ${emailSubject}`,
-        url: emailMessageId ? `https://mail.google.com/mail/u/0/#inbox/${emailMessageId}` : '' 
-      },
+      // Source probably doesn't need to change on update, unless the source email itself changed.
+      // For now, we don't update it.
       extendedProperties: (() => {
         const privateProps: { [key: string]: string } = {
           genieflowProcessed: 'true',
-          genieflowSource: 'emailAnalysisUpdate', // Indicate this event was updated via email analysis
+          genieflowSource: 'emailAnalysis_updated', // Indicate it's an update
         };
-        if (emailMessageId) privateProps.emailMessageId = emailMessageId; // Update to the new email ID
-        if (emailThreadId) privateProps.emailThreadId = emailThreadId;   // Update to the new thread ID
-        if (meetingDetails.caseNumber) privateProps.genieflowCaseNumber = meetingDetails.caseNumber; // Should be the same, but refresh
+        if (emailMessageId) privateProps.emailMessageId = emailMessageId; // Potentially update if new email triggered update
+        if (emailThreadId) privateProps.emailThreadId = emailThreadId;
+        if (meetingDetails.caseNumber) privateProps.genieflowCaseNumber = meetingDetails.caseNumber;
         if (meetingDetails.eventType) privateProps.genieflowEventType = meetingDetails.eventType;
+        if (meetingDetails.personInvolved) privateProps.genieflowPersonInvolved = meetingDetails.personInvolved;
+        if (meetingDetails.judgeName) privateProps.genieflowJudgeName = meetingDetails.judgeName;
         return { private: privateProps };
       })()
     };
-    
+
     if (meetingDetails.location && (meetingDetails.location.toLowerCase().includes('video:') || meetingDetails.location.toLowerCase().includes('meet.google.com'))) {
-        eventInput.conferenceData = {
-            createRequest: {
-                requestId: `genieflow-update-${Date.now()}`,
-                conferenceSolutionKey: { type: "hangoutsMeet" } 
-            }
-        };
+      eventPatch.conferenceData = {
+        createRequest: {
+          requestId: `genieflow-update-${Date.now()}`,
+          conferenceSolutionKey: { type: "hangoutsMeet" } 
+        }
+      };
     } else {
-      // If the new details don't specify a video meeting, we might want to clear existing conference data.
-      // Setting conferenceData to null or an empty object might be necessary.
-      // For now, if not specified, it will retain existing conference data unless overwritten by a new meet link.
-      // To explicitly remove: eventInput.conferenceData = null; (or the API specific way to clear it)
+      // If location no longer indicates a video meeting, clear conference data.
+      // To clear, set conferenceData to null IF it can be set to null.
+      // The API might require specific empty object for some fields or just omitting it.
+      // For now, let's assume we might want to clear it if it's no longer a video meeting.
+      // However, simply not including it in the patch might be enough if it was already set.
+      // To be safe, if we want to REMOVE a meet link, we might need to set conferenceData to null.
+      // Let's consult Google API docs if this becomes an issue. For now, only add if relevant.
     }
 
-    console.log(`[AiCalendarService] Attempting to update calendar event ID: ${eventId} with input:`, JSON.stringify(eventInput, null, 2));
+    console.log(`[AiCalendarService] Attempting to patch event ID: ${eventId} with input:`, JSON.stringify(eventPatch, null, 2));
 
     try {
-      const path = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?conferenceDataVersion=1`;
       const updatedEvent = await this.googleClient.request<any>(
-        path,
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?conferenceDataVersion=1`,
         {
-          method: 'PUT',
-          body: JSON.stringify(eventInput),
+          method: 'PATCH',
+          body: JSON.stringify(eventPatch),
         }
       );
-      console.log('[AiCalendarService] Successfully updated calendar event:', updatedEvent);
+      console.log(`[AiCalendarService] Successfully updated event ID: ${eventId}:`, updatedEvent);
       return updatedEvent;
     } catch (error) {
-      console.error(`[AiCalendarService] Error updating calendar event ID ${eventId}:`, error);
+      console.error(`[AiCalendarService] Error updating event ID: ${eventId}:`, error);
       return null;
     }
   }

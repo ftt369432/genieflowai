@@ -8,7 +8,7 @@ export interface WorkflowStep {
   actionType: string;
   name: string;
   description: string;
-  input: string;
+  input: string | Record<string, any>;
   inputType: 'static' | 'dynamic' | 'previous';
   outputMapping: string;
   condition?: {

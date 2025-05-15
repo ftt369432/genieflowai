@@ -11,6 +11,12 @@ import {
 } from '../types/agent';
 import { nanoid } from 'nanoid';
 
+// Import necessary services
+import emailServiceInstance from '../services/email/emailService';
+import { aiCalendarService } from '../services/calendar/AiCalendarService';
+import { EmailMessage } from '../types/email';
+import { EmailAnalysisMeetingDetails, EmailMessage as ServiceEmailMessage, EmailAttachment as ServiceEmailAttachment } from '../services/email/types';
+
 // Define a sample agent for testing
 const defaultAgent: Agent = {
   id: '1',
@@ -329,61 +335,144 @@ export const useAgentStore = create<AgentState>()(
         }));
       },
 
-      executeAction: async (agentId, actionType, input) => {
-        const actionId = await get().startAction(agentId, actionType, input);
+      executeAction: async (agentId: string, actionType: string, input: any): Promise<any> => {
+        console.log(`[AgentStore] Executing action: ${actionType} for agent ${agentId} with input:`, input);
+        const agent = get().agents.find(a => a.id === agentId);
+        if (!agent) {
+          throw new Error(`Agent with ID ${agentId} not found.`);
+        }
+
         try {
-          // Implement actual action execution logic here
-          // For now, just return a dummy response
-          await get().completeAction(actionId, { result: 'Action executed successfully' });
-          return { success: true, actionId };
+          switch (actionType) {
+            case 'GET_EMAIL_DETAILS':
+              if (!input || !input.emailId) {
+                throw new Error('Input must include emailId for GET_EMAIL_DETAILS');
+              }
+              // Assuming emailServiceInstance.getEmailDetails returns a Promise<EmailMessage | null>
+              // And that the workflow expects the full EmailMessage object.
+              // The actual getEmailDetails in EmailService might need adjustment if it expects accountId etc.
+              // For now, we'll assume it's adapted or a wrapper is used.
+              // This is a simplified call; EmailService.getEmailDetails might need more context (e.g., accountId)
+              // For workflows, the account context might be part of the agent's config or workflow global settings.
+              // This part needs careful integration with how EmailService fetches specific emails.
+              // Let's assume for now that a method exists on emailServiceInstance that can get by ID alone,
+              // or input.accountId is also provided.
+              // To make this runnable, we'll use a conceptual getRawEmailMessageById
+              // 실제 emailService.getEmailDetails는 accountId가 필요할 수 있습니다.
+              // 지금은 emailId만으로 가져올 수 있는 emailServiceInstance의 메서드가 있다고 가정하거나,
+              // input.accountId도 제공된다고 가정합니다.
+              // 실행 가능하게 만들기 위해 개념적인 getRawEmailMessageById를 사용합니다.
+              // This is a placeholder for the actual call that would fetch full email data.
+              // In a real scenario, this might involve looking up account details associated with the agent or workflow.
+              console.warn('[AgentStore] GET_EMAIL_DETAILS needs a robust way to get account context for emailService.getEmailDetails');
+              // const emailMessage = await emailServiceInstance.getEmailDetails(input.accountId, input.emailId);
+              // For now, let's return a mock or assume input.emailData is provided for chained testing
+              if (input.emailData) return input.emailData; // If emailData is passed directly (e.g. from a trigger)
+              throw new Error('GET_EMAIL_DETAILS needs implementation details for fetching by ID across accounts.');
+
+            case 'ANALYZE_EMAIL_FOR_CALENDAR_EVENT':
+              if (!input || !input.emailMessage) {
+                throw new Error('Input must include emailMessage for ANALYZE_EMAIL_FOR_CALENDAR_EVENT');
+              }
+              
+              const originalEmail = input.emailMessage as EmailMessage; // from ../types/email.ts
+
+              // Construct the email object expected by emailServiceInstance.analyzeEmail
+              // This is of type ../services/email/types.ts#EmailMessage (ServiceEmailMessage)
+              const emailForService: ServiceEmailMessage = {
+                // Fields present in originalEmail (../types/email.ts#EmailMessage)
+                id: originalEmail.id,
+                threadId: originalEmail.threadId,
+                subject: originalEmail.subject,
+                from: originalEmail.from,
+                to: originalEmail.to,
+                cc: originalEmail.cc,
+                bcc: originalEmail.bcc,
+                body: originalEmail.body,
+                date: originalEmail.date instanceof Date ? originalEmail.date.toISOString() : originalEmail.date, // Convert Date to ISO string
+                labels: originalEmail.labels || [],
+                read: originalEmail.read,
+                starred: originalEmail.starred,
+                
+                // Fields that might be in ServiceEmailMessage but not guaranteed in originalEmail
+                // Provide defaults or ensure they are optional in ServiceEmailMessage definition used by analyzeEmail
+                snippet: (originalEmail as any).snippet || '', // Assuming snippet might exist on originalEmail due to previous errors, or default to empty
+                attachments: (originalEmail as any).attachments as ServiceEmailAttachment[] || [], // Assuming attachments might exist, or default to empty array
+                important: (originalEmail as any).important || false, // Assuming important might exist, or default to false
+                bodyMimeType: (originalEmail as any).bodyMimeType || 'text/html', // Defaulting to text/html
+                // Ensure any other *required* fields of ServiceEmailMessage are present
+              };
+              
+              return await emailServiceInstance.analyzeEmail(emailForService);
+
+            case 'FIND_CALENDAR_EVENT_BY_CASENUMBER':
+              if (!input || !input.caseNumber) {
+                throw new Error('Input must include caseNumber for FIND_CALENDAR_EVENT_BY_CASENUMBER');
+              }
+              return await aiCalendarService.findEventByCaseNumber(input.caseNumber as string);
+
+            case 'CREATE_CALENDAR_EVENT':
+              if (!input || !input.meetingDetails || !input.emailSubject) {
+                throw new Error('Input must include meetingDetails and emailSubject for CREATE_CALENDAR_EVENT');
+              }
+              // Ensure all necessary parts of meetingDetails are present as per AiCalendarService
+              return await aiCalendarService.createEventFromAnalysis(
+                input.meetingDetails as EmailAnalysisMeetingDetails,
+                input.emailSubject as string,
+                input.emailMessageId as string | undefined, // Optional
+                input.emailThreadId as string | undefined  // Optional
+              );
+
+            case 'UPDATE_CALENDAR_EVENT':
+              if (!input || !input.eventId || !input.meetingDetails || !input.emailSubject) {
+                throw new Error('Input must include eventId, meetingDetails, and emailSubject for UPDATE_CALENDAR_EVENT');
+              }
+              return await aiCalendarService.updateEvent(
+                input.eventId as string,
+                input.meetingDetails as EmailAnalysisMeetingDetails,
+                input.emailSubject as string,
+                input.emailMessageId as string | undefined, // Optional
+                input.emailThreadId as string | undefined  // Optional
+              );
+            
+            case 'LOG_MESSAGE':
+                if (!input || !input.message) {
+                    console.warn('[AgentStore] LOG_MESSAGE action called without a message.');
+                    return { logged: false, message: 'No message provided.' };
+                }
+                console.log(`[Workflow Log][Agent: ${agentId}]: ${input.message}`);
+                return { logged: true, message: input.message };
+
+            // TODO: Add other actions like SEND_NOTIFICATION
+            // case 'SEND_NOTIFICATION':
+            //   // ...
+            //   break;
+
+            default:
+              console.warn(`[AgentStore] Unknown actionType: ${actionType}`);
+              throw new Error(`Unknown actionType: ${actionType}`);
+          }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          await get().failAction(actionId, errorMessage);
+          console.error(`[AgentStore] Error executing action ${actionType} for agent ${agentId}:`, error);
+          // Re-throw the error so workflowStore can catch it and mark the step/run as failed
           throw error;
         }
       },
 
-      trainAgent: async (agentId) => {
-        set((state) => ({
-          agents: state.agents.map((agent) =>
-            agent.id === agentId ? { ...agent, status: 'training' } : agent
+      trainAgent: async (agentId: string) => {
+        // Placeholder for training logic
+        console.log(`Training agent ${agentId}...`);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate training
+        set(state => ({
+          agents: state.agents.map(agent =>
+            agent.id === agentId ? { ...agent, status: 'active' as AgentStatus } : agent
           ),
         }));
-        
-        try {
-          // Simulate training process
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          set((state) => ({
-            agents: state.agents.map((agent) =>
-              agent.id === agentId ? { 
-                ...agent, 
-                status: 'active',
-                metrics: {
-                  ...agent.metrics,
-                  accuracy: Math.min(agent.metrics.accuracy + 0.05, 1),
-                  performance: Math.min(agent.metrics.performance + 5, 100)
-                }
-              } : agent
-            ),
-          }));
-        } catch (error) {
-          set((state) => ({
-            agents: state.agents.map((agent) =>
-              agent.id === agentId ? { ...agent, status: 'error' } : agent
-            ),
-          }));
-          throw error;
-        }
+        console.log(`Agent ${agentId} training complete.`);
       },
 
-      selectAgent: (id) => {
-        set({ selectedAgentId: id });
-      },
-
-      getAgent: (id) => {
-        return get().agents.find(agent => agent.id === id);
-      }
+      selectAgent: (id) => set({ selectedAgentId: id }),
+      getAgent: (id) => get().agents.find(agent => agent.id === id),
     }),
     {
       name: 'agent-store',

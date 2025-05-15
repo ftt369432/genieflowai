@@ -254,3 +254,50 @@
   - [ ] Implement due date notifications
   - [ ] Add collaborative task assignment
   - [ ] Create task dashboard view
+
+## Continuing Google Calendar Integration for Email-Based Legal Case Management
+
+Hi team,
+
+We've made significant progress on enhancing our email processing system to intelligently manage Google Calendar events for legal case hearings.
+
+What we've accomplished so far:
+
+**Resolved Authentication/API Issues:**
+*   Corrected Google OAuth scopes by adding `https://www.googleapis.com/auth/calendar.events` to `supabase.auth.signInWithOAuth` in `src/services/auth/googleAuth.ts`, fixing the "403 Permission Denied - Insufficient authentication scopes" error.
+*   Ensured the Google Calendar API was enabled in the relevant Google Cloud Project, resolving the "403 Google Calendar API has not been used in project... or it is disabled" error.
+
+**Implemented Event Update Logic (to avoid duplicates):**
+*   `AiCalendarService.ts` (`src/services/calendar/AiCalendarService.ts`):
+    *   Added `findEventByCaseNumber(caseNumber: string)` to search Google Calendar for events with a matching `genieflowCaseNumber` in their private extended properties.
+    *   Added `updateEvent(eventId: string, meetingDetails, ...)` to update existing events on Google Calendar using a PUT request.
+*   `EmailService.ts` (`src/services/email/emailService.ts`):
+    *   Refactored `analyzeEmail(email: EmailMessage)` to:
+        *   Extract `meetingDetails` (including `caseNumber`) via AI analysis.
+        *   Call `aiCalendarService.findEventByCaseNumber()`.
+        *   If an event exists, call `aiCalendarService.updateEvent()`.
+        *   If no event exists, call `aiCalendarService.createEventFromAnalysis()`.
+        *   Update `analysisResult` with `calendarEventId` and `calendarEventStatus`.
+*   `types.ts` (`src/services/email/types.ts`):
+    *   Updated the `EmailAnalysis` interface with new optional fields (`calendarEventId`, `calendarEventStatus`, etc.).
+*   UI for Testing (`EmailDetail.tsx`, `EmailPage.tsx`):
+    *   Removed automatic `analyzeEmail` call from `EmailService.getEmailDetails()`.
+    *   Added an "Analyze" button to the email detail view.
+    *   Implemented `handleAnalyzeAndCalendar` in `EmailPage.tsx` to trigger analysis, update state, and provide toast notifications.
+
+**Initial Testing:**
+*   Successfully tested the flow where an email for an existing case (ADJ4004075) correctly identified the existing calendar event (j3da1fum62bk395pg0pfje7n3s) and updated it, as confirmed by console logs.
+
+Our overall goal remains: To create a robust system that automatically and accurately manages Google Calendar events derived from email content for legal hearings, intelligently creating new events or updating existing ones.
+
+**Next Steps:**
+
+1.  **Full Verification of Event Updates:**
+    *   Manually check Google Calendar to confirm the event (e.g., j3da1fum62bk395pg0pfje7n3s for case ADJ4004075) was indeed updated correctly.
+    *   Conduct a thorough test of the update scenario: send/process another email for the same case number but with a different date/time to ensure the existing event is modified rather than a new one created.
+2.  **Documentation:**
+    *   Begin documenting the new calendar integration features, including the event update logic and the UI changes for manual analysis.
+3.  **Future Enhancements (Discussion):**
+    *   Revisit the idea of a checkbox system for batch email processing and calendaring.
+
+Let's proceed with the full verification first.

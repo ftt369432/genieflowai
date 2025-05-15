@@ -651,9 +651,9 @@ export class EmailService {
               existingEvent.id,
               meetingDetails,
               email.subject || 'Updated Event',
-              email.id,
-              email.threadId
-            );
+            email.id,
+            email.threadId
+          );
             if (updatedEvent) {
               console.log(`[EmailService] Successfully updated calendar event for email ID ${email.id}. Event ID: ${updatedEvent.id}`);
               analysisResult.calendarEventId = updatedEvent.id;

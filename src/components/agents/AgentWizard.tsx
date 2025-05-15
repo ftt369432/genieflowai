@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/Badge';
 import { Switch } from '../ui/Switch';
 import { Label } from '../ui/Label';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/Dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '../ui/Dialog';
 import { Alert, AlertDescription } from '../ui/Alert';
 import { 
   Wand2, 
@@ -39,6 +39,96 @@ interface ProjectOption {
   id: string;
   name: string;
 }
+
+// Define a more structured type for our actions
+export interface ActionDefinition {
+  id: string; // This will be the actionType used in stores
+  name: string; // User-friendly name for UI
+  description: string;
+  category?: string; // e.g., "Email", "Calendar", "Logic"
+  // Define expected inputs for the step editor UI
+  inputs?: Array<{ 
+    name: string; // e.g., "emailId", "caseNumber", "summary"
+    label: string; // e.g., "Email ID", "Case Number", "Event Summary"
+    type: 'string' | 'boolean' | 'number' | 'object' | 'json_string'; // Data type
+    required?: boolean;
+    placeholder?: string; // e.g., "{steps.previousStep.output.emailId}"
+    defaultValue?: any;
+  }>;
+  // Define outputs for mapping to subsequent steps
+  outputs?: Array<{ 
+    name: string; // e.g., "emailMessage", "calendarEvent", "analysisResult"
+    label: string; // e.g., "Fetched Email Data", "Created Calendar Event"
+    type: string; // e.g., "EmailMessage", "CalendarEvent", "EmailAnalysis"
+  }>;
+}
+
+// Manifest of all available granular actions
+const ALL_GRANULAR_ACTIONS: ActionDefinition[] = [
+  // Email Actions
+  {
+    id: 'GET_EMAIL_DETAILS',
+    name: 'Get Email Details',
+    description: 'Fetches the full details of a specific email.',
+    category: 'Email',
+    inputs: [{ name: 'emailId', label: 'Email ID', type: 'string', required: true, placeholder: 'Enter Email ID or {placeholder}' }],
+    outputs: [{ name: 'emailMessage', label: 'Fetched Email', type: 'EmailMessage' }]
+  },
+  {
+    id: 'ANALYZE_EMAIL_FOR_CALENDAR_EVENT',
+    name: 'Analyze Email for Calendar Event',
+    description: 'Uses AI to analyze an email and extract potential calendar event details.',
+    category: 'Email',
+    inputs: [{ name: 'emailMessage', label: 'Email Object', type: 'object', required: true, placeholder: '{steps.previousStep.output.emailMessage}' }],
+    outputs: [{ name: 'emailAnalysis', label: 'Email Analysis Result', type: 'EmailAnalysis' }]
+  },
+  // Calendar Actions
+  {
+    id: 'FIND_CALENDAR_EVENT_BY_CASENUMBER',
+    name: 'Find Calendar Event by Case Number',
+    description: 'Searches for an existing calendar event using a case number.',
+    category: 'Calendar',
+    inputs: [{ name: 'caseNumber', label: 'Case Number', type: 'string', required: true, placeholder: '{steps.previousStep.output.caseNumber}' }],
+    outputs: [{ name: 'foundEvent', label: 'Found Calendar Event', type: 'CalendarEvent' }]
+  },
+  {
+    id: 'CREATE_CALENDAR_EVENT',
+    name: 'Create Calendar Event',
+    description: 'Creates a new event in the Google Calendar.',
+    category: 'Calendar',
+    inputs: [
+      { name: 'meetingDetails', label: 'Meeting Details', type: 'object', required: true, placeholder: '{steps.analysisStep.output.meetingDetails}' },
+      { name: 'emailSubject', label: 'Email Subject (for context)', type: 'string', required: true },
+      { name: 'emailMessageId', label: 'Email Message ID (optional)', type: 'string' },
+      { name: 'emailThreadId', label: 'Email Thread ID (optional)', type: 'string' },
+    ],
+    outputs: [{ name: 'createdEvent', label: 'Created Calendar Event', type: 'CalendarEvent' }]
+  },
+  {
+    id: 'UPDATE_CALENDAR_EVENT',
+    name: 'Update Calendar Event',
+    description: 'Updates an existing event in the Google Calendar.',
+    category: 'Calendar',
+    inputs: [
+      { name: 'eventId', label: 'Event ID to Update', type: 'string', required: true, placeholder: '{steps.findStep.output.eventId}' },
+      { name: 'meetingDetails', label: 'New Meeting Details', type: 'object', required: true },
+      { name: 'emailSubject', label: 'Email Subject (for context)', type: 'string', required: true },
+      { name: 'emailMessageId', label: 'Email Message ID (optional)', type: 'string' },
+      { name: 'emailThreadId', label: 'Email Thread ID (optional)', type: 'string' },
+    ],
+    outputs: [{ name: 'updatedEvent', label: 'Updated Calendar Event', type: 'CalendarEvent' }]
+  },
+  // Utility Actions
+  {
+    id: 'LOG_MESSAGE',
+    name: 'Log Message',
+    description: 'Logs a message to the console/workflow log (for debugging or info).',
+    category: 'Utility',
+    inputs: [{ name: 'message', label: 'Message to Log', type: 'string', required: true, placeholder: 'Processing step X for {steps.prev.output.id}' }],
+    outputs: [{ name: 'logConfirmation', label: 'Log Confirmation', type: 'object' }]
+  },
+  // TODO: Add SEND_NOTIFICATION, etc.
+];
 
 // Sample project data - in a real app, this would come from a project store
 const PROJECTS: ProjectOption[] = [
@@ -204,73 +294,135 @@ export function AgentWizard() {
     return agents.find(agent => agent.id === id);
   };
   
-  const getAvailableActions = (agentId: string) => {
+  const getAvailableActions = (agentId: string): ActionDefinition[] => {
     const agent = getAgentById(agentId);
     if (!agent) return [];
     
-    // Base actions that every agent has
-    const baseActions = [
-      { id: 'chat', name: 'Chat', description: 'Send a message to the agent' }
+    let availableActions: ActionDefinition[] = [
+      // Every agent gets basic chat and log actions
+      { id: 'chat', name: 'Chat with Agent', description: 'Send a message to the agent and get a response.', category: 'Basic', inputs: [{name: 'prompt', label: 'Prompt', type: 'string', required: true}], outputs: [{name: 'response', label: 'Agent Response', type: 'string'}] },
+      ...ALL_GRANULAR_ACTIONS.filter(action => action.category === 'Utility'),
     ];
-    
-    // Capability-specific actions
-    const capabilityActions: Record<string, {id: string, name: string, description: string}> = {
-      'email-processing': {
-        id: 'email',
-        name: 'Process Email',
-        description: 'Process and analyze emails'
-      },
-      'document-analysis': {
-        id: 'analyze-document',
-        name: 'Analyze Document',
-        description: 'Extract information from documents'
-      },
-      'task-management': {
-        id: 'create-task',
-        name: 'Create Task',
-        description: 'Create a new task'
-      },
-      'code-generation': {
-        id: 'generate-code',
-        name: 'Generate Code',
-        description: 'Generate code based on requirements'
-      },
-      'data-analysis': {
-        id: 'analyze-data',
-        name: 'Analyze Data',
-        description: 'Analyze data and generate insights'
-      }
-    };
-    
-    const additionalActions = agent.capabilities
-      .filter(cap => capabilityActions[cap])
-      .map(cap => capabilityActions[cap]);
-    
-    return [...baseActions, ...additionalActions];
+
+    // Add actions based on agent capabilities
+    if (agent.capabilities.includes('email-processing')) {
+      availableActions = [...availableActions, ...ALL_GRANULAR_ACTIONS.filter(action => action.category === 'Email')];
+    }
+    if (agent.capabilities.includes('calendar-management') || agent.capabilities.includes('email-processing')) { 
+      availableActions = [...availableActions, ...ALL_GRANULAR_ACTIONS.filter(action => action.category === 'Calendar')];
+    }
+    if (agent.capabilities.includes('document-analysis')) {
+      availableActions.push({ id: 'analyze-document', name: 'Analyze Document', description: 'Extract information from documents', category: 'Document' });
+    }
+    if (agent.capabilities.includes('task-management')) {
+      availableActions.push({ id: 'create-task', name: 'Create Task', description: 'Create a new task', category: 'Task' });
+    }
+
+    const uniqueActions = Array.from(new Map(availableActions.map(action => [action.id, action])).values());
+    return uniqueActions;
   };
   
   const renderStepEditor = () => {
     if (!currentEditingStep) return null;
     
     const agent = getAgentById(currentEditingStep.agentId);
-    const availableActions = getAvailableActions(currentEditingStep.agentId);
+    const availableActionsForAgent = getAvailableActions(currentEditingStep.agentId);
+    const actionDef = ALL_GRANULAR_ACTIONS.find(ad => ad.id === currentEditingStep.actionType);
+
+    // Ensure currentEditingStep.input is an object if actionDef expects structured inputs
+    // If it's a string, try to parse it as JSON, otherwise initialize as empty object.
+    let currentStepInputValue: Record<string, any> = {};
+    if (actionDef && actionDef.inputs && actionDef.inputs.length > 0) {
+      if (typeof currentEditingStep.input === 'object' && currentEditingStep.input !== null) {
+        currentStepInputValue = currentEditingStep.input;
+      } else if (typeof currentEditingStep.input === 'string') {
+        try {
+          currentStepInputValue = JSON.parse(currentEditingStep.input);
+          if (typeof currentStepInputValue !== 'object' || currentStepInputValue === null) {
+            currentStepInputValue = {}; // Fallback if parse result is not an object
+          }
+        } catch (e) {
+          // If parsing fails & action expects object, it suggests a mismatch or old data.
+          // For a single expected input, we can map the string to it.
+          if (actionDef.inputs.length === 1 && (actionDef.inputs[0].type === 'string' || actionDef.inputs[0].type === 'json_string')) {
+            currentStepInputValue = { [actionDef.inputs[0].name]: currentEditingStep.input };
+          } else {
+            currentStepInputValue = {}; 
+          }
+        }
+      } else {
+        currentStepInputValue = {}; // Default to empty object if input is undefined/null
+      }
+    } else {
+      // For actions without defined inputs (like old 'chat') or if input is meant to be a simple string.
+      // We store it as a string directly.
+      if (typeof currentEditingStep.input === 'string') {
+        currentStepInputValue = { _legacyInput: currentEditingStep.input }; // Use a special key for legacy string input
+      } else if (currentEditingStep.input === null || typeof currentEditingStep.input === 'undefined') {
+        currentStepInputValue = { _legacyInput: '' }; 
+      } else { // If it's an object but no inputs defined, stringify it for the legacy view
+        currentStepInputValue = { _legacyInput: JSON.stringify(currentEditingStep.input, null, 2) };
+      }
+    }
+
+    const handleStepInputChange = (fieldName: string, value: any) => {
+      setCurrentEditingStep(prev => {
+        if (!prev) return null;
+        let newStructuredInput = { ...(typeof prev.input === 'object' && prev.input !== null ? prev.input : {}), [fieldName]: value };
+        // If only one input field is defined and it's not a special _legacyInput, then prev.input itself should be the value.
+        // However, workflowStore expects Record<string, any> or string, so we will always make it an object here
+        // and handle the string conversion when saving if needed by actionType.
+        return { ...prev, input: newStructuredInput };
+      });
+    };
+    
+    const handleLegacyInputChange = (value: string) => {
+       setCurrentEditingStep(prev => {
+        if (!prev) return null;
+        // For legacy/simple inputs, we store the string directly in the input field
+        // or in the object under _legacyInput if actionDef.inputs is empty
+        if (!actionDef || !actionDef.inputs || actionDef.inputs.length === 0) {
+            return { ...prev, input: value }; // Store as raw string
+        }
+        // This case should ideally not be hit if actionDef.inputs exists, 
+        // but as a fallback, update the special key.
+        return { ...prev, input: { ...currentStepInputValue, _legacyInput: value } }; 
+      });
+    };
+
+    const onSave = () => {
+      if (!currentEditingStep) return;
+      let stepToSave = { ...currentEditingStep };
+
+      // If actionDef.inputs is empty and input is an object like {_legacyInput: "..."}, convert back to string.
+      if ((!actionDef || !actionDef.inputs || actionDef.inputs.length === 0) && typeof stepToSave.input === 'object' && stepToSave.input !== null && ('_legacyInput' in stepToSave.input)) {
+        stepToSave.input = stepToSave.input._legacyInput;
+      }
+      // If actionDef.inputs has only one item and the input type is string/json_string, and current input is an object with one key
+      // matching that input, consider unwrapping it for simpler string-based actions.
+      // However, keeping it as an object is safer for agentStore which expects Record<string,any> for structured inputs.
+      // For now, we will always save it as an object if it was treated as an object.
+
+      handleUpdateStep(stepToSave);
+    };
     
     return (
-      <Card className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle>Edit Step</CardTitle>
-          <CardDescription>Configure this workflow step</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Dialog open={true} onOpenChange={() => { onSave(); setCurrentEditingStep(null);}} >
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Edit Step: {currentEditingStep.name}</DialogTitle>
+            <DialogDescription>
+              {actionDef ? actionDef.description : 'Configure this workflow step.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-grow overflow-y-auto pr-2 space-y-4 py-4"> 
           <div className="space-y-2">
             <Label htmlFor="step-name">Step Name</Label>
             <Input 
               id="step-name" 
               value={currentEditingStep.name}
-              onChange={(e) => setCurrentEditingStep({
-                ...currentEditingStep,
-                name: e.target.value
-              })}
+                onChange={(e) => setCurrentEditingStep(prev => prev ? {...prev, name: e.target.value} : null)}
             />
           </div>
           
@@ -279,78 +431,97 @@ export function AgentWizard() {
             <Textarea 
               id="step-description" 
               value={currentEditingStep.description}
-              onChange={(e) => setCurrentEditingStep({
-                ...currentEditingStep,
-                description: e.target.value
-              })}
+                onChange={(e) => setCurrentEditingStep(prev => prev ? {...prev, description: e.target.value} : null)}
               rows={2}
             />
           </div>
           
           <div className="space-y-2">
             <Label htmlFor="step-agent">Agent</Label>
-            <select
-              id="step-agent"
-              className="w-full p-2 border rounded-md"
+              <Select
               value={currentEditingStep.agentId}
-              onChange={(e) => setCurrentEditingStep({
-                ...currentEditingStep,
-                agentId: e.target.value
-              })}
+                onValueChange={(value) => setCurrentEditingStep(prev => prev ? {...prev, agentId: value} : null)}
             >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select agent" />
+                </SelectTrigger>
+                <SelectContent>
               {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
+                    <SelectItem key={agent.id} value={agent.id}>
                   {agent.name}
-                </option>
+                    </SelectItem>
               ))}
-            </select>
+                </SelectContent>
+              </Select>
           </div>
           
           <div className="space-y-2">
             <Label htmlFor="step-action">Action</Label>
-            <select
-              id="step-action"
-              className="w-full p-2 border rounded-md"
+              <Select
               value={currentEditingStep.actionType}
-              onChange={(e) => setCurrentEditingStep({
-                ...currentEditingStep,
-                actionType: e.target.value
-              })}
-            >
-              {availableActions.map((action) => (
-                <option key={action.id} value={action.id}>
-                  {action.name}
-                </option>
-              ))}
-            </select>
+                onValueChange={(value) => setCurrentEditingStep(prev => prev ? {...prev, actionType: value, input: {}} : null)} // Reset input when action changes
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select action" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableActionsForAgent.map((action) => (
+                    <SelectItem key={action.id} value={action.id}>
+                      {action.name} ({action.category})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
           </div>
           
-          <div className="space-y-2">
-            <Label htmlFor="step-input-type">Input Type</Label>
-            <select
-              id="step-input-type"
-              className="w-full p-2 border rounded-md"
-              value={currentEditingStep.inputType}
-              onChange={(e) => setCurrentEditingStep({
-                ...currentEditingStep,
-                inputType: e.target.value as 'static' | 'dynamic' | 'previous'
-              })}
-            >
-              <option value="static">Static (Fixed value)</option>
-              <option value="dynamic">Dynamic (Runtime value)</option>
-              <option value="previous">Previous Step Output</option>
-            </select>
+            {/* Dynamic Input Fields based on ActionDefinition */} 
+            {actionDef && actionDef.inputs && actionDef.inputs.length > 0 ? (
+              actionDef.inputs.map((inputDef) => (
+                <div key={inputDef.name} className="space-y-2">
+                  <Label htmlFor={`step-input-${inputDef.name}`}>
+                    {inputDef.label}
+                    {inputDef.required && <span className="text-destructive">*</span>}
+                  </Label>
+                  {inputDef.type === 'string' ? (
+                    <Input
+                      id={`step-input-${inputDef.name}`}
+                      value={currentStepInputValue[inputDef.name] || ''}
+                      onChange={(e) => handleStepInputChange(inputDef.name, e.target.value)}
+                      placeholder={inputDef.placeholder || `Enter ${inputDef.label}`}
+                    />
+                  ) : inputDef.type === 'json_string' || inputDef.type === 'object' ? (
+                    <Textarea
+                      id={`step-input-${inputDef.name}`}
+                      value={typeof currentStepInputValue[inputDef.name] === 'string' ? currentStepInputValue[inputDef.name] : JSON.stringify(currentStepInputValue[inputDef.name] || inputDef.defaultValue || {}, null, 2)}
+                      onChange={(e) => handleStepInputChange(inputDef.name, e.target.value) }
+                      placeholder={inputDef.placeholder || `Enter JSON for ${inputDef.label}`}
+                      rows={3}
+                      className="font-mono text-sm"
+                    />
+                  ) : inputDef.type === 'boolean' ? (
+                    <Switch
+                      id={`step-input-${inputDef.name}`}
+                      checked={!!currentStepInputValue[inputDef.name]}
+                      onCheckedChange={(checked) => handleStepInputChange(inputDef.name, checked)}
+                    />
+                  ) : (
+                     <Input // Fallback for other types like 'number'
+                      id={`step-input-${inputDef.name}`}
+                      value={currentStepInputValue[inputDef.name] || ''}
+                      onChange={(e) => handleStepInputChange(inputDef.name, e.target.value)}
+                      placeholder={inputDef.placeholder || `Enter ${inputDef.label}`}
+                    />
+                  )}
           </div>
-          
+              ))
+            ) : (
+              // Fallback for simple string input or actions without defined inputs (e.g., legacy 'chat')
           <div className="space-y-2">
-            <Label htmlFor="step-input">Input</Label>
+                <Label htmlFor="step-input-legacy">Input</Label>
             <Textarea 
-              id="step-input" 
-              value={currentEditingStep.input}
-              onChange={(e) => setCurrentEditingStep({
-                ...currentEditingStep,
-                input: e.target.value
-              })}
+                  id="step-input-legacy" 
+                  value={currentStepInputValue._legacyInput !== undefined ? currentStepInputValue._legacyInput : (typeof currentEditingStep.input === 'string' ? currentEditingStep.input : JSON.stringify(currentEditingStep.input || ''))}
+                  onChange={(e) => handleLegacyInputChange(e.target.value)}
               rows={3}
               placeholder={
                 currentEditingStep.inputType === 'static' 
@@ -360,6 +531,27 @@ export function AgentWizard() {
                     : 'Use {steps.stepName.outputField} to reference previous step outputs'
               }
             />
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="step-input-type">Input Type Hint</Label>
+              <Select
+                value={currentEditingStep.inputType}
+                onValueChange={(value) => setCurrentEditingStep(prev => prev ? {...prev, inputType: value as 'static' | 'dynamic' | 'previous'} : null)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select input type hint" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="static">Static (Fixed value / JSON)</SelectItem>
+                  <SelectItem value="dynamic"><span>Dynamic (Runtime value from workflow start, e.g. {'{input.field}'})</span></SelectItem>
+                  <SelectItem value="previous"><span>Previous Step Output (e.g. {'{steps.stepName.outputField}'})</span></SelectItem>
+                </SelectContent>
+              </Select>
+               <p className="text-xs text-muted-foreground">
+                {'This primarily serves as a hint for how to structure your input placeholders above. Static can be a direct value or a JSON object. Dynamic uses {input.fieldName}. Previous uses {steps.stepId.outputName}.'}
+              </p>
           </div>
           
           <div className="space-y-2">
@@ -367,68 +559,74 @@ export function AgentWizard() {
             <Input 
               id="step-output-mapping" 
               value={currentEditingStep.outputMapping}
-              onChange={(e) => setCurrentEditingStep({
-                ...currentEditingStep,
-                outputMapping: e.target.value
-              })}
-              placeholder="Name to access this step's output in later steps"
-            />
+                onChange={(e) => setCurrentEditingStep(prev => prev ? {...prev, outputMapping: e.target.value} : null)}
+                placeholder="e.g., analyzedEmail, createdTask (no spaces/special chars)"
+              />
+               <p className="text-xs text-muted-foreground">
+                This name will be used to reference this step's output in subsequent steps, e.g., {'{steps.' + (currentEditingStep.outputMapping || 'thisStepOutput') + '.someProperty}'}
+              </p>
           </div>
           
           {isAdvancedMode && (
-            <div className="space-y-2">
-              <Label htmlFor="step-condition-type">Condition Type</Label>
-              <select
-                id="step-condition-type"
-                className="w-full p-2 border rounded-md"
+              <div className="space-y-2 border-t pt-4 mt-4">
+                <Label>Conditional Execution (Advanced)</Label>
+                <Select
                 value={currentEditingStep.condition?.type || 'always'}
-                onChange={(e) => {
-                  const type = e.target.value as 'always' | 'if' | 'if-else';
-                  setCurrentEditingStep({
-                    ...currentEditingStep,
+                  onValueChange={(value) => {
+                    const type = value as 'always' | 'if' | 'if-else';
+                    setCurrentEditingStep(prev => prev ? {
+                      ...prev,
                     condition: {
                       type,
-                      expression: currentEditingStep.condition?.expression || ''
-                    }
-                  });
-                }}
-              >
-                <option value="always">Always Run</option>
-                <option value="if">Conditional (If)</option>
-                <option value="if-else">Conditional (If-Else)</option>
-              </select>
+                        expression: prev.condition?.expression || ''
+                      }
+                    } : null);
+                  }}
+                >
+                  <SelectTrigger>
+                     <SelectValue placeholder="Select condition type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="always">Always Run</SelectItem>
+                    <SelectItem value="if">Conditional (If)</SelectItem>
+                    {/* <SelectItem value="if-else">Conditional (If-Else)</SelectItem> */}
+                  </SelectContent>
+                </Select>
               
               {(currentEditingStep.condition?.type === 'if' || currentEditingStep.condition?.type === 'if-else') && (
                 <div className="space-y-2 mt-2">
-                  <Label htmlFor="step-condition">Condition Expression</Label>
+                    <Label htmlFor="step-condition-expression">Condition Expression</Label>
                   <Textarea 
-                    id="step-condition" 
+                      id="step-condition-expression" 
                     value={currentEditingStep.condition?.expression || ''}
-                    onChange={(e) => setCurrentEditingStep({
-                      ...currentEditingStep,
+                      onChange={(e) => setCurrentEditingStep(prev => prev ? {
+                        ...prev,
                       condition: {
-                        type: currentEditingStep.condition?.type || 'if',
+                          type: prev.condition?.type || 'if',
                         expression: e.target.value
                       }
-                    })}
-                    placeholder="E.g., {steps.previous.success} === true"
+                      } : null)}
+                      placeholder={`E.g., {steps.previousStep.output.success} === true OR {input.priority} === "high"`}
                     rows={2}
+                      className="font-mono text-sm"
                   />
                 </div>
               )}
             </div>
           )}
-        </CardContent>
-        <CardFooter className="flex justify-between">
+          </div>
+
+          <DialogFooter className="mt-auto pt-4 border-t">
           <Button variant="outline" onClick={() => setCurrentEditingStep(null)}>
             Cancel
           </Button>
-          <Button onClick={() => handleUpdateStep(currentEditingStep)}>
+            <Button onClick={onSave}>
             <Check className="h-4 w-4 mr-2" />
             Save Step
           </Button>
-        </CardFooter>
-      </Card>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     );
   };
   
@@ -709,7 +907,11 @@ export function AgentWizard() {
                                 
                                 {isAdvancedMode && (
                                   <div className="mt-2 text-xs">
-                                    <div className="text-muted-foreground">Input: <code className="bg-gray-100 px-1 rounded">{step.input}</code></div>
+                                    <div className="text-muted-foreground">Input: 
+                                      <code className="bg-gray-100 px-1 rounded">
+                                        {typeof step.input === 'object' ? JSON.stringify(step.input, null, 2) : step.input}
+                                      </code>
+                                    </div>
                                     <div className="text-muted-foreground">Output as: <code className="bg-gray-100 px-1 rounded">{step.outputMapping}</code></div>
                                     {step.condition && step.condition.type !== 'always' && (
                                       <div className="text-muted-foreground">

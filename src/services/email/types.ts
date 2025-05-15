@@ -249,14 +249,18 @@ export interface IMAPConfig {
  * Email analysis structure
  */
 export interface EmailAnalysisMeetingDetails {
+  eventTitle?: string;
   caseNumber?: string;
   eventType?: string;
   eventDate?: string;
   eventTime?: string;
   endTime?: string;
+  timeZone?: string;
   location?: string;
   attendees?: string[];
   description?: string;
+  personInvolved?: string;
+  judgeName?: string;
 }
 
 export interface EmailAnalysis {
