@@ -14,7 +14,7 @@ interface CalendarRightPanelProps {
 }
 
 export function CalendarRightPanel({ className }: CalendarRightPanelProps) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('insights');
 
   return (

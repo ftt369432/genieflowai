@@ -22,7 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover
 import { Switch } from "@/components/ui/Switch";
 import { Label } from "@/components/ui/Label";
 import type { MultimodalPart } from '../hooks/useAIProvider';
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure the workerSrc for pdf.js
 // THIS REQUIRES YOU TO MANUALLY COPY 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs'
@@ -32,8 +32,8 @@ if (typeof window !== 'undefined') { // Ensure this runs only in the browser
 }
 
 export function AIAssistantPage() {
-  const navigate = useNavigate();
-  const { user, session } = useAuth();
+  const navigate: any = useNavigate();
+  const { user: _user, session: _session } = useAuth();
   const {
     sendMessage,
   } = useContext(AIContext);
@@ -271,6 +271,7 @@ export function AIAssistantPage() {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    console.log('[AIAssistantPage] handleSubmit triggered. Input:', input, 'Processing:', isProcessing);
     if (!input.trim() || isProcessing) return;
 
     const currentInput = input;
@@ -314,15 +315,17 @@ export function AIAssistantPage() {
 
       if (partsToSend.length === 0 && !systemPromptForAPI) {
         // Avoid sending completely empty messages if there's no text, no files, and no system prompt
-        console.log("Skipping empty message send");
+        console.log("[AIAssistantPage] Skipping empty message send. Parts:", partsToSend, "SystemPrompt:", systemPromptForAPI);
         setIsProcessing(false);
         setChatMessages((prev) => prev.filter((msg) => msg.id !== typingIndicatorId));
         return;
       }
       
+      console.log('[AIAssistantPage] About to call sendMessage. Parts:', partsToSend, 'SystemPrompt:', systemPromptForAPI);
       // Pass the parts array and systemPrompt option to sendMessage
       // useAIProvider.sendMessage will handle prepending the systemPrompt to the parts if it exists.
       const response = await sendMessage(partsToSend, 'chat', { systemPrompt: systemPromptForAPI });
+      console.log('[AIAssistantPage] sendMessage call returned. Response:', response);
 
       // Clear staged files after successful send
       setStagedFileParts([]);
@@ -370,7 +373,7 @@ export function AIAssistantPage() {
         );
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('[AIAssistantPage] Error in handleSubmit sending message:', error);
       setChatMessages((prev) => {
         const messagesWithoutIndicator = prev.filter(
           (msg) => msg.id !== typingIndicatorId
@@ -389,6 +392,7 @@ export function AIAssistantPage() {
         ];
       });
     } finally {
+      console.log('[AIAssistantPage] handleSubmit finally block. Setting isProcessing to false.');
       setIsProcessing(false);
       setChatMessages((prev) => prev.filter((msg) => msg.id !== typingIndicatorId));
     }
@@ -656,10 +660,6 @@ export function AIAssistantPage() {
                   <Link 
                     to="/assistants"
                     className="w-full justify-start gap-2 mb-2 gleaming-silver-button inline-flex items-center px-4 py-2 rounded-md text-sm font-medium"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate('/assistants', { state: { user, session } });
-                    }}
                   >
                     <Users className="h-4 w-4" />
                     Assistants

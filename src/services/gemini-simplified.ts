@@ -12,10 +12,16 @@ export class GeminiSimplifiedService {
     try {
       const env = getEnv();
       const apiKey = env.geminiApiKey;
+      console.log('[GeminiSimplifiedService] Constructor. API Key from env:', apiKey ? 'Loaded (not printing value)' : 'NOT LOADED', 'Default Model:', env.aiModel || this.defaultModel);
+      if (!apiKey) {
+        console.error('[GeminiSimplifiedService] Gemini API Key is missing from environment variables (VITE_GEMINI_API_KEY).');
+        throw new Error('Gemini API Key is missing.'); // Ensure error is thrown if key is missing
+      }
       this.client = new GoogleGenerativeAI(apiKey);
       this.defaultModel = env.aiModel || this.defaultModel;
+      console.log('[GeminiSimplifiedService] Gemini client initialized successfully.');
     } catch (error) {
-      console.error('Error initializing GeminiSimplifiedService:', error);
+      console.error('[GeminiSimplifiedService] Error initializing GeminiSimplifiedService:', error);
       throw error;
     }
   }
@@ -70,7 +76,9 @@ export class GeminiSimplifiedService {
   }
 
   async getCompletion(parts: Array<{text: string} | {inlineData: {mimeType: string, data: string}}>, options?: { temperature?: number; maxTokens?: number }): Promise<string> {
+    console.log('[GeminiSimplifiedService] getCompletion called. Parts:', parts, 'Options:', options);
     const apiCall = async () => {
+      console.log('[GeminiSimplifiedService] Attempting to get generative model with defaultModel:', this.defaultModel);
       const model = this.client.getGenerativeModel({
         model: this.defaultModel,
         generationConfig: {
@@ -79,15 +87,33 @@ export class GeminiSimplifiedService {
         }
       });
       
+      console.log('[GeminiSimplifiedService] Model obtained. About to call model.generateContent with parts:', parts);
       const result = await model.generateContent(parts);
       const response = await result.response;
-      return response.text() || '';
+
+      // New detailed logging
+      console.log('[GeminiSimplifiedService] Raw API Response Object:', response);
+      try {
+        console.log('[GeminiSimplifiedService] Response Candidates JSON:', JSON.stringify(response.candidates, null, 2));
+      } catch (e) {
+        console.log('[GeminiSimplifiedService] Could not stringify response.candidates:', response.candidates);
+      }
+      try {
+        console.log('[GeminiSimplifiedService] Response Prompt Feedback JSON:', JSON.stringify(response.promptFeedback, null, 2));
+      } catch (e) {
+        console.log('[GeminiSimplifiedService] Could not stringify response.promptFeedback:', response.promptFeedback);
+      }
+      
+      const textResponse = response.text() || '';
+      console.log('[GeminiSimplifiedService] model.generateContent success. Text response:', textResponse);
+      return textResponse;
     };
 
     try {
+      console.log('[GeminiSimplifiedService] Calling exponentialBackoffRetry for apiCall.');
       return await this.exponentialBackoffRetry(apiCall);
     } catch (error) {
-      console.error('Gemini API Error (getCompletion):', error);
+      console.error('[GeminiSimplifiedService] Error in getCompletion (after retry logic):', error);
       throw error;
     }
   }
@@ -115,9 +141,9 @@ export class GeminiSimplifiedService {
     const prompt = `Analyze the following email content and extract information for a calendar event and general email analysis.
 Email Subject: "${email.subject}"
 Email Body:
-\"\"\"
+\\"""
 ${email.body}
-\"\"\"
+\\"""
 Email Date: "${email.date}" // This is the received date, use for context.
 
 Please determine if this email discusses a new meeting, an update to an existing meeting, or is not related to a calendar event.
@@ -130,8 +156,9 @@ If it IS related to a calendar event, extract the following details for the 'mee
 - timeZone: The timezone for the event (e.g., "America/Los_Angeles", "PST", "UTC"). If not specified, state "Not Specified" or assume UTC.
 - location: The location of the event. If not specified, state "Not Specified".
 - attendees: A list of attendee email addresses, if any.
-- description: A brief description for the calendar event, derived from the email body.
+- description: Extract the full, unsummarized text from the email body that directly pertains to the meeting\'s agenda, notes, or discussion points. This should be the detailed content for the calendar event description. If no specific notes are present, this can be a brief summary.
 - caseNumber: Extract any case number or similar identifier (e.g., ADJxxxxxxx, WCxxxx). If not present, leave blank.
+- attachments: An array of objects, where each object represents a file attachment from the email that is relevant to this event. Each object should have 'fileName' and 'fileId' (placeholder for now, actual URL will be handled later). Example: [{"fileName": "document.pdf", "fileId": "placeholder_id_123"}]. If no relevant attachments, this should be an empty array or omitted.
 - eventType: The type of event. Prioritize specific legal hearing types if mentioned (e.g., "MSC", "Lien Conference", "Status Conference", "Priority Conference", "Trial"). Otherwise, use more general types like "Hearing", "Meeting", "Call", "Deadline". If not clear, use "General Event".
 - personInvolved: The primary person or client name involved in the event (e.g., "Richard Nombrano", "Miguel Corpeno", "Jane Smith"). If not clearly identifiable, leave blank.
 - judgeName: The name of the judge, if mentioned (e.g., "Randal Hursh", "Judge Smith"). If not applicable or not mentioned, leave blank.
@@ -172,8 +199,9 @@ Example of the expected JSON structure (fields in meetingDetails are optional if
     "timeZone": "America/Los_Angeles",
     "location": "Courtroom 3B",
     "attendees": ["lawyer@example.com"],
-    "description": "Hearing for case ADJ123456 involving Miguel Corpeno.",
+    "description": "This is the detailed discussion about the upcoming hearing for case ADJ123456 involving Miguel Corpeno, covering points A, B, and C as discussed in the email.",
     "caseNumber": "ADJ123456",
+    "attachments": [{"fileName": "hearing_notice.pdf", "fileId": "placeholder_id_789"}],
     "eventType": "Hearing",
     "personInvolved": "Miguel Corpeno",
     "judgeName": "Judge Randal Hursh"
@@ -184,7 +212,7 @@ Example of the expected JSON structure (fields in meetingDetails are optional if
 If the email is NOT about a calendar event, the 'meetingDetails' field should NOT be included in the JSON response (i.e., it should be undefined in the resulting object), and 'isMeeting' should be set to false.
 If the email IS about a calendar event, 'isMeeting' must be true, and 'meetingDetails' must be populated with extracted details.
 
-Your response MUST be ONLY the JSON object itself, starting with '{' and ending with '}'. Do not include any explanatory text, markdown formatting (like \`\`\`json ... \`\`\` or \`\`\` ... \`\`\`), or anything else outside of the JSON structure. The response must be directly parsable as JSON.
+Your response MUST be ONLY the JSON object itself, starting with '{' and ending with '}'. Do not include any explanatory text, markdown formatting (like \\\`\\\`\\\`json ... \\\`\\\`\\\` or \\\`\\\`\\\` ... \\\`\\\`\\\`), or anything else outside of the JSON structure. The response must be directly parsable as JSON.
 `;
 
     let rawAiResponseText = '';

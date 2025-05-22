@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { openAIService } from '../services/ai/openai';
+// import { openAIService } from '../services/ai/openai';
 import { mockAIService } from '../services/ai/mockOpenAI';
 
 // Simple chat hook for handling messages
@@ -9,7 +9,8 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null);
 
   // Determine which service to use based on API key presence
-  const service = process.env.VITE_OPENAI_API_KEY ? openAIService : mockAIService;
+  // const service = process.env.VITE_OPENAI_API_KEY ? openAIService : mockAIService;
+  const service = mockAIService; // Default to mockAIService
 
   // Send a message and get a response
   const sendMessage = async (message: string) => {

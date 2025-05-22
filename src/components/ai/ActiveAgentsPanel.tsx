@@ -8,22 +8,26 @@ import type { Agent } from '../../types/agent';
 
 interface ActiveAgentsPanelProps {
   onSelectAgent: (agentId: string) => void;
+  agents?: Agent[];
 }
 
-export function ActiveAgentsPanel({ onSelectAgent }: ActiveAgentsPanelProps) {
-  const { agents, activateAgent, deactivateAgent } = useAgentStore();
+export function ActiveAgentsPanel({ onSelectAgent, agents: propAgents }: ActiveAgentsPanelProps) {
+  const { agents: storeAgents, activateAgent, deactivateAgent } = useAgentStore();
   
-  // Get only non-inactive agents for display
-  const activeAgents = agents.filter(a => a.status !== 'inactive');
+  // Use propAgents if provided, otherwise use agents from the store
+  const allAgents = propAgents || storeAgents;
 
-  // Calculate metrics
+  // Get only non-inactive agents for display
+  const displayAgents = allAgents.filter(a => a.status !== 'inactive');
+
+  // Calculate metrics based on displayAgents
   const metrics = {
-    totalActive: activeAgents.filter(a => a.status === 'active').length,
-    averagePerformance: activeAgents.length > 0 
-      ? Math.round(activeAgents.reduce((acc, curr) => acc + curr.metrics.performance, 0) / activeAgents.length)
+    totalActive: displayAgents.filter(a => a.status === 'active').length,
+    averagePerformance: displayAgents.length > 0 
+      ? Math.round(displayAgents.reduce((acc, curr) => acc + curr.metrics.performance, 0) / displayAgents.length)
       : 0,
-    totalUptime: activeAgents.length > 0 
-      ? `${Math.round(activeAgents.reduce((acc, curr) => acc + curr.metrics.uptime, 0) / activeAgents.length)}%`
+    totalUptime: displayAgents.length > 0 
+      ? `${Math.round(displayAgents.reduce((acc, curr) => acc + curr.metrics.uptime, 0) / displayAgents.length)}%`
       : 'N/A'
   };
 
@@ -35,15 +39,15 @@ export function ActiveAgentsPanel({ onSelectAgent }: ActiveAgentsPanelProps) {
           <h2 className="text-lg font-bold">Active Agents</h2>
         </div>
         <div className="flex items-center gap-4">
-          <StatusMetric label="Active" value={`${metrics.totalActive}/${activeAgents.length}`} />
+          <StatusMetric label="Active" value={`${metrics.totalActive}/${displayAgents.length}`} />
           <StatusMetric label="Avg. Performance" value={`${metrics.averagePerformance}%`} />
           <StatusMetric label="Uptime" value={metrics.totalUptime} />
         </div>
       </div>
 
       <div className="space-y-4">
-        {activeAgents.length > 0 ? (
-          activeAgents.map(agent => (
+        {displayAgents.length > 0 ? (
+          displayAgents.map(agent => (
             <AgentStatusCard 
               key={agent.id} 
               agent={agent}

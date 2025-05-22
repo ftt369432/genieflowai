@@ -175,14 +175,14 @@ export class AiCalendarService {
     const localStartTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, meetingDetails.eventTime);
     if (!localStartTimeStr) {
       console.error('[AiCalendarService] Failed to parse start date/time to local string format:', { date: meetingDetails.eventDate, time: meetingDetails.eventTime });
-      return null;
+        return null;
     }
 
     let localEndTimeStr: string | null = null;
     if (meetingDetails.endTime && meetingDetails.eventDate) {
       // If endTime is a full ISO UTC string, this specific handling might need review based on expected format of meetingDetails.endTime
       // For now, assuming if it's not explicitly UTC, it's a local time string like eventTime.
-      if (meetingDetails.endTime.includes('T') && meetingDetails.endTime.includes('Z')) {
+        if (meetingDetails.endTime.includes('T') && meetingDetails.endTime.includes('Z')) { 
         console.warn('[AiCalendarService] meetingDetails.endTime appears to be a UTC ISO string. Attempting to parse as local time relative to eventDate for consistency. Review this logic if endTime can be UTC.', meetingDetails.endTime);
         // This case is tricky: if it's a UTC string, we'd ideally convert it to a Pacific local time string.
         // For now, we'll try to parse it as if it were a local time string related to eventDate, which might be incorrect if it's truly UTC.
@@ -192,12 +192,12 @@ export class AiCalendarService {
         if (tempEndTime) {
             localEndTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, tempEndTime); // This assumes it's on the same date and the time part is local.
         }
-      } else {
+        } else {
         localEndTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, meetingDetails.endTime);
-      }
+        }
       if (!localEndTimeStr) {
         console.warn('[AiCalendarService] Provided endTime could not be parsed to local string format, defaulting to 1 hour duration from start time.', { date: meetingDetails.eventDate, endTime: meetingDetails.endTime });
-      }
+        }
     }
     
     if (!localEndTimeStr) {
@@ -216,8 +216,8 @@ export class AiCalendarService {
           const startDateObj = new Date(datePart + "T00:00:00"); // Use a date object for reliable date increment
           startDateObj.setDate(startDateObj.getDate() + endDayOffset);
           endDateStr = startDateObj.toISOString().split('T')[0];
-      }
-
+    }
+    
       const endHH = String(hours).padStart(2, '0');
       const endMM = String(minutes).padStart(2, '0');
       localEndTimeStr = `${endDateStr}T${endHH}:${endMM}:00`;
@@ -257,7 +257,7 @@ export class AiCalendarService {
     }
     // Only add time if eventType or personInvolved is present (now summaryParts will always have at least eventTypeForDisplay)
     if (meetingDetails.eventTime) { // Simplified condition as summaryParts will not be empty
-      summaryParts.push(`at ${meetingDetails.eventTime}`);
+      summaryParts.push(`at ${meetingDetails.eventTime}`); 
     }
     if (meetingDetails.judgeName) {
       summaryParts.push(`w/ Judge ${meetingDetails.judgeName}`);
@@ -342,13 +342,13 @@ export class AiCalendarService {
     const localStartTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, meetingDetails.eventTime);
     if (!localStartTimeStr) {
       console.error('[AiCalendarService] updateEvent: Failed to parse start date/time to local string format:', { date: meetingDetails.eventDate, time: meetingDetails.eventTime });
-      return null;
+        return null;
     }
 
     let localEndTimeStr: string | null = null;
     if (meetingDetails.endTime && meetingDetails.eventDate) {
       // Similar handling for endTime as in createEventFromAnalysis
-      if (meetingDetails.endTime.includes('T') && meetingDetails.endTime.includes('Z')) {
+        if (meetingDetails.endTime.includes('T') && meetingDetails.endTime.includes('Z')) { 
         console.warn('[AiCalendarService] updateEvent: meetingDetails.endTime appears to be a UTC ISO string. Review this logic.', meetingDetails.endTime);
         const tempEndTime = meetingDetails.endTime.split('T')[1]?.substring(0,5);
         if (tempEndTime) {
@@ -356,7 +356,7 @@ export class AiCalendarService {
         }
       } else {
         localEndTimeStr = this.parseDateTimeToLocalStringFormat(meetingDetails.eventDate, meetingDetails.endTime);
-      }
+        }
       if (!localEndTimeStr) {
         console.warn('[AiCalendarService] updateEvent: Provided endTime could not be parsed, defaulting to 1 hour duration.');
       }
@@ -376,7 +376,7 @@ export class AiCalendarService {
           const startDateObj = new Date(datePart + "T00:00:00");
           startDateObj.setDate(startDateObj.getDate() + endDayOffset);
           endDateStr = startDateObj.toISOString().split('T')[0];
-      }
+    }
       const endHH = String(hours).padStart(2, '0');
       const endMM = String(minutes).padStart(2, '0');
       localEndTimeStr = `${endDateStr}T${endHH}:${endMM}:00`;

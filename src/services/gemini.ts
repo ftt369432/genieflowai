@@ -3,7 +3,9 @@ import { BaseAIService, AIService } from './ai/baseAIService';
 import { Task } from '../types/task';
 import { Event } from '../types/calendar';
 import { aiConfig } from './aiConfig';
-import type { AIModel } from '../types/ai';
+import type { AIModel, Message, AIAnalysis as CoreAIAnalysis } from '../types/ai';
+import type { EmailMessage, EmailAnalysis } from '../services/email/types';
+import type { Workflow } from '../store/workflowStore';
 
 interface ConversationTurn {
   role: 'user' | 'model';
@@ -53,16 +55,23 @@ interface ResponseWithSources<T> {
 }
 
 export class GeminiService extends BaseAIService implements AIService {
-  private model: AIModel;
+  model: AIModel;
   private genAI: GoogleGenerativeAI | null = null;
   private conversationState: ConversationState;
+  private apiKey: string;
 
   constructor() {
     super('google');
+    this.apiKey = '';
     try {
+      this.apiKey = aiConfig.getApiKey('google');
+      if (!this.apiKey) {
+        throw new Error('API key for Gemini is missing.');
+      }
       this.genAI = new GoogleGenerativeAI(this.apiKey);
     } catch (error) {
       console.error('Error initializing GeminiService:', error);
+      this.genAI = null;
     }
     this.model = {
       id: 'gemini-2.0-flash',
@@ -79,51 +88,27 @@ export class GeminiService extends BaseAIService implements AIService {
     };
   }
 
-  async generateResponse(message: Message): Promise<Message> {
+  async generateResponse(messages: Message[]): Promise<string> {
+    if (!this.genAI) throw new Error('Gemini service not initialized (API key issue?)');
+    const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+    if (!lastUserMessage) return '';
     try {
-      if (!this.genAI) throw new Error('Gemini service not initialized');
-      
-      const model = this.genAI.getGenerativeModel({ 
-        model: 'gemini-2.0-flash',
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048,
-        }
-      });
-
-      const result = await model.generateContent(message.content);
-      const response = await result.response;
-      const text = response.text();
-      
-      if (!text) throw new Error('Empty response from Gemini');
-
-      return {
-        role: 'assistant',
-        content: text,
-        timestamp: new Date().toISOString()
-      };
+      const model = this.genAI.getGenerativeModel({ model: this.model.id });
+      const result = await model.generateContent(lastUserMessage.content);
+      return result.response.text();
     } catch (error) {
-      throw this.handleError(error, 'Gemini');
+      throw this.handleError(error, 'GeminiGenerateResponse');
     }
   }
 
   async getRelevantSourcesByQuery(query: string): Promise<Source[]> {
-    try {
-      const context = this.conversationState.history
-        .map(turn => turn.content)
-        .join('\n');
-      
-      const sources = await this.getSourcesFromContext(context);
-      return this.filterSources(sources, query, 0.3);
-    } catch (error) {
-      console.error('Error getting relevant sources:', error);
-      return [];
-    }
+    console.warn("getRelevantSourcesByQuery not implemented");
+    return [];
   }
 
   private async getSourcesFromContext(context: string): Promise<Source[]> {
     try {
-      if (!this.genAI) throw new Error('Gemini service not initialized');
+      if (!this.genAI) throw new Error('Gemini service not initialized or API key missing');
 
       const prompt = `Based on this context:
 ${context}
@@ -139,12 +124,11 @@ Return as JSON array with fields:
 
       const model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
       const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const responseText = result.response.text();
       
-      if (!text) return [];
+      if (!responseText) return [];
       
-      return JSON.parse(text);
+      return JSON.parse(responseText);
     } catch (error) {
       console.error('Error generating sources:', error);
       return [];
@@ -152,94 +136,85 @@ Return as JSON array with fields:
   }
 
   async sendMessage(message: Message): Promise<Message> {
-    return this.generateResponse(message);
+    if (!this.genAI) throw new Error('Gemini service not initialized (API key issue?)');
+    try {
+      const model = this.genAI.getGenerativeModel({ model: this.model.id });
+      const result = await model.generateContent(message.content);
+      const responseMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: result.response.text(),
+        timestamp: new Date()
+      };
+      return responseMessage;
+    } catch (error) {
+      throw this.handleError(error, 'GeminiSendMessage');
+    }
   }
 
-  async getCompletion(prompt: string, options?: {
-    maxTokens?: number;
-    temperature?: number;
-    model?: string;
-  }): Promise<string> {
+  async getCompletion(prompt: string, options?: any): Promise<string> {
+    if (!this.genAI) throw new Error('Gemini service not initialized (API key issue?)');
     try {
-      if (!this.genAI) throw new Error('Gemini service not initialized');
-
       const model = this.genAI.getGenerativeModel({ 
-        model: options?.model || 'gemini-2.0-flash',
-        generationConfig: {
-          maxOutputTokens: options?.maxTokens,
-          temperature: options?.temperature || 0.7,
-        }
+        model: options?.model || this.model.id,
+        generationConfig: { maxOutputTokens: options?.maxTokens, temperature: options?.temperature || 0.7 }
       });
 
       const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      if (!text) throw new Error('Empty response from Gemini');
-      
-      return text;
+      return result.response.text();
     } catch (error) {
-      throw this.handleError(error, 'Gemini');
+      throw this.handleError(error, 'GeminiGetCompletion');
     }
   }
 
   async getEmbedding(text: string): Promise<number[]> {
+    if (!this.genAI) throw new Error('Gemini service not initialized (API key issue?)');
     try {
-      if (!this.genAI) throw new Error('Gemini service not initialized');
-
-      const model = this.genAI.getGenerativeModel({ 
-        model: 'embedding-001',
-        generationConfig: {
-          temperature: 0
-        }
-      });
-
-      const embedResult = await model.embedContent(text);
-      // Convert embedding to array of numbers
-      const values = Object.values(embedResult.embedding);
-      return values.map(v => Number(v));
+      const model = this.genAI.getGenerativeModel({ model: 'embedding-001' });
+      const result = await model.embedContent(text);
+      return result.embedding.values;
     } catch (error) {
-      console.error('Error getting embedding:', error);
-      throw this.handleError(error, 'Gemini Embedding');
+      throw this.handleError(error, 'GeminiGetEmbedding');
     }
   }
 
   async testConnection(): Promise<boolean> {
-    try {
-      const testMessage = 'Test connection to Gemini 2.0 Flash';
-      const response = await this.getCompletion(testMessage, { temperature: 0.1 });
-      return response.length > 0;
-    } catch (error) {
-      console.error('Connection test failed:', error);
-      return false;
-    }
+    console.warn("testConnection not fully implemented");
+    return this.genAI !== null;
   }
 
   async enhanceTask(task: Task): Promise<ResponseWithSources<Task>> {
-    return Promise.resolve({ data: task, sources: [] });
+    console.warn("enhanceTask not implemented in GeminiService");
+    return { data: task, sources: [] };
   }
 
-  async estimateTaskDuration(description: string): Promise<ResponseWithSources<number>> {
-    return Promise.resolve({ data: 60, sources: [] }); // Mock duration of 60 minutes
+  async estimateTaskDuration(task: Task): Promise<ResponseWithSources<number>> {
+    console.warn("estimateTaskDuration not implemented in GeminiService");
+    return { data: 60, sources: [] };
   }
 
   async optimizeTaskSchedule(tasks: Task[]): Promise<ResponseWithSources<Task[]>> {
-    return Promise.resolve({ data: tasks, sources: [] });
+    console.warn("optimizeTaskSchedule not implemented in GeminiService");
+    return { data: tasks, sources: [] };
   }
 
   async suggestEventTimes(event: Partial<Event>): Promise<ResponseWithSources<Date[]>> {
-    return Promise.resolve({ data: [], sources: [] });
+    console.warn("suggestEventTimes not implemented in GeminiService");
+    return { data: [], sources: [] };
   }
 
   async analyzeScheduleConflicts(events: Event[]): Promise<ResponseWithSources<ScheduleAnalysisResult>> {
-    return Promise.resolve({ data: { conflicts: [], followUpQuestions: [] }, sources: [] });
+    console.warn("analyzeScheduleConflicts not implemented in GeminiService");
+    return { data: { conflicts: [], followUpQuestions: [] }, sources: [] };
   }
 
   getSourcesByType(type: string): Source[] {
+    console.warn("getSourcesByType not implemented");
     return [];
   }
 
   getSourcesByConfidence(minConfidence?: number): Source[] {
+    console.warn("getSourcesByConfidence not implemented");
     return [];
   }
 
@@ -248,10 +223,90 @@ Return as JSON array with fields:
     if (error instanceof Error) {
       throw new Error(`${service} Error: ${error.message}`);
     }
-    throw new Error(`${service} Error: Unknown error occurred`);
+    throw new Error(`${service} Error: An unknown error occurred`);
   }
 
-  // Rest of the class implementation remains unchanged...
+  async generateWorkflowFromPrompt(userPrompt: string): Promise<Workflow> {
+    if (!this.genAI) throw new Error('Gemini service not initialized (API key issue?)');
+    try {
+      const instruction = `Create a JSON workflow for: "${userPrompt}".\nJSON structure: { id, name, description, trigger, steps: [{ id, agentId, actionType, name, description, input, inputType, outputMapping }], created, status }.\nKey details: 
+- 'id' and 'steps.id': new UUIDs.
+- 'name': concise workflow name.
+- 'description': user's prompt or summary.
+- 'trigger': 'manual'.
+- 'steps.agentId': 'agent-default-id'.
+- 'steps.actionType': general type like 'chat', 'summarize'.
+- 'steps.input': user's prompt for the first step.
+- 'steps.inputType': 'static' for the first step.
+- 'created': Valid ISO8601 date string (current date).
+- 'status': 'inactive'.\nRespond with ONLY the JSON object.`;
+
+      const jsonResponse = await this.getCompletion(instruction, { temperature: 0.3, model: this.model.id });
+      
+      let parsedWorkflow: any;
+      try {
+        parsedWorkflow = JSON.parse(jsonResponse);
+      } catch (e) {
+        console.error('GeminiService: Failed to parse workflow JSON:', e, "Raw response was: ", jsonResponse);
+        throw new Error('AI failed to return valid JSON for workflow.');
+      }
+
+      const newWorkflow: Workflow = {
+        id: parsedWorkflow.id || crypto.randomUUID(),
+        name: parsedWorkflow.name || `Workflow: ${userPrompt.substring(0,25)}...`,
+        description: parsedWorkflow.description || userPrompt,
+        trigger: parsedWorkflow.trigger || 'manual',
+        steps: (parsedWorkflow.steps && parsedWorkflow.steps.length > 0) ? parsedWorkflow.steps.map((step: any) => ({
+          id: step.id || crypto.randomUUID(),
+          agentId: step.agentId || 'agent-default-id',
+          actionType: step.actionType || 'chat',
+          name: step.name || 'Generated Step',
+          description: step.description || 'Generated Step Description',
+          input: step.input || userPrompt,
+          inputType: step.inputType || 'static',
+          outputMapping: step.outputMapping || `step_${crypto.randomUUID().substring(0,4)}_output`
+        })) : [{
+          id: crypto.randomUUID(),
+          agentId: 'agent-default-id',
+          actionType: 'chat',
+          name: 'Initial Task',
+          description: 'Default first step based on prompt',
+          input: userPrompt,
+          inputType: 'static',
+          outputMapping: 'initialOutput'
+        }],
+        created: parsedWorkflow.created ? new Date(parsedWorkflow.created) : new Date(),
+        status: parsedWorkflow.status || 'inactive',
+      };
+      
+      return newWorkflow;
+
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('AI failed to return valid JSON')) { throw error; }
+      throw this.handleError(error, 'GeminiWorkflowGeneration');
+    }
+  }
+
+  async enhanceText(userPrompt: string): Promise<string> {
+    if (!this.genAI) throw new Error('Gemini service not initialized (API key issue?)');
+    try {
+      const instruction = `Review and enhance this text to be clearer, more concise, or more professional: "${userPrompt}". Return only the enhanced text.`;
+      const enhancedText = await this.getCompletion(instruction, { temperature: 0.7, model: this.model.id });
+      
+      if (!enhancedText || enhancedText.trim() === '') {
+        return userPrompt;
+      }
+      return enhancedText;
+
+    } catch (error) {
+      throw this.handleError(error, 'GeminiTextEnhancement');
+    }
+  }
+
+  async analyzeEmailForCalendarEvent(email: EmailMessage): Promise<EmailAnalysis | null> {
+    console.warn("analyzeEmailForCalendarEvent not implemented in GeminiService - returning null");
+    return null;
+  }
 }
 
 export const geminiService = new GeminiService();

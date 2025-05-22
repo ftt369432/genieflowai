@@ -187,17 +187,6 @@ export function UserMenu() {
                 Settings
               </button>
               <button
-                onClick={navigateTo('/gmail-test')}
-                className={cn(
-                  "flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 border-t border-gray-200 dark:border-gray-700 mt-1 pt-1",
-                  "hover:bg-gray-100 dark:hover:bg-gray-700"
-                )}
-                role="menuitem"
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Gmail Connection Test
-              </button>
-              <button
                 onClick={handleLogout}
                 className={cn(
                   "flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400",

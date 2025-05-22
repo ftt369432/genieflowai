@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useAgentStore } from '../store/agentStore';
 import { useCalendarStore } from '../store/calendarStore';
@@ -16,18 +16,24 @@ import {
   Play, Pause, Settings, File, Workflow, Clock, Calendar, CalendarClock, Bell, 
   BarChart2, Zap, Plus, ChevronRight, Sparkles, RefreshCw, Eye, Trash2, Settings2,
   ArrowRight, CalendarDays, Mail, MessageSquare, Database, Search, Inbox, Filter,
-  Users
+  Users, Brain, Activity, X
 } from 'lucide-react';
+import { ActiveAgentsPanel } from '../components/ai/ActiveAgentsPanel';
+import { AgentSuggestionPanel } from '../components/agents/AgentSuggestionPanel';
+import { SwarmPanel } from '../components/swarm/SwarmPanel';
+import { useSwarmStore } from '../stores/swarmStore';
 
 export function AutomationPage() {
   const navigate = useNavigate();
   const { workflows, addWorkflow, runWorkflow } = useWorkflowStore();
-  const { agents } = useAgentStore();
+  const { agents, selectAgent } = useAgentStore();
+  const { swarms } = useSwarmStore();
   const { syncAutomationsToCalendar } = useCalendarStore();
   const { scheduleRecurringTimeBlocks } = useCalendarAutomation();
   const [activeTab, setActiveTab] = useState('workflows');
   const [selectedWorkflow, setSelectedWorkflow] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [agentSearchQuery, setAgentSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   // Scheduler states
@@ -46,6 +52,29 @@ export function AutomationPage() {
     { id: 'message-received', name: 'Message Received', enabled: true, icon: MessageSquare },
     { id: 'data-updated', name: 'Database Updated', enabled: false, icon: Database },
   ]);
+
+  // Agent metrics
+  const agentMetrics = {
+    totalAgents: agents.length,
+    activeAgents: agents.filter(a => a.status === 'active').length,
+    averagePerformance: agents.length > 0
+      ? Math.round(agents.reduce((acc, curr) => acc + curr.metrics.performance, 0) / agents.length)
+      : 0,
+    totalTasks: agents.reduce((acc, curr) => acc + curr.metrics.tasks.total, 0)
+  };
+
+  // Handle selecting an agent
+  const handleSelectAgent = (id: string) => {
+    selectAgent(id);
+    console.log("Selected agent:", id);
+  };
+
+  // Filter agents based on search query
+  const filteredAgents = agents.filter(agent =>
+    agent.name.toLowerCase().includes(agentSearchQuery.toLowerCase()) ||
+    agent.type.toLowerCase().includes(agentSearchQuery.toLowerCase()) ||
+    (agent.description && agent.description.toLowerCase().includes(agentSearchQuery.toLowerCase()))
+  );
 
   // Quick automation templates
   const automationTemplates = [
@@ -111,7 +140,7 @@ export function AutomationPage() {
   const filteredWorkflows = workflows.filter(workflow => {
     const matchesSearch = searchQuery === '' || 
       workflow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      workflow.description.toLowerCase().includes(searchQuery.toLowerCase());
+      (workflow.description && workflow.description.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchesStatus = statusFilter === 'all' || workflow.status === statusFilter;
     
@@ -129,39 +158,61 @@ export function AutomationPage() {
   };
 
   const handleCreateFromTemplate = (templateId: string) => {
-    // In a real app, this would create a workflow from the template
-    // and then navigate to the edit page
-    navigate(`/agent-wizard?template=${templateId}`);
+    navigate(`/agent-wizard?template=${templateId}&type=workflow`);
   };
 
   const currentWorkflow = selectedWorkflow 
     ? workflows.find(w => w.id === selectedWorkflow) 
     : null;
 
+  // Dummy agent templates for AgentSuggestionPanel - replace with actual data source
+  const agentTemplateSuggestions = [
+      {
+        id: 'researcher',
+        name: 'Research Assistant',
+        description: 'Helps with research and data analysis',
+        type: 'research',
+        capabilities: ['Web Search', 'Data Analysis', 'Report Generation']
+      },
+      {
+        id: 'coder',
+        name: 'Code Assistant',
+        description: 'Helps with coding and development',
+        type: 'development',
+        capabilities: ['Code Generation', 'Code Review', 'Debugging']
+      },
+  ];
+
+  const handleCreateAgentFromTemplate = (template: any) => {
+    // Logic to create an agent from a template, potentially navigating to agent wizard
+    console.log('Create agent from template:', template);
+    navigate(`/agent-wizard?creationMode=agent&templateName=${template.name}&templateType=${template.type}&templateCapabilities=${template.capabilities.join(',')}`);
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Automation Hub</h1>
-          <p className="text-muted-foreground">Create, manage, and monitor your automated workflows</p>
+          <h1 className="text-3xl font-bold">AI Workspace</h1>
+          <p className="text-muted-foreground">Manage your AI agents, workflows, and swarms</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate('/agent-wizard')}>
+          <Button variant="outline" onClick={() => navigate('/agent-wizard?creationMode=workflow')}>
             <Plus className="h-4 w-4 mr-2" />
             New Workflow
           </Button>
-          <Button onClick={() => navigate('/agent-wizard')}>
-            <Sparkles className="h-4 w-4 mr-2" />
-            AI Workflow Wizard
+          <Button onClick={() => navigate('/agent-wizard?creationMode=agent')}>
+             <Brain className="h-4 w-4 mr-2" />
+            New Agent
           </Button>
-          <Button onClick={() => navigate('/swarm-hub')} className="bg-blue-600 hover:bg-blue-700 text-white"> 
+          <Button onClick={() => navigate('/configure-swarm')} className="bg-blue-600 hover:bg-blue-700 text-white">
             <Users className="h-4 w-4 mr-2" />
-            Swarm Hub
+            New Swarm
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Workflows</CardTitle>
@@ -172,59 +223,49 @@ export function AutomationPage() {
               {workflows.filter(w => w.status === 'active').length}
             </div>
             <p className="text-xs text-muted-foreground">
-              {Math.round((workflows.filter(w => w.status === 'active').length / Math.max(workflows.length, 1)) * 100)}% of all workflows
+              {Math.round((workflows.filter(w => w.status === 'active').length / Math.max(workflows.length, 1)) * 100)}% of total
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Scheduled Tasks</CardTitle>
-            <CalendarClock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Active Agents</CardTitle>
+            <Brain className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {workflows.filter(w => w.trigger === 'scheduled').length}
-            </div>
+            <div className="text-2xl font-bold">{agentMetrics.activeAgents}</div>
             <p className="text-xs text-muted-foreground">
-              Next: Today at 3:00 PM
+               {Math.round((agentMetrics.activeAgents / Math.max(agentMetrics.totalAgents, 1)) * 100)}% of total
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Event Triggers</CardTitle>
-            <Bell className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Swarms</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {workflows.filter(w => w.trigger === 'event').length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {triggers.filter(t => t.enabled).length} active triggers
-            </p>
+            <div className="text-2xl font-bold">{swarms.length}</div>
+             <p className="text-xs text-muted-foreground">Currently active</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">Tasks Processed (Agents)</CardTitle>
             <BarChart2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">92%</div>
-            <p className="text-xs text-muted-foreground">
-              Last 30 days
-            </p>
+            <div className="text-2xl font-bold">{agentMetrics.totalTasks}</div>
+            <p className="text-xs text-muted-foreground">Across all agents</p>
           </CardContent>
         </Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="workflows">Workflows</TabsTrigger>
-          <TabsTrigger value="triggers">Triggers</TabsTrigger>
+          <TabsTrigger value="agents">Agents</TabsTrigger>
+          <TabsTrigger value="swarms">Swarms</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
         </TabsList>
 
@@ -246,269 +287,192 @@ export function AutomationPage() {
                 id="status-filter"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="border rounded-md text-sm p-1"
+                className="border rounded-md text-sm p-1 dark:bg-gray-700 dark:border-gray-600"
               >
                 <option value="all">All</option>
                 <option value="active">Active</option>
                 <option value="paused">Paused</option>
-                <option value="inactive">Inactive</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="pending">Pending</option>
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
-            {filteredWorkflows.length > 0 ? (
-              filteredWorkflows.map(workflow => (
-                <Card 
-                  key={workflow.id}
-                  className={`cursor-pointer transition-shadow hover:shadow-md ${selectedWorkflow === workflow.id ? 'border-primary' : ''}`}
-                  onClick={() => setSelectedWorkflow(workflow.id)}
-                >
-                  <CardHeader className="pb-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle>{workflow.name}</CardTitle>
-                        <CardDescription className="mt-1">{workflow.description}</CardDescription>
-                      </div>
-                      <Badge className={getStatusColor(workflow.status)}>
-                        {workflow.status.charAt(0).toUpperCase() + workflow.status.slice(1)}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pb-2">
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      <Badge variant="outline" className="text-xs">
-                        {workflow.trigger === 'manual' ? 'Manual' : 
-                         workflow.trigger === 'scheduled' ? 'Scheduled' : 'Event-based'}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {workflow.steps.length} steps
-                      </Badge>
-                      {workflow.lastRun && (
-                        <Badge variant="outline" className="text-xs">
-                          Last run: {new Date(workflow.lastRun).toLocaleDateString()}
-                        </Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between pt-0">
-                    <Button variant="outline" size="sm" className="text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/agent-wizard?id=${workflow.id}`);
-                      }}>
-                      <Settings className="h-3.5 w-3.5 mr-1" />
-                      Edit
-                    </Button>
-                    <Button size="sm" className="text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRunWorkflow(workflow.id);
-                      }}>
-                      <Play className="h-3.5 w-3.5 mr-1" />
-                      Run Now
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                <p className="mb-2">No workflows found</p>
-                <Button onClick={() => navigate('/agent-wizard')}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create New Workflow
-                </Button>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredWorkflows.map((workflow) => (
+              <Card key={workflow.id} className="flex flex-col justify-between dark:bg-gray-800">
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-lg">{workflow.name}</CardTitle>
+                    <Badge className={getStatusColor(workflow.status)}>{workflow.status}</Badge>
+                  </div>
+                  <CardDescription className="text-xs text-muted-foreground">ID: {workflow.id}</CardDescription>
+                  <CardDescription>{workflow.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <p><strong className="text-muted-foreground">Trigger:</strong> {workflow.trigger}</p>
+                  <p><strong className="text-muted-foreground">Steps:</strong> {workflow.steps.length}</p>
+                  <p><strong className="text-muted-foreground">Created:</strong> {new Date(workflow.created).toLocaleDateString()}</p>
+                  {workflow.lastRun && (
+                    <p><strong className="text-muted-foreground">Last Run:</strong> {new Date(workflow.lastRun).toLocaleString()}</p>
+                  )}
+                </CardContent>
+                <CardFooter className="flex justify-end gap-2 pt-4 border-t dark:border-gray-700">
+                  <Button variant="outline" size="sm" onClick={() => {/* TODO: Workflow manage modal or view */ console.log('Manage workflow', workflow.id)}}>
+                    <Settings className="h-4 w-4 mr-1" /> Manage
+                  </Button>
+                  <Button size="sm" onClick={() => handleRunWorkflow(workflow.id)} disabled={workflow.status === 'running'}>
+                    {workflow.status === 'running' ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
+                    Run
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+            {filteredWorkflows.length === 0 && (
+              <p className="col-span-full text-center text-muted-foreground">No workflows match your criteria.</p>
             )}
           </div>
         </TabsContent>
 
-        <TabsContent value="triggers" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {triggers.map(trigger => (
-              <Card key={trigger.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <trigger.icon className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-base">{trigger.name}</CardTitle>
-                    </div>
-                    <Switch 
-                      checked={trigger.enabled} 
-                      onCheckedChange={(checked) => {
-                        setTriggers(prev => 
-                          prev.map(t => t.id === trigger.id ? {...t, enabled: checked} : t)
-                        );
-                      }} 
-                    />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm">
-                    <div className="font-semibold mb-1">Connected Workflows:</div>
-                    <div className="pl-4 text-muted-foreground">
-                      {workflows.filter(w => 
-                        w.trigger === 'event' && 
-                        w.triggerConfig?.event === trigger.id
-                      ).length > 0 ? (
-                        workflows.filter(w => 
-                          w.trigger === 'event' && 
-                          w.triggerConfig?.event === trigger.id
-                        ).map(w => (
-                          <div key={w.id} className="flex items-center gap-1">
-                            <ChevronRight className="h-3 w-3" />
-                            <span>{w.name}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <span className="italic">No workflows connected</span>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button variant="outline" size="sm" className="w-full">
-                    <Settings2 className="h-3.5 w-3.5 mr-1" />
-                    Configure
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
+        <TabsContent value="agents" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-4 dark:bg-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Brain className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{agentMetrics.totalAgents}</div>
+                  <div className="text-sm text-muted-foreground">Total Agents</div>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-4 dark:bg-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-green-500/10">
+                  <Activity className="w-5 h-5 text-green-500" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{agentMetrics.activeAgents}</div>
+                  <div className="text-sm text-muted-foreground">Active Agents</div>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-4 dark:bg-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-yellow-500/10">
+                  <Zap className="w-5 h-5 text-yellow-500" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{agentMetrics.averagePerformance}%</div>
+                  <div className="text-sm text-muted-foreground">Avg. Performance</div>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-4 dark:bg-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <Activity className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{agentMetrics.totalTasks}</div>
+                  <div className="text-sm text-muted-foreground">Total Tasks</div>
+                </div>
+              </div>
+            </Card>
           </div>
+
+          <div className="flex justify-between items-center">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search agents..."
+                className="w-full pl-10 dark:bg-gray-700 dark:border-gray-600"
+                value={agentSearchQuery}
+                onChange={(e) => setAgentSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <ActiveAgentsPanel onSelectAgent={handleSelectAgent} agents={filteredAgents} />
+
+        </TabsContent>
+
+        <TabsContent value="swarms" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Manage Swarms</h2>
+          </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+             <Card className="dark:bg-gray-800"><CardHeader><CardTitle className="text-sm">Total Swarms</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{swarms.length}</div></CardContent></Card>
+           </div>
+          <SwarmPanel />
         </TabsContent>
 
         <TabsContent value="templates" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {automationTemplates.map(template => (
-              <Card key={template.id}>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <div className="bg-primary/10 p-2 rounded-md">
-                      <template.icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{template.name}</CardTitle>
-                      <CardDescription>{template.description}</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pb-2">
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {template.triggers.map(trigger => (
-                      <Badge key={trigger} variant="outline" className="text-xs">
-                        {trigger}
-                      </Badge>
-                    ))}
-                    <Badge variant="outline" className="text-xs bg-primary/5">
-                      {template.category}
-                    </Badge>
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button 
-                    className="w-full"
-                    onClick={() => handleCreateFromTemplate(template.id)}
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Create Workflow
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Available Templates</h2>
           </div>
+          
+          <Card className="dark:bg-gray-800">
+            <CardHeader>
+              <CardTitle>Workflow Templates</CardTitle>
+              <CardDescription>Quick-start new automations.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {automationTemplates.map((template) => (
+                <Card key={template.id} className="flex flex-col dark:bg-gray-700">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <template.icon className="h-6 w-6 text-primary" />
+                      <CardTitle>{template.name}</CardTitle>
+                    </div>
+                    <CardDescription>{template.description}</CardDescription>
+                  </CardHeader>
+                  <CardFooter className="mt-auto pt-4 border-t dark:border-gray-600">
+                    <Button className="w-full" onClick={() => handleCreateFromTemplate(template.id)}>
+                      <Plus className="h-4 w-4 mr-2" /> Use Template
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="dark:bg-gray-800">
+            <CardHeader>
+              <CardTitle>Agent Templates</CardTitle>
+              <CardDescription>Bootstrap new agents with predefined capabilities.</CardDescription>
+            </CardHeader>
+            <CardContent>
+               <AgentSuggestionPanel
+                patterns={agentTemplateSuggestions}
+                onCreateAgent={handleCreateAgentFromTemplate}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
       {selectedWorkflow && currentWorkflow && (
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="text-xl">Workflow Details: {currentWorkflow.name}</CardTitle>
-            <CardDescription>{currentWorkflow.description}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-muted rounded-lg p-3">
-                  <div className="text-sm text-muted-foreground mb-1">Status</div>
-                  <div className="font-medium">
-                    <Badge className={getStatusColor(currentWorkflow.status)}>
-                      {currentWorkflow.status.charAt(0).toUpperCase() + currentWorkflow.status.slice(1)}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="bg-muted rounded-lg p-3">
-                  <div className="text-sm text-muted-foreground mb-1">Trigger</div>
-                  <div className="font-medium">
-                    {currentWorkflow.trigger === 'manual' ? 'Manual' : 
-                    currentWorkflow.trigger === 'scheduled' ? 'Scheduled' : 'Event-based'}
-                  </div>
-                </div>
-                <div className="bg-muted rounded-lg p-3">
-                  <div className="text-sm text-muted-foreground mb-1">Steps</div>
-                  <div className="font-medium">{currentWorkflow.steps.length}</div>
-                </div>
-                <div className="bg-muted rounded-lg p-3">
-                  <div className="text-sm text-muted-foreground mb-1">Last Run</div>
-                  <div className="font-medium">
-                    {currentWorkflow.lastRun ? new Date(currentWorkflow.lastRun).toLocaleString() : 'Never'}
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <h3 className="text-lg font-medium mb-2">Workflow Steps</h3>
-                <div className="space-y-3">
-                  {currentWorkflow.steps.map((step, index) => {
-                    const agent = agents.find(a => a.id === step.agentId);
-                    return (
-                      <div key={step.id} className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                        <div className="bg-primary/10 text-primary font-medium rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
-                          {index + 1}
-                        </div>
-                        <div className="flex-grow">
-                          <div className="font-medium">{step.name}</div>
-                          <div className="text-sm text-muted-foreground">{step.description}</div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className="text-xs">
-                              Agent: {agent?.name || 'Unknown'}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              Action: {step.actionType}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="flex justify-between border-t pt-6">
-            <div className="flex gap-2">
-              <Button variant="outline">
-                <Eye className="h-4 w-4 mr-2" />
-                View Runs
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl dark:bg-gray-800">
+            <CardHeader>
+              <CardTitle>Manage Workflow: {currentWorkflow.name}</CardTitle>
+              <Button variant="ghost" size="icon" className="absolute top-4 right-4" onClick={() => setSelectedWorkflow(null)}>
+                <X className="h-5 w-5" />
               </Button>
-              <Button variant="outline">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => navigate(`/agent-wizard?id=${currentWorkflow.id}`)}>
-                <Settings className="h-4 w-4 mr-2" />
-                Edit Workflow
-              </Button>
-              <Button onClick={() => handleRunWorkflow(currentWorkflow.id)}>
-                <Play className="h-4 w-4 mr-2" />
-                Run Now
-              </Button>
-            </div>
-          </CardFooter>
-        </Card>
+            </CardHeader>
+            <CardContent className="max-h-[70vh] overflow-y-auto">
+              <p>Details for workflow ID: {currentWorkflow.id}</p>
+            </CardContent>
+            <CardFooter className="flex justify-end gap-2 border-t dark:border-gray-700 pt-4">
+              <Button variant="outline" onClick={() => setSelectedWorkflow(null)}>Cancel</Button>
+              <Button>Save Changes</Button>
+            </CardFooter>
+          </Card>
+        </div>
       )}
     </div>
   );

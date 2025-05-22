@@ -19,20 +19,26 @@ export interface Page {
   hasAI?: boolean;
   aiAssistant?: string;
   expanded?: boolean;
-  threads?: Thread[];
   created_at: string;
   updated_at: string;
+}
+
+export interface UserProfileInfo {
+  id: string;
+  full_name?: string;
+  avatar_url?: string;
+  display_name?: string;
 }
 
 export interface Thread {
   id: string;
   page_id: string;
-  title: string;
-  lastActivity: string;
-  participants: number;
-  unread: number;
+  user_id: string;
+  content: string;
   created_at: string;
   updated_at: string;
+  parent_message_id?: string | null;
+  user_profile?: UserProfileInfo;
 }
 
 export interface DirectMessage {

@@ -3,15 +3,16 @@ import { AIAssistant, Message } from '../../types/ai';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
-import { Send, ArrowLeft, Book, Loader2 } from 'lucide-react';
+import { Send, ArrowLeft, Book, Loader2, Edit } from 'lucide-react';
 import { chatWithAssistant } from '../../services/documentChatService';
 
 interface AssistantChatProps {
   assistant: AIAssistant;
   onBack?: () => void;
+  onEdit?: () => void;
 }
 
-export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
+export function AssistantChat({ assistant, onBack, onEdit }: AssistantChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -102,7 +103,13 @@ export function AssistantChat({ assistant, onBack }: AssistantChatProps) {
           )}
           <h2 className="text-xl font-semibold">{assistant.name}</h2>
           {assistant.description && (
-            <p className="text-muted-foreground text-sm">{assistant.description}</p>
+            <p className="text-muted-foreground text-sm flex-1">{assistant.description}</p>
+          )}
+          {onEdit && (
+            <Button variant="outline" size="sm" onClick={onEdit}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Assistant
+            </Button>
           )}
         </div>
         

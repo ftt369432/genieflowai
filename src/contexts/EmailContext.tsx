@@ -25,6 +25,7 @@ interface EmailContextType {
   removeLabel: (accountId: string, messageId: string, labelId: string) => Promise<void>;
   deleteMessage: (accountId: string, messageId: string) => Promise<void>;
   removeAccount: (accountId: string) => Promise<void>;
+  refreshAccounts: () => Promise<void>;
   // TODO: Add functions for addGoogleAccount, addIMAPAccount, saveDraft, refreshAccount if needed at context level
 }
 
@@ -276,6 +277,26 @@ export const EmailProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [performAction, accounts, selectedAccountId, fetchFoldersAndLabels, fetchMessages, setError] 
   );
 
+  const refreshAccounts = useCallback(async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const updatedAccounts = await emailServiceAdapter.getAccounts();
+      setAccounts(updatedAccounts);
+      
+      // If we have a selected account, refresh its data
+      if (selectedAccountId) {
+        await fetchFoldersAndLabels(selectedAccountId);
+        await fetchMessages(selectedAccountId, { folderId: 'INBOX', pageSize: 20 });
+      }
+    } catch (err) {
+      console.error('Failed to refresh accounts:', err);
+      setError(err instanceof Error ? err : new Error('Failed to refresh accounts'));
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedAccountId, fetchFoldersAndLabels, fetchMessages]);
+
   const contextValue: EmailContextType = {
     accounts,
     selectedAccountId,
@@ -296,6 +317,7 @@ export const EmailProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     removeLabel,
     deleteMessage,
     removeAccount,
+    refreshAccounts,
   };
 
   return (

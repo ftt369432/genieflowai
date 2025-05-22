@@ -14,9 +14,9 @@ export * from './EmailPage';
 // AI pages
 export * from './AIAssistant';
 export * from './AIDrive';
-export * from './AIAgents';
-export { AgentsPageComponent } from './AgentsPage';
-export * from './AgentDetail';
+// export * from './AIAgents'; // To be reviewed
+// export { AgentsPageComponent } from './AgentsPage'; // Page removed
+// export * from './AgentDetail'; // Page removed
 export * from './TestAI';
 export * from './AIPage';
 

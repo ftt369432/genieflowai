@@ -14,7 +14,7 @@ export const useSidebarStore = create<SidebarState>()(
   persist(
     (set) => ({
       isOpen: true,
-      autoCollapse: true,
+      autoCollapse: false,
       toggle: () => set((state) => ({ isOpen: !state.isOpen })),
       setOpen: (open) => set({ isOpen: open }),
       toggleAutoCollapse: () => set((state) => ({ autoCollapse: !state.autoCollapse })),

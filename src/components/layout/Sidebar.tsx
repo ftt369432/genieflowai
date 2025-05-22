@@ -113,7 +113,7 @@ const sidebarSections: SidebarSection[] = [
       {
         title: 'AI Assistant',
         icon: MessageSquare,
-        href: '/assistant',
+        href: '/ai-assistant',
         color: 'text-pink-500',
       },
       {
@@ -129,13 +129,7 @@ const sidebarSections: SidebarSection[] = [
         color: 'text-violet-500',
       },
       {
-        title: 'AI Agents',
-        icon: Brain,
-        href: '/agents',
-        color: 'text-purple-500',
-      },
-      {
-        title: 'Automation Hub',
+        title: 'AI Workspace',
         icon: Zap,
         href: '/automation',
         color: 'text-amber-500',

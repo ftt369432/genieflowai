@@ -6,20 +6,23 @@ import { useAuth } from './AuthContext';
 interface TeamContextType {
   teams: Team[];
   activeTeam: Team | null;
-  activePage: Page | null; // Added
+  activePage: Page | null;
+  activePageMessages: Thread[];
   loading: boolean;
+  loadingMessages: boolean;
   error: Error | null;
   setActiveTeam: (team: Team | null) => void;
-  setActivePage: (page: Page | null) => void; // Added
-  createTeam: (teamData: Partial<Team>) => Promise<Team>;
+  setActivePage: (page: Page | null) => void;
+  createTeam: (teamData: { name: string; description?: string; avatar_url?: string }) => Promise<Team | null>;
   updateTeam: (teamId: string, teamData: Partial<Team>) => Promise<Team>;
   deleteTeam: (teamId: string) => Promise<void>;
   addTeamMember: (teamId: string, memberData: Partial<TeamMember>) => Promise<TeamMember>;
   removeTeamMember: (teamId: string, memberId: string) => Promise<void>;
-  createPage: (teamId: string, pageData: Partial<Page>) => Promise<Page>;
+  createPage: (teamId: string, pageData: Partial<Omit<Page, 'id' | 'created_at' | 'updated_at' | 'threads' | 'unread' | 'isStarred' | 'hasAI' >> & { name: string }) => Promise<Page>;
   updatePage: (pageId: string, pageData: Partial<Page>) => Promise<Page>;
   deletePage: (pageId: string) => Promise<void>;
-  createThread: (pageId: string, threadData: Partial<Thread>) => Promise<Thread>;
+  postMessage: (pageId: string, content: string, parentMessageId?: string | null) => Promise<Thread | null>;
+  fetchMessages: (pageId: string) => Promise<void>;
   sendDirectMessage: (teamId: string, messageData: Partial<DirectMessage>) => Promise<DirectMessage>;
   refreshTeams: () => Promise<void>;
 }
@@ -36,15 +39,15 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [activeTeam, _setActiveTeam] = useState<Team | null>(null);
-  const [activePage, _setActivePage] = useState<Page | null>(null); // Added state
+  const [activePage, _setActivePage] = useState<Page | null>(null);
+  const [activePageMessages, setActivePageMessages] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Refs to hold current activeTeam and activePage for use in refreshTeams
   const activeTeamRef = useRef(activeTeam);
   const activePageRef = useRef(activePage);
 
-  // Update refs when activeTeam or activePage change
   useEffect(() => {
     activeTeamRef.current = activeTeam;
   }, [activeTeam]);
@@ -56,6 +59,9 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setActivePage = useCallback((page: Page | null) => {
     console.log('TeamContext: Public setActivePage called with page:', JSON.stringify(page));
     _setActivePage(page);
+    if (!page) {
+      setActivePageMessages([]);
+    }
   }, []);
 
   const setActiveTeam = useCallback((team: Team | null) => {
@@ -89,7 +95,6 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let newActiveTeam: Team | null = null;
       let newActivePage: Page | null = null;
 
-      // Use refs to get current values
       const currentPersistedActiveTeam = activeTeamRef.current;
       const currentPersistedActivePage = activePageRef.current;
 
@@ -121,7 +126,7 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  }, [user, _setActiveTeam, _setActivePage, setLoading, setTeams, setError]); // Changed dependencies
+  }, [user, _setActiveTeam, _setActivePage, setLoading, setTeams, setError]);
 
   useEffect(() => {
     console.log(`TeamContext: EFFECT [user, authLoading] --- User: ${JSON.stringify(user)}, AuthLoading: ${authLoading}`);
@@ -139,18 +144,46 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, authLoading, refreshTeams]);
 
-  const createTeam = useCallback(async (teamData: Partial<Team>) => {
-    if (!user || !user.id) throw new Error('User must be logged in to create a team.');
+  const fetchMessages = useCallback(async (pageId: string) => {
+    if (!pageId) return;
+    setLoadingMessages(true);
     try {
-      const newTeam = await TeamService.createTeam(teamData);
-      setTeams(prev => [...prev, newTeam]);
-      // Does not automatically set as active, user can select it.
+      const messages = await TeamService.getMessages(pageId);
+      setActivePageMessages(messages);
+    } catch (err) {
+      console.error('Error fetching messages in context:', err);
+      setActivePageMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activePage && activePage.id) {
+      fetchMessages(activePage.id);
+    } else {
+      setActivePageMessages([]);
+    }
+  }, [activePage, fetchMessages]);
+
+  const createTeam = useCallback(async (teamData: { name: string; description?: string; avatar_url?: string }) => {
+    if (!user || !user.id) {
+      setError(new Error('User must be logged in to create a team.'));
+      throw new Error('User must be logged in to create a team.');
+    }
+    try {
+      setLoading(true);
+      const newTeam = await TeamService.createTeam(teamData, user.id);
+      await refreshTeams();
       return newTeam;
     } catch (err) {
+      console.error('TeamContext: createTeam - error:', err);
       setError(err instanceof Error ? err : new Error('Failed to create team'));
       throw err;
+    } finally {
+      setLoading(false);
     }
-  }, [user]);
+  }, [user, refreshTeams]);
 
   const updateTeam = useCallback(async (teamId: string, teamData: Partial<Team>) => {
     if (!user || !user.id) throw new Error('User must be logged in to update a team.');
@@ -159,7 +192,6 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTeams(prev => prev.map(team => team.id === teamId ? updatedTeam : team));
       if (activeTeam?.id === teamId) {
         _setActiveTeam(updatedTeam);
-        // Re-evaluate activePage
         const pageStillExists = activePage && updatedTeam.pages.some(p => p.id === activePage.id);
         if (pageStillExists) {
           _setActivePage(updatedTeam.pages.find(p => p.id === activePage!.id) || updatedTeam.pages[0] || null);
@@ -190,7 +222,7 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return remainingTeams;
       });
-      if (activeTeam?.id === teamId) { // If the deleted team was active
+      if (activeTeam?.id === teamId) {
         _setActiveTeam(newActiveTeam);
         _setActivePage(newActivePage);
       }
@@ -198,7 +230,7 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(err instanceof Error ? err : new Error('Failed to delete team'));
       throw err;
     }
-  }, [user, activeTeam, teams]); // teams is needed for setting new active team
+  }, [user, activeTeam, teams]);
 
   const addTeamMember = useCallback(async (teamId: string, memberData: Partial<TeamMember>) => {
     if (!user || !user.id) throw new Error('User must be logged in to add a member.');
@@ -249,127 +281,114 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, activeTeam]);
 
-  const createPage = useCallback(async (teamId: string, pageData: Partial<Page>) => {
+  const createPage = useCallback(async (teamId: string, pageData: Partial<Omit<Page, 'id' | 'created_at' | 'updated_at' | 'threads' | 'unread' | 'isStarred' | 'hasAI' >> & { name: string }) => {
     if (!user || !user.id) throw new Error('User must be logged in to create a page.');
     try {
       const newPage = await TeamService.createPage(teamId, pageData);
-      let updatedActiveTeam: Team | null = null;
-      setTeams(prev => prev.map(team => {
-        if (team.id === teamId) {
-          const newTeam = { ...team, pages: [...team.pages, newPage] };
-          if (activeTeam?.id === teamId) {
-            updatedActiveTeam = newTeam;
-          }
-          return newTeam;
-        }
-        return team;
-      }));
-      if (updatedActiveTeam) {
-        _setActiveTeam(updatedActiveTeam);
-        // Optionally, set the new page as activePage, for now, user clicks to activate
-        // _setActivePage(newPage);
-      }
+      await refreshTeams();
       return newPage;
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to create page'));
       throw err;
     }
-  }, [user, activeTeam]);
+  }, [user, refreshTeams]);
 
   const updatePage = useCallback(async (pageId: string, pageData: Partial<Page>) => {
     if (!user || !user.id) throw new Error('User must be logged in to update a page.');
     try {
       const updatedPage = await TeamService.updatePage(pageId, pageData);
-      let owningTeamId: string | null = null;
-      setTeams(prev => prev.map(team => {
-        const pageIndex = team.pages.findIndex(p => p.id === pageId);
-        if (pageIndex !== -1) {
-          owningTeamId = team.id;
-          const newPages = [...team.pages];
-          newPages[pageIndex] = updatedPage;
-          return { ...team, pages: newPages };
-        }
-        return team;
-      }));
-
-      if (owningTeamId && activeTeam?.id === owningTeamId) {
-        // Refresh activeTeam from the state to get the updated pages array
-        const currentTeamState = teams.find(t => t.id === owningTeamId);
-        if (currentTeamState) _setActiveTeam(currentTeamState);
-        
+      setTeams(prevTeams => prevTeams.map(t => ({
+        ...t,
+        pages: t.pages.map(p => p.id === pageId ? updatedPage : p)
+      })));
         if (activePage?.id === pageId) {
           _setActivePage(updatedPage);
-        }
       }
       return updatedPage;
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to update page'));
       throw err;
     }
-  }, [user, activeTeam, activePage, teams]); // Added teams to deps for finding currentTeamState
+  }, [user, activePage, _setActivePage]);
 
   const deletePage = useCallback(async (pageId: string) => {
     if (!user || !user.id) throw new Error('User must be logged in to delete a page.');
     try {
       await TeamService.deletePage(pageId);
-      let owningTeamId: string | null = null;
-      let newActivePageCandidate: Page | null = null;
-
-      setTeams(prev => prev.map(team => {
-        const pageIndex = team.pages.findIndex(p => p.id === pageId);
-        if (pageIndex !== -1) {
-          owningTeamId = team.id;
-          const updatedPages = team.pages.filter(p => p.id !== pageId);
-          if (activeTeam?.id === team.id && activePage?.id === pageId) {
-            newActivePageCandidate = updatedPages.length > 0 ? updatedPages[0] : null;
+      let newActivePageToSet: Page | null = null;
+      setTeams(prevTeams => prevTeams.map(t => {
+        const newPages = t.pages.filter(p => p.id !== pageId);
+        if (t.id === activeTeam?.id && activePage?.id === pageId) {
+          newActivePageToSet = newPages.length > 0 ? newPages[0] : null;
           }
-          return { ...team, pages: updatedPages };
-        }
-        return team;
+        return { ...t, pages: newPages };
       }));
-
-      if (owningTeamId && activeTeam?.id === owningTeamId) {
-        // Refresh activeTeam from the state
-        const currentTeamState = teams.find(t => t.id === owningTeamId);
-        if (currentTeamState) _setActiveTeam(currentTeamState);
-
         if (activePage?.id === pageId) {
-          _setActivePage(newActivePageCandidate);
-        }
+        _setActivePage(newActivePageToSet);
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to delete page'));
       throw err;
     }
-  }, [user, activeTeam, activePage, teams]); // Added teams to deps
+  }, [user, activeTeam, activePage, _setActivePage]);
 
-  const createThread = useCallback(async (pageId: string, threadData: Partial<Thread>) => {
-    if (!user || !user.id) throw new Error('User must be logged in to create a thread.');
-    // TODO: Implement thread creation logic, update relevant team/page state
-    console.log('TeamContext: createThread called', pageId, threadData);
-    const newThread = await TeamService.createThread(pageId, threadData);
-    // Potentially update activeTeam.pages.find(p=>p.id === pageId).threads or similar
-    return newThread;
+  const postMessage = useCallback(async (pageId: string, content: string, parentMessageId?: string | null) => {
+    if (!user) {
+      setError(new Error('User is not authenticated'));
+      console.error('TeamContext: postMessage - User is not authenticated.');
+      return null;
+    }
+    const currentUserId = user.id;
+    if (!currentUserId) {
+      setError(new Error('User ID is missing'));
+      console.error('TeamContext: postMessage - User ID is missing.');
+      return null;
+    }
+
+    try {
+      const newMessage = await TeamService.sendMessage(pageId, content, currentUserId, parentMessageId);
+      if (newMessage) {
+        setActivePageMessages(prevMessages => {
+          if (prevMessages.find(m => m.id === newMessage.id)) return prevMessages;
+          return [...prevMessages, newMessage];
+        });
+      }
+      return newMessage;
+    } catch (err) {
+      console.error('TeamContext: postMessage - error:', err);
+      setError(err instanceof Error ? err : new Error('Failed to send message'));
+      return null;
+    }
   }, [user]);
 
   const sendDirectMessage = useCallback(async (teamId: string, messageData: Partial<DirectMessage>) => {
     if (!user || !user.id) throw new Error('User must be logged in to send a DM.');
-    // TODO: Implement DM logic, update relevant team state
-    console.log('TeamContext: sendDirectMessage called', teamId, messageData);
-    const newDM = await TeamService.sendDirectMessage(teamId, messageData);
-    // Potentially update activeTeam.direct_messages or similar
-    return newDM;
-  }, [user]);
+    try {
+      const newDm = await TeamService.sendDirectMessage(teamId, messageData);
+      if (activeTeam?.id === teamId) {
+        _setActiveTeam(prevActiveTeam => prevActiveTeam ? {
+          ...prevActiveTeam,
+          direct_messages: [...prevActiveTeam.direct_messages, newDm]
+        } : null);
+      }
+      return newDm;
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to send direct message'));
+      throw err;
+    }
+  }, [user, activeTeam]);
 
   return (
     <TeamContext.Provider value={{
       teams,
       activeTeam,
-      activePage, // Provide
+      activePage,
+      activePageMessages,
       loading,
+      loadingMessages,
       error,
-      setActiveTeam, // Use public setter
-      setActivePage, // Use public setter
+      setActiveTeam,
+      setActivePage,
       createTeam,
       updateTeam,
       deleteTeam,
@@ -378,7 +397,8 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createPage,
       updatePage,
       deletePage,
-      createThread,
+      postMessage,
+      fetchMessages,
       sendDirectMessage,
       refreshTeams
     }}>

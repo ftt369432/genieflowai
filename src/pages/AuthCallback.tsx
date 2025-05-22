@@ -87,9 +87,7 @@ export function AuthCallback() {
                 setStatus('Login successful! Redirecting...');
                 
                 // Navigate to dashboard
-                setTimeout(() => {
-                  navigate('/dashboard', { replace: true });
-                }, 1000);
+                navigate('/dashboard', { replace: true });
                 return;
               } catch (userInfoError) {
                 console.error('Error getting user info, but continuing with session data', userInfoError);
@@ -114,9 +112,7 @@ export function AuthCallback() {
                 setStatus('Login successful! Redirecting...');
                 
                 // Navigate to dashboard
-                setTimeout(() => {
-                  navigate('/dashboard', { replace: true });
-                }, 1000);
+                navigate('/dashboard', { replace: true });
                 return;
               }
             } else {
@@ -200,9 +196,7 @@ export function AuthCallback() {
           setStatus('Login successful! Redirecting...');
           
           // Navigate to dashboard
-          setTimeout(() => {
-            navigate('/dashboard', { replace: true });
-          }, 1000);
+          navigate('/dashboard', { replace: true });
           return;
         }
         
@@ -277,14 +271,10 @@ export function AuthCallback() {
         setAuthToken(session.provider_token);
         
         setStatus('Login successful! Redirecting...');
-        
-        // Navigate to dashboard
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true });
-        }, 1000);
-      } catch (error) {
-        console.error('Error during auth callback:', error);
-        setError(error instanceof Error ? error.message : 'An unknown error occurred');
+        navigate('/dashboard', { replace: true });
+      } catch (e: any) {
+        console.error('Auth callback error:', e);
+        setError(e instanceof Error ? e.message : 'An unknown error occurred');
       }
     }
 

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Search, Inbox, Send, Archive, Trash, Mail, RefreshCw, Folder as FolderIcon } from 'lucide-react';
+import { Plus, Search, Inbox, Send, Archive, Trash, Mail, RefreshCw, Folder as FolderIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { useEmail } from '../contexts/EmailContext';
 import { EmailComposer } from '../components/email/EmailComposer';
 import { EmailDetail } from '../components/email/EmailDetail';
@@ -17,6 +17,9 @@ import { EmailToolbar } from '../components/email/EmailToolbar';
 // Import the main emailService
 import emailServiceInstance from '../services/email/emailService'; // Renamed to avoid conflict if adapter also exports 'emailService'
 import { useCalendarStore } from '../store/calendarStore'; // Added import
+import { useEmailSelection } from '../hooks/useEmailSelection'; // Import the hook
+import { Switch } from '../components/ui/Switch'; // Ensure Switch is imported
+import { Label } from '../components/ui/Label';   // For associating with the Switch
 
 // Define the type for replyTo data directly, matching EmailComposer's expectation
 interface ComposerReplyData {
@@ -60,6 +63,9 @@ export function EmailPage() {
     selectAccount,
   } = useEmail();
   const { addEvent: addCalendarEventToStore, updateEvent: updateCalendarEventInStore } = useCalendarStore(); // Get store functions
+  const { selectedEmails, toggleSelect, selectAll, clearSelection } = useEmailSelection(); // Instantiate the hook
+  const [isAutoCalendarEnabled, setIsAutoCalendarEnabled] = useState(false); // New state for the toggle
+  const [autoProcessedIds, setAutoProcessedIds] = useState<Set<string>>(new Set()); // New state for session tracking
 
   // Store getMessages in a ref to keep a stable reference for the useEffect
   const getMessagesRef = useRef(getMessages);
@@ -468,6 +474,127 @@ export function EmailPage() {
     }
   };
 
+  const handleBatchCalendarAnalysis = async () => {
+    if (selectedEmails.length === 0) {
+      toast.info("No emails selected for calendaring.");
+      return;
+    }
+    const emailsToProcess = messages.filter(email => selectedEmails.includes(email.id));
+    if (emailsToProcess.length === 0) {
+        toast.error("Selected emails could not be found. Please refresh.");
+        clearSelection(); 
+        return;
+    }
+    toast.info(`Batch Calendar: Starting to process ${emailsToProcess.length} email(s)...`, { duration: 5000 });
+    let successCount = 0;
+    let errorCount = 0;
+    let skippedCount = 0;
+
+    for (let i = 0; i < emailsToProcess.length; i++) {
+      const email = emailsToProcess[i];
+      try {
+        console.log(`Batch Calendar: Analyzing email ID ${email.id} - ${email.subject}`);
+        const analysisResult = await emailServiceInstance.analyzeEmail(email); 
+        
+        if (analysisResult?.calendarEventStatus === 'created' || analysisResult?.calendarEventStatus === 'updated') {
+          toast.success(`Batch Calendar: Event ${analysisResult.calendarEventStatus} for "${email.subject?.substring(0,30) || 'email'}..." (Case: ${analysisResult.meetingDetails?.caseNumber || 'N/A'})`);
+          successCount++;
+        } else if (analysisResult?.calendarEventStatus === 'skipped_no_case_number' || analysisResult?.calendarEventStatus === 'skipped_no_hearing_details') {
+           toast.info(`Batch Calendar: Skipped "${email.subject?.substring(0,30) || 'email'}...": ${analysisResult.error || 'No relevant details'}`);
+           skippedCount++;
+        } else if (analysisResult?.calendarEventStatus === 'error' || analysisResult?.error) {
+          toast.error(`Batch Calendar Error: "${email.subject?.substring(0,30) || 'email'}...": ${analysisResult.error || 'Unknown error'}`);
+          errorCount++;
+        } else {
+           console.log('Batch Calendar: Unhandled analysis result:', analysisResult);
+           skippedCount++;
+        }
+      } catch (error: any) {
+        console.error(`Batch Calendar: Error processing email ${email.id}:`, error);
+        toast.error(`Batch Calendar Failed: "${email.subject?.substring(0,30) || 'email'}...": ${error.message || 'Unknown error'}`);
+        errorCount++;
+      }
+      // Add delay after processing each email, unless it's the very last one
+      if (i < emailsToProcess.length - 1) {
+        console.log(`Batch Calendar: Delaying for 1.5s before next email.`);
+        await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
+      }
+    }
+    // Overall summary toast
+    if (successCount > 0 && errorCount === 0 && skippedCount === 0) {
+      toast.success(`Successfully processed all ${successCount} selected email(s).`);
+    } else {
+        let summaryMessages: string[] = [];
+        if (successCount > 0) summaryMessages.push(`${successCount} succeeded`);
+        if (errorCount > 0) summaryMessages.push(`${errorCount} failed`);
+        if (skippedCount > 0) summaryMessages.push(`${skippedCount} skipped`);
+        toast.info(`Batch processing complete: ${summaryMessages.join(', ')}.`, { duration: 7000 });
+    }
+    clearSelection(); // Clear selection after processing
+  };
+
+  // useEffect for Automatic Calendar Processing
+  useEffect(() => {
+    if (isAutoCalendarEnabled && messages.length > 0) {
+      const processNewMessages = async () => {
+        let newEmailsProcessedCount = 0;
+        let newErrorsCount = 0;
+        
+        // Create a list of emails that haven't been attempted for auto-calendaring in this session
+        // AND do not already have a definitive calendar status from a previous run (e.g. batch or prior auto-run)
+        const emailsToConsider = messages.filter(email => 
+            !autoProcessedIds.has(email.id) && 
+            !(email.analysis && email.analysis.calendarEventStatus && 
+              ['created', 'updated', 'error', 'skipped_no_case_number', 'skipped_no_hearing_details'].includes(email.analysis.calendarEventStatus)
+            )
+        );
+
+        if (emailsToConsider.length > 0) {
+            console.log(`Auto-Calendar: Considering ${emailsToConsider.length} emails for processing.`);
+        }
+
+        for (let i = 0; i < emailsToConsider.length; i++) {
+          const email = emailsToConsider[i];
+          console.log(`Auto-Calendar: Processing ${email.id} - ${email.subject}`);
+          try {
+            const analysisResult = await emailServiceInstance.analyzeEmail(email);
+            setAutoProcessedIds(prev => new Set(prev).add(email.id)); 
+
+            if (analysisResult?.calendarEventStatus === 'created' || analysisResult?.calendarEventStatus === 'updated') {
+              toast.success(`Auto-Calendar: Event ${analysisResult.calendarEventStatus} for "${email.subject?.substring(0,25) || 'email'}..."`);
+              newEmailsProcessedCount++;
+            } else if (analysisResult?.error && 
+                       analysisResult.calendarEventStatus !== 'skipped_no_case_number' && 
+                       analysisResult.calendarEventStatus !== 'skipped_no_hearing_details') {
+              toast.error(`Auto-Calendar Error: "${email.subject?.substring(0,25) || 'email'}..." (${analysisResult.error?.substring(0, 50)})`);
+              newErrorsCount++;
+            }
+          } catch (error: any) {
+            setAutoProcessedIds(prev => new Set(prev).add(email.id)); 
+            console.error(`Auto-Calendar: Exception processing ${email.id}:`, error);
+            toast.error(`Auto-Calendar Exception: "${email.subject?.substring(0,25) || 'email'}..."`);
+            newErrorsCount++;
+          }
+          
+          // Add delay after processing each email, unless it's the very last one in this batch
+          if (i < emailsToConsider.length - 1) {
+            console.log(`Auto-Calendar: Delaying for 2s before next email.`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+          }
+        }
+        
+        if (newEmailsProcessedCount > 0 || newErrorsCount > 0) {
+            let summary = "Auto-Calendar summary:";
+            if (newEmailsProcessedCount > 0) summary += ` ${newEmailsProcessedCount} event(s) actioned`;
+            if (newErrorsCount > 0) summary += `${newEmailsProcessedCount > 0 ? ',' :''} ${newErrorsCount} error(s)`;
+            toast.info(summary + ".", { duration: 4000 });
+        }
+      };
+      
+      processNewMessages();
+    }
+  }, [messages, isAutoCalendarEnabled, autoProcessedIds, emailServiceInstance]);
+
   console.log('[EmailPage] Values JUST BEFORE RENDER LOGIC:', {
     showCompose, routeMessageId, detailedEmail: !!detailedEmail, detailLoading,
     emailContextLoading, messagesLength: messages.length, currentFolderId
@@ -658,6 +785,48 @@ export function EmailPage() {
                 onChange={(e) => handleSearch(e.target.value)}
               />
             </div>
+            {messages && messages.length > 0 && !routeMessageId && (
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="checkbox"
+                    id="select-all-emails"
+                    checked={messages.length > 0 && selectedEmails.length === messages.length}
+                    onChange={() => selectAll(messages)}
+                    disabled={messages.length === 0}
+                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary cursor-pointer"
+                  />
+                  <label htmlFor="select-all-emails" className="text-sm text-muted-foreground cursor-pointer select-none">
+                    {selectedEmails.length === messages.length && messages.length > 0 ? 'Deselect All' : 'Select All'}
+                  </label>
+                </div>
+                <div className="flex items-center gap-4"> {/* Container for right-side toolbar items */}
+                  {selectedEmails.length > 0 && (
+                    <Button
+                      onClick={handleBatchCalendarAnalysis} 
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      <CalendarIcon className="h-4 w-4" />
+                      Calendar ({selectedEmails.length}) Selected
+                    </Button>
+                  )}
+
+                  {/* Auto-Calendar Toggle - ADDED HERE */}
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="auto-calendar-toggle"
+                      checked={isAutoCalendarEnabled}
+                      onCheckedChange={setIsAutoCalendarEnabled}
+                    />
+                    <Label htmlFor="auto-calendar-toggle" className="text-sm text-muted-foreground select-none cursor-pointer">
+                      Auto-Calendar New Emails
+                    </Label>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto">
             {(emailContextLoading && messages.length === 0) ? (
@@ -670,9 +839,25 @@ export function EmailPage() {
                   <div 
                     key={email.id} 
                     className={cn(
-                        "flex items-start gap-4 p-4 hover:bg-muted/80 dark:hover:bg-muted/20 cursor-pointer",
-                        !email.read && "bg-muted/50 dark:bg-muted/10"
+                        "flex items-start gap-3 p-4 hover:bg-muted/80 dark:hover:bg-muted/20",
+                        !email.read && "bg-muted/50 dark:bg-muted/10",
+                        selectedEmails.includes(email.id) && "bg-primary/10 dark:bg-primary/20 border-l-2 border-primary"
                     )}
+                  >
+                    <div className="flex-shrink-0 pt-0.5">
+                      <Input
+                        type="checkbox"
+                        checked={selectedEmails.includes(email.id)}
+                        onChange={(e) => {
+                          e.stopPropagation(); 
+                          toggleSelect(email.id);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary cursor-pointer"
+                      />
+                    </div>
+                    <div 
+                        className="flex-1 min-w-0 cursor-pointer"
                     onClick={() => {
                       const accountToNavigate = selectedAccountId || routeAccountId || accounts[0]?.id;
                       if (accountToNavigate) {
@@ -683,8 +868,9 @@ export function EmailPage() {
                       }
                     }}
                   >
-                    <div className={cn("w-2 h-2 rounded-full mt-1.5", !email.read ? "bg-primary" : "bg-transparent")} />
-                    <div className="min-w-0 flex-1">
+                        <div className={cn("w-2 h-2 rounded-full inline-block mr-2 align-middle", !email.read ? "bg-primary" : "bg-transparent")} />
+                        
+                        <div className="inline-block min-w-0 flex-1 align-middle">
                       <div className="flex items-baseline justify-between">
                         <span className={cn("font-medium truncate max-w-[200px] sm:max-w-[300px]", !email.read ? 'text-foreground' : 'text-muted-foreground')}>
                           {email.from}
@@ -701,6 +887,7 @@ export function EmailPage() {
                           ? email.body.substring(0, 150).replace(/<[^>]*>/g, '')
                           : '[No content preview]')}
                       </p>
+                        </div>
                     </div>
                   </div>
                 ))}
@@ -714,9 +901,7 @@ export function EmailPage() {
                     ? `No emails found for "${searchQuery}" in ${folders.find(f => f.id.toUpperCase() === currentFolderId)?.name || 'this folder'}.`
                     : `Your ${folders.find(f => f.id.toUpperCase() === currentFolderId)?.name || 'folder'} is empty.`}
                 </p>
-                {/* <EmailEmptyState /> was likely here or part of this block, commenting out its direct usage if it was standalone */}
-                {/* If EmailEmptyState took props or was more integrated, this is a simplified commenting out */}
-                {emailContextError && <p className="text-sm text-destructive mt-2">Error: {emailContextError.message}</p>}
+                {emailContextError ? <p className="text-sm text-destructive mt-2">Error: {emailContextError.message}</p> : null}
               </div>
             )}
           </div>

@@ -1,7 +1,19 @@
-import type { AgentConfig } from './agents';
+import type { AgentConfig } from './agent';
+
+export interface ParameterDefinition {
+  name: string;
+  type: string;
+  description: string;
+  required: boolean;
+  defaultValue?: any;
+  enumValues?: string[];
+}
+
+// Define a type for model configuration relevant to capabilities
+export type ModelConfigForCapability = Pick<AgentConfig, 'model' | 'temperature' | 'maxTokens' | 'systemPrompt'>;
 
 export interface CapabilityContext {
-  modelConfig: AgentConfig['modelConfig'];
+  modelConfig?: ModelConfigForCapability; // Use the new type
   sessionId?: string;
   metadata?: Record<string, any>;
 }
@@ -10,25 +22,31 @@ export interface Capability {
   id: string;
   name: string;
   description: string;
-  preprocess?: (input: any) => Promise<any>;
+  category?: string;
+  version?: string;
+  inputParameters: ParameterDefinition[];
+  outputParameters: ParameterDefinition[];
+  target: {
+    type: 'function' | 'agent' | 'service' | 'workflow';
+    identifier: string;
+  };
   execute: (input: any, context: CapabilityContext) => Promise<any>;
-  postprocess?: (output: any) => Promise<any>;
+  preprocess?: (input: any, context: CapabilityContext) => Promise<any>;
+  postprocess?: (output: any, context: CapabilityContext) => Promise<any>;
+  tags?: string[];
+  permissionsRequired?: string[];
+  cost?: number;
+  exampleUsage?: Record<string, any>;
 }
 
 export interface DocumentProcessingCapability extends Capability {
   supportedFormats: string[];
-  extractText: (document: Buffer) => Promise<string>;
-  analyze: (text: string) => Promise<any>;
 }
 
 export interface DataAnalysisCapability extends Capability {
   supportedDataTypes: string[];
-  analyze: (data: any) => Promise<any>;
-  generateInsights: (analysis: any) => Promise<any>;
 }
 
 export interface CommunicationCapability extends Capability {
   channels: ('email' | 'chat' | 'voice')[];
-  compose: (prompt: string, context: any) => Promise<string>;
-  respond: (message: string, context: any) => Promise<string>;
 } 

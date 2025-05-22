@@ -34,16 +34,25 @@ ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for teams table
-CREATE POLICY "Team members can view their teams"
+
+-- Drop the existing broad SELECT policy on teams
+DROP POLICY IF EXISTS "Team members can view their teams" ON public.teams;
+
+-- Policy for owners to view their teams (this doesn't query team_members)
+CREATE POLICY "Owners can view their own teams"
     ON public.teams
     FOR SELECT
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.team_members 
-            WHERE team_id = teams.id AND user_id = auth.uid()
-        )
-        OR auth.uid() = owner_id
-    );
+    USING (auth.uid() = owner_id);
+
+-- Policy for members to view teams they are part of (this queries team_members)
+CREATE POLICY "Members can view their joined teams"
+    ON public.teams
+    FOR SELECT
+    USING (EXISTS (
+        SELECT 1
+        FROM public.team_members
+        WHERE team_members.team_id = teams.id AND team_members.user_id = auth.uid()
+    ));
 
 CREATE POLICY "Team owners can update their teams"
     ON public.teams
@@ -110,6 +119,7 @@ DROP POLICY IF EXISTS "team_members_policy" ON team_members;
 -- Then create a new non-recursive policy
 CREATE POLICY "team_members_policy"
 ON team_members
+FOR SELECT -- Apply this policy ONLY to SELECT operations
 USING (
   auth.uid() = user_id OR 
   auth.uid() IN (

@@ -6,7 +6,6 @@ import { CalendarPage } from '../pages/CalendarPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { KnowledgeBasePage } from '../pages/KnowledgeBasePage';
-import { AgentDetail } from '../pages/AgentDetail';
 import { AIDrivePage } from '../pages/AIDrive';
 import { AssistantsPage } from '../pages/AssistantsPage';
 import { CreateLegalAssistant } from '../components/legal/CreateLegalAssistant';
@@ -19,7 +18,6 @@ import { AutomationPage } from '../pages/AutomationPage';
 import EmailConnectSuccess from '../pages/EmailConnectSuccess';
 import EmailConnectError from '../pages/EmailConnectError';
 import { AutomationAuditDashboard } from '../components/dashboard/AutomationAuditDashboard';
-import { AgentsPageComponent } from '../pages/AgentsPage';
 
 export function AppRoutes() {
   return (
@@ -41,8 +39,6 @@ export function AppRoutes() {
       >
         <Route path="/" element={<DashboardPage />} />
         <Route path="/ai" element={<AIPage />} />
-        <Route path="/agents" element={<AgentsPageComponent />} />
-        <Route path="/agents/:agentId" element={<AgentDetail />} />
         <Route path="/agent-wizard" element={<AgentWizardPage />} />
         <Route path="/notebooks" element={<NotebookPage />} />
         <Route path="/calendar" element={<CalendarPage />} />

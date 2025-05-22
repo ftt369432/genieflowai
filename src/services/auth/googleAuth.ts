@@ -33,8 +33,8 @@ export interface GoogleAuthConfig {
   scope: string[];
 }
 
-export class GoogleAuthError extends Error {
-  constructor(message: string, public readonly code?: string) {
+class GoogleAuthError extends Error {
+  constructor(message: string) {
     super(message);
     this.name = 'GoogleAuthError';
   }
@@ -42,12 +42,12 @@ export class GoogleAuthError extends Error {
 
 export class GoogleAuthService {
   private static instance: GoogleAuthService;
-  private googleApiClient: GoogleAPIClient;
+  private googleClient: GoogleAPIClient;
   private mockUserSetter: UserSetterFunction | null = null;
   private isInitialized = false;
   
   private constructor() {
-    this.googleApiClient = GoogleAPIClient.getInstance();
+    this.googleClient = GoogleAPIClient.getInstance();
     console.log('GoogleAuthService: Initializing');
     this.initialize();
   }
@@ -69,7 +69,7 @@ export class GoogleAuthService {
     if (this.isInitialized) return;
     
     // Initialize the Google API client
-    await this.googleApiClient.initialize();
+    await this.googleClient.initialize();
     
     this.isInitialized = true;
     console.log('GoogleAuthService: Initialization complete');
@@ -87,21 +87,11 @@ export class GoogleAuthService {
    * Get the correct callback URL based on environment
    */
   private getCallbackUrl(): string {
-    const { serverUrl } = getEnv();
-    const isLocalhost = window.location.hostname === 'localhost' || 
-                        window.location.hostname === '127.0.0.1' ||
-                        window.location.hostname.includes('192.168.');
-    
-    if (isLocalhost) {
-      // Use the current origin when running locally to support both direct localhost and Docker
-      const port = window.location.port ? `:${window.location.port}` : '';
-      const protocol = window.location.protocol;
-      const host = window.location.hostname;
-      return `${protocol}//${host}${port}/auth/callback`;
-    } else {
-      // Use the appropriate production URL
-      return serverUrl ? `${serverUrl}/auth/callback` : 'https://genieflowai.netlify.app/auth/callback';
+    const { authCallbackUrl } = getEnv();
+    if (!authCallbackUrl) {
+      throw new GoogleAuthError('Auth callback URL not configured');
     }
+    return authCallbackUrl;
   }
 
   /**
@@ -123,7 +113,7 @@ export class GoogleAuthService {
         id: 'mock-user-id',
         email: email || 'mock@example.com',
         name: 'Mock User',
-        picture: 'https://via.placeholder.com/150'
+        picture: 'https://example.com/mock-avatar.png'
       };
       
       this.mockUserSetter({
@@ -134,7 +124,7 @@ export class GoogleAuthService {
       
       return {
         user: mockUser,
-        accessToken: 'mock-token',
+        accessToken: 'mock-access-token',
         expiresAt: Date.now() + 3600000 // 1 hour from now
       };
     }
@@ -158,16 +148,26 @@ export class GoogleAuthService {
             picture: session.user.user_metadata?.avatar_url
           },
           accessToken: session.provider_token,
-          expiresAt: session.expires_at! * 1000 // Convert to milliseconds
+          expiresAt: session.expires_at! * 1000, // Convert to milliseconds
+          refreshToken: session.refresh_token
         };
       }
+
+      // Generate a random state parameter for OAuth security
+      const state = crypto.randomUUID();
+      localStorage.setItem('oauth_state', state);
 
       // If no session or no provider token, initiate OAuth flow
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: this.getCallbackUrl(),
-          scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events'
+          scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events',
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+            state
+          }
         }
       });
 
@@ -175,11 +175,57 @@ export class GoogleAuthService {
         throw new GoogleAuthError(`Failed to initiate OAuth: ${error.message}`);
       }
 
+      // Store the OAuth URL in session storage for verification
+      if (data?.url) {
+        sessionStorage.setItem('oauth_url', data.url);
+      }
+
       // The OAuth flow will redirect to the callback URL
       // The callback handler will set the provider token
       throw new GoogleAuthError('Redirecting to OAuth provider');
     } catch (error) {
       console.error('Error during sign in:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle the OAuth callback
+   */
+  public async handleCallback(): Promise<void> {
+    const { useMock } = getEnv();
+    if (useMock) return;
+
+    try {
+      // Verify state parameter
+      const storedState = localStorage.getItem('oauth_state');
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnedState = urlParams.get('state');
+
+      if (storedState !== returnedState) {
+        throw new GoogleAuthError('Invalid OAuth state parameter');
+      }
+
+      // Clear the state parameter
+      localStorage.removeItem('oauth_state');
+
+      // Get the session after OAuth callback
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        throw new GoogleAuthError(`Failed to get session: ${sessionError.message}`);
+      }
+
+      if (!session?.provider_token) {
+        throw new GoogleAuthError('No provider token in session after OAuth callback');
+      }
+
+      // Initialize Google API client with the new token
+      await this.googleClient.initialize();
+      
+      console.log('OAuth callback handled successfully');
+    } catch (error) {
+      console.error('Error handling OAuth callback:', error);
       throw error;
     }
   }
@@ -196,18 +242,23 @@ export class GoogleAuthService {
    * Sign out the user
    */
   public async signOut(): Promise<void> {
+    const { useMock } = getEnv();
+    if (useMock) return;
+
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('Sign out error:', error);
-        throw new GoogleAuthError(error.message, error.status?.toString());
+        throw new GoogleAuthError(`Failed to sign out: ${error.message}`);
       }
+      
+      // Clear any stored OAuth state
+      localStorage.removeItem('oauth_state');
+      sessionStorage.removeItem('oauth_url');
+      
+      console.log('Signed out successfully');
     } catch (error) {
       console.error('Error during sign out:', error);
-      if (error instanceof GoogleAuthError) {
-        throw error;
-      }
-      throw new GoogleAuthError('Failed to sign out');
+      throw error;
     }
   }
 }

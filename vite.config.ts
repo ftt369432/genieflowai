@@ -48,11 +48,19 @@ export default defineConfig(({ mode }) => {
       sourcemap: true, // Enable source maps for production builds
       outDir: 'build',
       rollupOptions: {
+        external: [
+          '@tanstack/react-query',
+          '@tanstack/react-query-devtools'
+        ],
         output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              return id.toString().split('node_modules/')[1].split('/')[0].toString();
-            }
+          manualChunks: {
+            'react-query': ['@tanstack/react-query', '@tanstack/react-query-devtools'],
+            vendor: [
+              'react',
+              'react-dom',
+              'react-router-dom',
+              '@supabase/supabase-js'
+            ]
           }
         }
       }

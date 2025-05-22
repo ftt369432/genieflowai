@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
@@ -16,9 +16,14 @@ import {
   ArrowUpDown,
   ArrowDown,
   ArrowUp,
-  Menu
+  Menu,
+  Loader2,
+  AlertTriangle,
+  FileText,
+  Sparkles
 } from 'lucide-react';
-import { useTaskStore, Task, TaskStatus, TaskPriority } from '../store/taskStore';
+import { useTaskStore, Task as StoreTask, TaskStatus, TaskPriority, TaskTemplate } from '../store/taskStore';
+import { Task as ComponentTask } from '../types/tasks';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { TaskCard } from '../components/tasks/TaskCard';
@@ -44,11 +49,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel
 } from '../components/ui/DropdownMenu';
 import { Badge } from '../components/ui/Badge';
 import { Tooltip } from '../components/ui/Tooltip';
-import { Task as TasksTypeTask } from '../types/tasks';
+import { toast } from 'sonner';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/Alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select';
 
 // View modes
 type ViewMode = 'kanban' | 'list';
@@ -57,43 +67,85 @@ type ViewMode = 'kanban' | 'list';
 interface Column {
   id: string;
   name: string;
-  accessor: keyof Task | ((task: Task) => React.ReactNode);
+  accessor: keyof StoreTask | ((task: StoreTask) => React.ReactNode);
   sortable: boolean;
   width?: string;
 }
 
-// Create an adapter function to convert store task type to TasksTypeTask
-const adaptTaskForConversion = (task: Task): TasksTypeTask => {
-  return {
-    id: task.id,
-    title: task.title,
-    description: task.description,
-    status: task.status === 'To Do' ? 'todo' :
-           task.status === 'In Progress' ? 'in-progress' :
-           'completed',
-    priority: task.priority === 'High' ? 'high' :
-             task.priority === 'Medium' ? 'medium' : 'low',
-    dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-    tags: task.tags || [],
-    assignedTo: task.assignedTo,
-    createdAt: new Date(task.createdAt),
-    updatedAt: task.updatedAt ? new Date(task.updatedAt) : new Date(),
-    estimatedTime: undefined // Add if your store task has this property
+// Helper function to convert store task to component task
+const convertStoreTaskToComponentTask = (storeTask: StoreTask): ComponentTask => {
+  // Ensure all required properties are present
+  const componentTask: ComponentTask = {
+    id: storeTask.id,
+    title: storeTask.title,
+    description: storeTask.description || '', // Convert undefined to empty string
+    status: storeTask.status === 'Done' ? 'completed' :
+            storeTask.status === 'In Progress' ? 'in-progress' : 'todo',
+    priority: storeTask.priority.toLowerCase() as 'high' | 'medium' | 'low',
+    createdAt: new Date(storeTask.createdAt),
+    updatedAt: storeTask.updatedAt ? new Date(storeTask.updatedAt) : new Date(),
+    dueDate: storeTask.dueDate ? new Date(storeTask.dueDate) : undefined,
+    assignee: storeTask.assignedTo,
+    tags: storeTask.tags || [],
+    source: storeTask.notebookId ? {
+      type: 'notebook',
+      id: storeTask.notebookId
+    } : storeTask.workflowId ? {
+      type: 'manual',
+      id: storeTask.workflowId
+    } : undefined
   };
+  return componentTask;
+};
+
+// Helper function to convert component task to store task
+const convertComponentTaskToStoreTask = (componentTask: ComponentTask): Omit<StoreTask, 'id' | 'createdAt' | 'updatedAt'> => {
+  // Convert component task to store task format
+  const storeTask: Omit<StoreTask, 'id' | 'createdAt' | 'updatedAt'> = {
+    title: componentTask.title,
+    description: componentTask.description || undefined, // Convert empty string to undefined
+    status: componentTask.status === 'completed' ? 'Done' :
+            componentTask.status === 'in-progress' ? 'In Progress' : 'To Do',
+    priority: (componentTask.priority.charAt(0).toUpperCase() + componentTask.priority.slice(1)) as TaskPriority,
+    dueDate: componentTask.dueDate?.toISOString(),
+    assignedTo: componentTask.assignee,
+    tags: componentTask.tags,
+    completed: false,
+    templateId: undefined,
+    lastModifiedBy: undefined,
+    error: undefined,
+    notebookId: componentTask.source?.type === 'notebook' ? componentTask.source.id : undefined,
+    workflowId: componentTask.source?.type === 'manual' ? componentTask.source.id : undefined
+  };
+  return storeTask;
 };
 
 export function TasksPage() {
+  const { 
+    tasks, 
+    templates,
+    isLoading,
+    error,
+    addTask, 
+    updateTask, 
+    deleteTask,
+    createTaskFromTemplate,
+    convertTaskToEvent,
+    clearError
+  } = useTaskStore();
+  
+  const { syncTasksToCalendar } = useCalendarStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const { tasks, addTask, updateTask, deleteTask } = useTaskStore();
-  const { addEvent } = useCalendarStore();
   const [showTaskConversion, setShowTaskConversion] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Task | null; direction: 'asc' | 'desc' }>({
+  const [sortConfig, setSortConfig] = useState<{ key: keyof StoreTask | null; direction: 'asc' | 'desc' }>({
     key: null,
     direction: 'asc',
   });
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   
   // For column reordering in list view
   const [columns, setColumns] = useState<Column[]>([
@@ -113,32 +165,69 @@ export function TasksPage() {
     { id: 'actions', name: 'Actions', accessor: () => null, sortable: false, width: '80px' }
   ]);
 
+  // Convert store tasks to component tasks for the conversion modal
+  const componentTasks = useMemo(() => tasks.map(convertStoreTaskToComponentTask), [tasks]);
+
+  // Clear error when component unmounts
+  useEffect(() => {
+    return () => {
+      clearError();
+    };
+  }, [clearError]);
+
   // Handle drag end for kanban view
-  const handleDragEnd = (result: any) => {
+  const handleDragEnd = async (result: any) => {
     if (!result.destination) return;
-    // Simple implementation without the reorderTasks function
-    // This is a placeholder for the actual reordering logic
-    console.log('Reordering tasks:', result.source.index, result.destination.index);
+    
+    const { source, destination, draggableId } = result;
+    
+    // If dropped in the same place, do nothing
+    if (source.droppableId === destination.droppableId && 
+        source.index === destination.index) {
+      return;
+    }
+    
+    try {
+      // Update the task's status
+      await updateTask({
+        id: draggableId,
+        status: destination.droppableId as TaskStatus
+      });
+      
+      toast.success('Task moved successfully');
+    } catch (err) {
+      toast.error('Failed to move task');
+      console.error('Error moving task:', err);
+    }
   };
 
-  // Filter tasks by search query
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(task => 
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      false
-    );
+  // Filter tasks by search query and other filters
+  const filteredTasks = useCallback(() => {
+    return tasks.filter(task => {
+      // Search filter
+      if (searchQuery) {
+        const searchLower = searchQuery.toLowerCase();
+        const titleMatch = task.title.toLowerCase().includes(searchLower);
+        const descMatch = task.description?.toLowerCase().includes(searchLower);
+        const tagMatch = task.tags?.some(tag => tag.toLowerCase().includes(searchLower));
+        
+        if (!titleMatch && !descMatch && !tagMatch) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
   }, [tasks, searchQuery]);
 
   // Sort tasks for list view
-  const sortedTasks = useMemo(() => {
-    let sortableTasks = [...filteredTasks];
+  const sortedTasks = useCallback(() => {
+    let sortableTasks = [...filteredTasks()];
     
     if (sortConfig.key && sortConfig.direction) {
       sortableTasks.sort((a, b) => {
-        const aValue = a[sortConfig.key as keyof Task];
-        const bValue = b[sortConfig.key as keyof Task];
+        const aValue = a[sortConfig.key as keyof StoreTask];
+        const bValue = b[sortConfig.key as keyof StoreTask];
         
         if (aValue === undefined) return sortConfig.direction === 'asc' ? -1 : 1;
         if (bValue === undefined) return sortConfig.direction === 'asc' ? 1 : -1;
@@ -157,7 +246,7 @@ export function TasksPage() {
   }, [filteredTasks, sortConfig.key, sortConfig.direction]);
 
   // Request sort by column
-  const requestSort = (key: keyof Task) => {
+  const requestSort = (key: keyof StoreTask) => {
     let direction: 'asc' | 'desc' = 'asc';
     
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -177,7 +266,7 @@ export function TasksPage() {
 
   // Get tasks for a kanban column
   const getColumnTasks = (columnId: string) =>
-    filteredTasks.filter(task => task.status === columnId);
+    filteredTasks().filter(task => task.status === columnId);
 
   // Handle column reordering in list view
   const moveColumn = (dragIndex: number, hoverIndex: number) => {
@@ -189,408 +278,413 @@ export function TasksPage() {
   };
 
   // Convert task to event handler
-  const handleConvertTaskToEvent = (task: Task) => {
-    // Create a calendar event object compatible with your calendar store
-    const event: Omit<CalendarEvent, 'id'> = {
-      title: task.title,
-      description: task.description || '',
-      start: task.dueDate ? new Date(task.dueDate) : new Date(),
-      end: task.dueDate 
-        ? new Date(new Date(task.dueDate).getTime() + 60 * 60000) 
-        : new Date(Date.now() + 60 * 60000),
-      allDay: false,
-      sourceId: 'tasks',
-      taskId: task.id,
-      tags: task.tags || [],
-      completed: task.completed
-    };
-    
-    // Add the event to the calendar store
-    addEvent(event);
+  const handleConvertTaskToEvent = useCallback(async (task: ComponentTask) => {
+    try {
+      // First convert the component task to a store task
+      const storeTask = convertComponentTaskToStoreTask(task);
+      // Add the task to the store
+      const taskId = await addTask(storeTask);
+      // Then convert it to an event
+      await convertTaskToEvent(taskId);
+      setShowTaskConversion(false);
+      toast.success('Task converted to calendar event');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to convert task to event');
+    }
+  }, [addTask, convertTaskToEvent]);
+
+  // Create task from template
+  const handleCreateFromTemplate = async (templateId: string) => {
+    try {
+      await createTaskFromTemplate(templateId);
+      toast.success('Task created from template');
+      setSelectedTemplate(null);
+    } catch (err) {
+      toast.error('Failed to create task from template');
+      console.error('Error creating task from template:', err);
+    }
   };
 
+  // Handle task selection
+  const handleTaskSelect = (taskId: string) => {
+    setSelectedTasks(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  };
+
+  // Handle bulk actions
+  const handleBulkAction = async (action: 'delete' | 'complete' | 'convert') => {
+    try {
+      const selectedTaskIds = Array.from(selectedTasks);
+      
+      switch (action) {
+        case 'delete':
+          await Promise.all(selectedTaskIds.map(id => deleteTask(id)));
+          toast.success('Selected tasks deleted');
+          break;
+          
+        case 'complete':
+          await Promise.all(selectedTaskIds.map(id => 
+            updateTask({ id, status: 'Done', completed: true })
+          ));
+          toast.success('Selected tasks completed');
+          break;
+          
+        case 'convert':
+          const tasksToConvert = selectedTaskIds
+            .map(id => tasks.find(t => t.id === id))
+            .filter((t): t is StoreTask => t !== undefined && t.dueDate !== undefined);
+            
+          await Promise.all(tasksToConvert.map(task => convertTaskToEvent(task.id)));
+          toast.success('Selected tasks converted to events');
+          break;
+      }
+      
+      setSelectedTasks(new Set());
+    } catch (err) {
+      toast.error(`Failed to perform bulk ${action} action`);
+      console.error(`Error performing bulk ${action}:`, err);
+    }
+    };
+    
+  // Render loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-8 h-8 animate-spin" />
+        <span className="ml-2">Loading tasks...</span>
+      </div>
+    );
+  }
+
+  // Render error state
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="p-6 max-w-7xl mx-auto"
-    >
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-semibold">Tasks</h1>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-            <Button
-              onClick={() => setViewMode('kanban')}
-              variant={viewMode === 'kanban' ? 'default' : 'ghost'}
-              size="sm"
-              className="flex items-center gap-2"
-            >
+    <div className="container mx-auto p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <h1 className="text-2xl font-bold">Tasks</h1>
+          
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+            <TabsList>
+              <TabsTrigger value="kanban" className="flex items-center gap-1">
               <LayoutGrid className="h-4 w-4" />
-              Board
-            </Button>
-            <Button
-              onClick={() => setViewMode('list')}
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              className="flex items-center gap-2"
-            >
+                Kanban
+              </TabsTrigger>
+              <TabsTrigger value="list" className="flex items-center gap-1">
               <List className="h-4 w-4" />
               List
-            </Button>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
           </div>
-          <Button
-            onClick={() => setShowFilters(!showFilters)}
-            variant="outline"
-            className="flex items-center gap-2"
+        
+        <div className="flex items-center space-x-2">
+          {/* Template selector */}
+          <Select
+            value={selectedTemplate || ''}
+            onValueChange={(value) => {
+              if (value) {
+                handleCreateFromTemplate(value);
+              }
+              setSelectedTemplate(null);
+            }}
           >
-            <Filter className="h-4 w-4" />
-            Filters
-          </Button>
-          <Button
-            onClick={() => setShowTaskConversion(true)}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <Calendar className="h-4 w-4" />
-            To Calendar
-          </Button>
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Create from template" />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map(template => (
+                <SelectItem key={template.id} value={template.id}>
+                  {template.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          {/* Create task button */}
+          <Button onClick={() => setShowCreateModal(true)}>
+            <Plus className="h-4 w-4 mr-2" />
             New Task
           </Button>
         </div>
       </div>
 
-      <div className="mb-6">
+      {/* Search and filters */}
+      <div className="flex items-center space-x-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
-          type="search"
           placeholder="Search tasks..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-md"
+            className="pl-8"
         />
       </div>
 
+        <Button
+          variant="outline"
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <Filter className="h-4 w-4 mr-2" />
+          Filters
+        </Button>
+        
+        {selectedTasks.size > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Menu className="h-4 w-4 mr-2" />
+                Bulk Actions
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel>Actions for {selectedTasks.size} tasks</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleBulkAction('complete')}>
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Mark as Complete
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleBulkAction('convert')}>
+                <Calendar className="h-4 w-4 mr-2" />
+                Convert to Events
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => handleBulkAction('delete')}
+                className="text-red-600"
+              >
+                <AlertCircle className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+
+      {/* Filters panel */}
       <AnimatePresence>
         {showFilters && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="mb-6"
+            className="overflow-hidden"
           >
+            <Card>
+              <CardContent className="p-4">
             <TaskFilters 
               onFilterChange={(filters) => {
-                // Implement filtering logic
+                    // Implement filtering logic if needed
+                    console.log('Filters changed:', filters);
               }} 
             />
+              </CardContent>
+            </Card>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Kanban View */}
-      {viewMode === 'kanban' && (
+      {/* Main content */}
+      <Card>
+        <CardContent className="p-4">
+          {viewMode === 'kanban' ? (
         <DragDropContext onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-4 gap-4">
             {kanbanColumns.map(column => (
-              <div key={column.id} className="space-y-4">
-                {/* Column Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div key={column.id} className="flex flex-col">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
                     {column.icon}
-                    <h3 className="font-semibold text-text-primary">{column.title}</h3>
-                    <span className="text-sm text-text-secondary">
-                      ({getColumnTasks(column.id).length})
-                    </span>
+                        <h3 className="font-medium">{column.title}</h3>
                   </div>
-                  <Button variant="ghost" size="icon">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
+                      <Badge variant="secondary">
+                        {getColumnTasks(column.id).length}
+                      </Badge>
                 </div>
 
-                {/* Tasks */}
-                <div className="space-y-3">
-                  {getColumnTasks(column.id).map(task => (
-                    <Card key={task.id} className="cursor-pointer hover:border-primary/30">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <h4 className="font-medium text-text-primary">{task.title}</h4>
-                            <p className="text-sm text-text-secondary line-clamp-2">
-                              {task.description}
-                            </p>
-                          </div>
-                          <Checkbox 
-                            checked={task.completed} 
-                            onCheckedChange={() => {
-                              updateTask({ 
+                    <Droppable droppableId={column.id}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className={`
+                            flex-1 p-2 rounded-lg min-h-[200px]
+                            ${snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/20'}
+                          `}
+                        >
+                          {getColumnTasks(column.id).map((task, index) => {
+                            const componentTask = convertStoreTaskToComponentTask(task);
+                            return (
+                              <Draggable
+                                key={task.id}
+                                draggableId={task.id}
+                                index={index}
+                              >
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    className={`
+                                      mb-2
+                                      ${snapshot.isDragging ? 'opacity-50' : ''}
+                                    `}
+                                  >
+                                    <TaskCard
+                                      task={componentTask}
+                                      onToggle={() => updateTask({ 
                                 id: task.id, 
                                 completed: !task.completed,
                                 status: !task.completed ? 'Done' : 'To Do'
-                              });
-                            }}
+                                      })}
+                                      onEnhance={() => handleConvertTaskToEvent(componentTask)}
                           />
                         </div>
-                        
-                        <div className="mt-3 flex items-center gap-2">
-                          <div className={`px-2 py-1 rounded text-xs ${
-                            task.priority === 'Urgent' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                            task.priority === 'High' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
-                            task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                            'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          }`}>
-                            {task.priority}
-                          </div>
-                          {task.dueDate && (
-                            <div className="text-xs text-text-secondary">
-                              Due {new Date(task.dueDate).toLocaleDateString()}
+                                )}
+                              </Draggable>
+                            );
+                          })}
+                          {provided.placeholder}
+                          
+                          {getColumnTasks(column.id).length === 0 && (
+                            <div className="h-20 border border-dashed rounded-md flex items-center justify-center">
+                              <p className="text-sm text-muted-foreground">No tasks</p>
                             </div>
                           )}
-                        </div>
-
-                        {task.tags && task.tags.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {task.tags.map(tag => (
-                              <span
-                                key={tag}
-                                className="px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary"
-                              >
-                                {tag}
-                              </span>
-                            ))}
                           </div>
                         )}
-
-                        <div className="mt-3 flex justify-end">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => setShowTaskConversion(true)}>
-                                Convert to Calendar Event
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                updateTask({ 
-                                  id: task.id, 
-                                  completed: !task.completed,
-                                  status: !task.completed ? 'Done' : 'To Do'
-                                });
-                              }}>
-                                Mark as {task.completed ? 'Incomplete' : 'Complete'}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => deleteTask(task.id)}>
-                                Delete Task
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-
-                  {getColumnTasks(column.id).length === 0 && (
-                    <div className="p-4 rounded-lg border border-dashed border-border text-center">
-                      <p className="text-sm text-text-secondary">No tasks</p>
-                    </div>
-                  )}
-                </div>
+                    </Droppable>
               </div>
             ))}
           </div>
         </DragDropContext>
-      )}
-
-      {/* List View */}
-      {viewMode === 'list' && (
-        <Card>
-          <CardContent className="p-0 overflow-auto">
+          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">
-                    <Checkbox />
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={selectedTasks.size === filteredTasks().length}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedTasks(new Set(filteredTasks().map(t => t.id)));
+                        } else {
+                          setSelectedTasks(new Set());
+                        }
+                      }}
+                    />
                   </TableHead>
-                  {columns.map((column, index) => (
+                  {columns.map(column => (
                     <TableHead 
                       key={column.id} 
-                      className={`${column.width ? column.width : ''}`}
+                      className={column.sortable ? 'cursor-pointer' : ''}
+                      onClick={() => column.sortable && requestSort(column.id as keyof StoreTask)}
                     >
-                      <div className="flex items-center gap-1 select-none">
+                      <div className="flex items-center space-x-1">
                         <span>{column.name}</span>
-                        {column.sortable && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-5 w-5"
-                            onClick={() => requestSort(column.id as keyof Task)}
-                          >
-                            {sortConfig.key === column.id ? (
-                              sortConfig.direction === 'asc' ? (
-                                <ArrowUp className="h-3 w-3" />
-                              ) : (
-                                <ArrowDown className="h-3 w-3" />
-                              )
-                            ) : (
-                              <ArrowUpDown className="h-3 w-3" />
+                        {column.sortable && sortConfig.key === column.id && (
+                          sortConfig.direction === 'asc' 
+                            ? <ArrowUp className="h-4 w-4" />
+                            : <ArrowDown className="h-4 w-4" />
                             )}
-                          </Button>
-                        )}
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          className="h-5 w-5 ml-auto"
-                        >
-                          <Menu className="h-3 w-3" />
-                        </Button>
                       </div>
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedTasks.map(task => (
-                  <TableRow key={task.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                {sortedTasks().map(task => (
+                  <TableRow key={task.id}>
                     <TableCell>
                       <Checkbox 
-                        checked={task.completed} 
-                        onCheckedChange={() => {
-                          updateTask({ 
-                            id: task.id, 
-                            completed: !task.completed,
-                            status: !task.completed ? 'Done' : 'To Do'
-                          });
-                        }}
+                        checked={selectedTasks.has(task.id)}
+                        onCheckedChange={() => handleTaskSelect(task.id)}
                       />
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={task.status === 'Done' ? 'success' : task.status === 'Blocked' ? 'destructive' : task.status === 'In Progress' ? 'default' : 'outline'}>
-                          {task.status}
-                        </Badge>
-                      </div>
+                    {columns.map(column => (
+                      <TableCell key={column.id}>
+                        {typeof column.accessor === 'function'
+                          ? column.accessor(task)
+                          : task[column.accessor]}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className={task.completed ? 'line-through text-gray-500' : ''}>
-                          {task.title}
-                        </span>
-                        {task.description && (
-                          <span className="text-xs text-gray-500 truncate max-w-md">
-                            {task.description}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={
-                        task.priority === 'Urgent' ? 'destructive' :
-                        task.priority === 'High' ? 'secondary' :
-                        task.priority === 'Medium' ? 'secondary' :
-                        'outline'
-                      }>
-                        {task.priority}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {task.tags?.map(tag => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setShowTaskConversion(true)}>
-                              Convert to Calendar Event
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              updateTask({ 
-                                id: task.id, 
-                                completed: !task.completed,
-                                status: !task.completed ? 'Done' : 'To Do'
-                              });
-                            }}>
-                              Mark as {task.completed ? 'Incomplete' : 'Complete'}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => deleteTask(task.id)}>
-                              Delete Task
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
+                    ))}
                   </TableRow>
                 ))}
-                {/* Empty row for adding new task */}
-                <TableRow className="bg-gray-50 dark:bg-gray-800/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800">
-                  <TableCell colSpan={7}>
+                
+                {sortedTasks().length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={columns.length + 1} className="h-24 text-center">
+                      <div className="flex flex-col items-center justify-center text-muted-foreground">
+                        <FileText className="h-8 w-8 mb-2" />
+                        <p>No tasks found</p>
                     <Button
-                      variant="ghost"
-                      className="w-full h-8 flex items-center justify-center gap-2 text-gray-500"
+                          variant="link"
                       onClick={() => setShowCreateModal(true)}
                     >
-                      <Plus className="h-4 w-4" />
-                      Add New Task
+                          Create a task
                     </Button>
+                      </div>
                   </TableCell>
                 </TableRow>
+                )}
               </TableBody>
             </Table>
+          )}
           </CardContent>
         </Card>
-      )}
 
+      {/* Modals */}
       <CreateTaskModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onCreateTask={(taskData) => {
-          // Add ID and other required fields and ensure the status is properly formatted
-          const storeTask: Task = {
+        onCreateTask={async (taskData) => {
+          try {
+            // Fill in required fields for ComponentTask
+            const now = new Date();
+            const componentTask: ComponentTask = {
             ...taskData,
             id: crypto.randomUUID(),
-            completed: false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            status: taskData.status === 'completed' ? 'Done' : 
-                    taskData.status === 'in-progress' ? 'In Progress' : 'To Do',
-            priority: (taskData.priority?.charAt(0).toUpperCase() + taskData.priority?.slice(1)) as TaskPriority,
+              createdAt: now,
+              updatedAt: now,
+              description: taskData.description || '',
+              status: taskData.status || 'todo',
+              priority: taskData.priority || 'medium',
             tags: taskData.tags || [],
-            dueDate: taskData.dueDate ? taskData.dueDate.toISOString() : undefined
-          };
-          addTask(storeTask);
+            };
+            const storeTask = convertComponentTaskToStoreTask(componentTask);
+            await addTask(storeTask);
+            toast.success('Task created successfully');
+            setShowCreateModal(false);
+          } catch (err) {
+            toast.error('Failed to create task');
+            console.error('Error creating task:', err);
+          }
         }}
       />
 
       <TaskConversionModal
         isOpen={showTaskConversion}
         onClose={() => setShowTaskConversion(false)}
-        tasks={tasks.map(adaptTaskForConversion)}
-        onConvert={(typesTask) => {
-          // Find the original task in the store
-          const storeTask = tasks.find(t => t.id === typesTask.id);
-          if (storeTask) {
-            handleConvertTaskToEvent(storeTask);
-          }
-        }}
+        tasks={componentTasks.filter(t => t.status !== 'completed' && t.dueDate)}
+        onConvert={handleConvertTaskToEvent}
       />
-    </motion.div>
+    </div>
   );
 }

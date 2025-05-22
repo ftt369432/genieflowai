@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
+import { Calendar, dateFnsLocalizer, EventProps as BigCalendarEventProps, EventInteractionArgs } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import format from 'date-fns/format';
 import parse from 'date-fns/parse';
@@ -10,8 +10,8 @@ import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import enUS from 'date-fns/locale/en-US';
 
-import { useCalendarStore } from '../store/calendarStore';
-import { useTaskStore } from '../store/taskStore';
+import { useCalendarStore, CalendarEvent as StoreCalendarEvent, TimeBlock as StoreTimeBlock } from '../store/calendarStore';
+import { useTaskStore, Task as StoreTask } from '../store/taskStore';
 import { parseISO } from 'date-fns';
 import { ProductivityInsights } from '../components/calendar/ProductivityInsights';
 import { OverlaysDropdown } from '../components/calendar/OverlaysDropdown';
@@ -135,98 +135,146 @@ const TaskOverlay = ({ event }: any) => {
       );
 };
 
+// Define a more specific type for calendar events used by react-big-calendar
+interface RbcEvent {
+  id: string;
+  title: string | undefined;
+  start: Date;
+  end: Date;
+  allDay?: boolean;
+  source?: 'event' | 'timeBlock' | 'task';
+  description?: string;
+  location?: string;
+  component?: React.ElementType;
+  taskId?: string;
+  taskIds?: string[];
+  originalStoreEvent?: StoreCalendarEvent;
+  originalStoreBlock?: StoreTimeBlock;
+  originalStoreTask?: StoreTask;
+  calendarType?: string;
+}
+
 export function CalendarPage() {
   const { theme } = useTheme();
-  const { events, timeBlocks, addEvent, updateEvent, deleteEvent } = useCalendarStore();
+  const { events, timeBlocks, addEvent, updateEvent, deleteEvent, updateTimeBlock } = useCalendarStore();
   const { tasks } = useTaskStore();
-  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<RbcEvent | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showSmartScheduler, setShowSmartScheduler] = useState(false);
-  const [viewMode, setViewMode] = useState('week');
+  const [viewMode, setViewMode] = useState('month');
   const [calendarDate, setCalendarDate] = useState(new Date());
 
-  // Convert events and timeBlocks to calendar events
-  const calendarEvents = [
-    ...events.map(event => ({
+  const calendarEvents: RbcEvent[] = events.map((event: StoreCalendarEvent) => ({
       id: event.id,
       title: event.title,
-      start: parseISO(event.start),
-      end: parseISO(event.end),
-      type: event.category || 'default',
+    start: typeof event.start === 'string' ? parseISO(event.start) : new Date(event.start),
+    end: typeof event.end === 'string' ? parseISO(event.end) : new Date(event.end),
+    allDay: event.allDay,
       source: 'event',
       description: event.description || '',
       location: event.location || '',
-    })),
-    ...timeBlocks.map(block => ({
-      id: block.id,
-      title: block.title,
-      start: parseISO(block.start),
-      end: parseISO(block.end),
-      type: block.type || 'default',
-      source: 'timeBlock',
-      description: block.description || '',
-      taskIds: block.taskIds || [],
-    })),
-  ];
-
-  // Create task overlays if enabled
-  const taskOverlays = tasks.filter(task => !task.completed && task.dueDate).map(task => ({
-    id: `task-${task.id}`,
-    title: task.title,
-    start: parseISO(task.dueDate!),
-    end: parseISO(task.dueDate!),
-    type: 'task',
-    source: 'task',
-    description: task.description || '',
-    component: TaskOverlay,
-    taskId: task.id,
+    originalStoreEvent: event,
+    calendarType: event.sourceId || 'default', // For styling or filtering
   }));
 
-  // Add task overlays to calendar events if enabled
-  const allEvents = [...calendarEvents, ...taskOverlays];
+  const timeBlockEvents: RbcEvent[] = timeBlocks.map((block: StoreTimeBlock) => ({
+      id: block.id,
+    title: block.name,
+    start: typeof block.start === 'string' ? parseISO(block.start) : new Date(block.start),
+    end: typeof block.end === 'string' ? parseISO(block.end) : new Date(block.end),
+    allDay: false,
+      source: 'timeBlock',
+      description: block.description || '',
+    taskIds: block.tasks || [],
+    originalStoreBlock: block,
+    calendarType: 'timeBlock',
+  }));
 
-  // Handle event selection
-  const handleSelectEvent = (event: any) => {
+  const taskEventOverlays: RbcEvent[] = tasks
+    .filter(task => !task.completed && task.dueDate)
+    .map((task: StoreTask) => {
+      const dueDateDate = typeof task.dueDate === 'string' ? parseISO(task.dueDate) : (task.dueDate ? new Date(task.dueDate) : new Date());
+      return {
+    id: `task-${task.id}`,
+    title: task.title,
+        start: dueDateDate,
+        end: dueDateDate,
+        allDay: true,
+    source: 'task',
+    description: task.description || '',
+        component: TaskOverlay, // Assuming TaskOverlay is defined
+    taskId: task.id,
+        originalStoreTask: task,
+        calendarType: 'task',
+      };
+    });
+
+  const allEvents: RbcEvent[] = [...calendarEvents, ...timeBlockEvents, ...taskEventOverlays];
+
+  const handleSelectEvent = (event: RbcEvent) => {
     setSelectedEvent(event);
     setShowEventModal(true);
   };
 
-  // Handle event creation
   const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
-    const title = '';
+    const newEventPartial: Omit<StoreCalendarEvent, 'id' | 'sourceId' | 'tags'> & Partial<Pick<StoreCalendarEvent, 'sourceId' | 'tags'>> = {
+        title: 'New Event',
+        start: start,
+        end: end,
+        allDay: false,
+        // sourceId is required by StoreCalendarEvent, provide a default or make it optional
+        sourceId: 'primary', // Example default
+        tags: [], // Example default
+    };
+    // setShowEventModal(true); // This would typically open a modal to fill details for newEventPartial
+    // For now, let's assume we directly add it or open a modal that then calls addEvent
+    // The selectedEvent for the modal should be in RbcEvent format if the modal expects that
     setSelectedEvent({
-      title,
+        id: 'new_slot_event', // temporary ID for modal
+        title: 'New Event',
       start,
       end,
-      type: 'default',
-      source: 'timeBlock', // Default to creating a time block
-      description: '',
+        allDay: false,
+        source: 'event',
     });
     setShowEventModal(true);
   };
 
-  // Handle event drag and drop
-  const moveEvent = ({ event, start, end }: { event: any; start: Date; end: Date }) => {
-    if (event.source === 'event') {
-      updateEvent({
-        id: event.id,
-        start: start.toISOString(),
-        end: end.toISOString(),
+  const moveEventHandler = ({ event, start, end }: EventInteractionArgs<RbcEvent>) => {
+    const newStart = typeof start === 'string' ? parseISO(start) : start;
+    const newEnd = typeof end === 'string' ? parseISO(end) : end;
+
+    if (event.source === 'event' && event.originalStoreEvent) {
+      updateEvent(event.originalStoreEvent.id, {
+        start: newStart,
+        end: newEnd,
       });
-    } else if (event.source === 'timeBlock') {
-      // Update time block
-      const updatedBlock = {
-        id: event.id,
-        start: start.toISOString(),
-        end: end.toISOString(),
-      };
-      // Call appropriate update function
+    } else if (event.source === 'timeBlock' && event.originalStoreBlock) {
+      if (updateTimeBlock) {
+        updateTimeBlock(event.originalStoreBlock.id, {
+          start: newStart,
+          end: newEnd,
+        });
+      }
+    } else if (event.source === 'task' && event.originalStoreTask?.id ) {
+        // Assuming useTaskStore has an updateTask similar to calendar
+        const { updateTask } = useTaskStore.getState(); 
+        if (updateTask && event.originalStoreTask) {
+            updateTask(event.originalStoreTask.id, { dueDate: newStart });
+        } else {
+            console.warn('Task drag-and-drop: updateTask function not found in taskStore or originalTask missing.');
+        }
     }
   };
 
-  // Handle event resize
-  const resizeEvent = ({ event, start, end }: { event: any; start: Date; end: Date }) => {
-    moveEvent({ event, start, end });
+  // Custom Event component for react-big-calendar
+  const CustomEventComponent = (props: BigCalendarEventProps<RbcEvent>) => {
+    const { event } = props;
+    if (event.source === 'task' && event.component) {
+      const EventComponent = event.component;
+      return <EventComponent event={event} />;
+    }
+    return <div>{event.title}</div>;
   };
 
   return (
@@ -337,19 +385,12 @@ export function CalendarPage() {
             resizable
             onSelectSlot={handleSelectSlot}
             onSelectEvent={handleSelectEvent}
-            onEventDrop={moveEvent}
-            onEventResize={resizeEvent}
+            onEventDrop={moveEventHandler}
+            onEventResize={moveEventHandler}
             eventPropGetter={eventStyleGetter}
-            components={{
-              event: (props) => {
-                if (props.event.source === 'task') {
-                  return <props.event.component event={props.event} />;
-                }
-                return <div>{props.title}</div>;
-              }
-            }}
-            view={viewMode}
-            onView={(newView) => setViewMode(newView)}
+            components={{ event: CustomEventComponent }}
+            view={viewMode as any}
+            onView={(newView: any) => setViewMode(newView)}
             date={calendarDate}
             onNavigate={(newDate) => setCalendarDate(newDate)}
           />
@@ -368,8 +409,7 @@ export function CalendarPage() {
           if (event.id) {
             // Update existing event
             if (event.source === 'event') {
-              updateEvent({
-                id: event.id,
+              updateEvent(event.id, {
                 title: event.title,
                 start: event.start.toISOString(),
                 end: event.end.toISOString(),

@@ -1,4 +1,4 @@
-import { ENV } from '../../config/env';
+import { getEnv, EnvironmentConfig } from '../../config/env';
 import { useSupabase } from '../../hooks/useSupabase';
 
 /**
@@ -33,12 +33,15 @@ export class AIService {
   private model: string;
   private temperature: number;
   private maxTokens: number;
+  private envConfig: EnvironmentConfig;
   
   constructor(options?: AIServiceOptions) {
+    this.envConfig = getEnv();
     this.supabase = useSupabase();
-    this.model = options?.model || 'gpt-3.5-turbo';
-    this.temperature = options?.temperature || 0.7;
-    this.maxTokens = options?.maxTokens || 1000;
+    
+    this.model = options?.model || this.envConfig.aiModel || 'gpt-3.5-turbo'; 
+    this.temperature = options?.temperature || this.envConfig.temperature || 0.7;
+    this.maxTokens = options?.maxTokens || this.envConfig.maxTokens || 1000;
   }
   
   /**
@@ -48,8 +51,8 @@ export class AIService {
    */
   async generateText(prompt: string): Promise<string> {
     try {
-      // Call Supabase Edge Function for text generation
-      const { data, error } = await this.supabase.functions.invoke('generate-text', {
+      // Corrected: Call Supabase Edge Function via the nested supabase client
+      const { data, error } = await this.supabase.supabase.functions.invoke('generate-text', {
         body: {
           prompt,
           model: this.model,
@@ -216,7 +219,7 @@ export class AIService {
    * Generate embeddings for a piece of text
    */
   async generateEmbeddings(text: string): Promise<number[]> {
-    if (ENV.USE_MOCK) {
+    if (this.envConfig.useMock) {
       return this.mockGenerateEmbeddings();
     }
     

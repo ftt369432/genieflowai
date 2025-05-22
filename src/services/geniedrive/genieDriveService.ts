@@ -188,7 +188,7 @@ class GenieDriveServiceImpl implements GenieDriveService {
     const newFile: GenieDriveFile = {
       id: fileId,
       name: file.name,
-      type: fileType,
+      type: fileType as Exclude<GenieDriveItemType, 'folder'>,
       parentId,
       path: await this.getItemPath(parentId),
       extension: this.getFileExtension(file.name),
@@ -542,7 +542,7 @@ class GenieDriveServiceImpl implements GenieDriveService {
     if (!item) throw new Error('Item not found');
     
     // Get item content for analysis
-    let content: string | ArrayBuffer | null = item.content;
+    let content: string | ArrayBuffer | null = item.content || null;
     if (!content) {
       content = await this.getItemContent(itemId);
     }
@@ -720,7 +720,7 @@ class GenieDriveServiceImpl implements GenieDriveService {
       if (!parent) break;
       
       path.unshift(parent.name);
-      currentId = parent.parentId;
+      currentId = parent.parentId as string;
     }
     
     return path;

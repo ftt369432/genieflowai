@@ -6,6 +6,58 @@
   command = "npm run build"
   publish = "build"  # Matches Vite's output directory in vite.config.js
 
+# Production environment variables
+[build.environment]
+  NODE_ENV = "production"
+  NODE_VERSION = "18"
+  NPM_VERSION = "9"
+  VITE_APP_ENV = "production"
+  VITE_SUPABASE_URL = "https://bpczmzsozjlqxercmnyu.supabase.co"
+  VITE_AUTH_CALLBACK_URL = "https://genieflowai.com/auth/callback"
+  VITE_USE_MOCK = "false"
+
+# Enable built-in performance optimization
+[build.processing]
+  skip_processing = false
+
+[build.processing.css]
+  minify = true
+  
+[build.processing.js]
+  minify = true
+  
+[build.processing.html]
+  pretty_urls = true
+  
+[build.processing.images]
+  compress = true
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["serverless-http", "express", "cors", "dotenv", "nodemailer", "imap", "mailparser", "googleapis"]
+
+# Configure all functions to use ESM format
+[functions."*"]
+  node_bundler = "esbuild"
+  format = "esm"
+
+# API redirects to Netlify Functions
+[[redirects]]
+  from = "/api/email/*"
+  to = "/.netlify/functions/email/api/email/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/feedback"
+  to = "/.netlify/functions/feedback/api/feedback"
+  status = 200
+
+[[redirects]]
+  from = "/api/train/*"
+  to = "/.netlify/functions/train/api/train/:splat"
+  status = 200
+
 # Handle SPA routing by redirecting all paths to index.html
 [[redirects]]
   from = "/*"
@@ -60,52 +112,3 @@
       base-uri 'self';
       upgrade-insecure-requests;
     """
-
-# Production environment variables
-[build.environment]
-  NODE_ENV = "production"
-  NODE_VERSION = "18"
-  NPM_VERSION = "9"
-  VITE_APP_ENV = "production"
-
-# Enable built-in performance optimization
-[build.processing]
-  skip_processing = false
-
-[build.processing.css]
-  minify = true
-  
-[build.processing.js]
-  minify = true
-  
-[build.processing.html]
-  pretty_urls = true
-  
-[build.processing.images]
-  compress = true
-
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-  external_node_modules = ["serverless-http", "express", "cors", "dotenv", "nodemailer", "imap", "mailparser", "googleapis"]
-
-# Configure all functions to use ESM format
-[functions."*"]
-  node_bundler = "esbuild"
-  format = "esm"
-
-# API redirects to Netlify Functions
-[[redirects]]
-  from = "/api/email/*"
-  to = "/.netlify/functions/email/api/email/:splat"
-  status = 200
-
-[[redirects]]
-  from = "/api/feedback"
-  to = "/.netlify/functions/feedback/api/feedback"
-  status = 200
-
-[[redirects]]
-  from = "/api/train/*"
-  to = "/.netlify/functions/train/api/train/:splat"
-  status = 200

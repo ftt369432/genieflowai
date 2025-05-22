@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAgentStore } from '../../store/agentStore';
 import { useWorkflowStore } from '../../store/workflowStore';
 import { useNotebookStore } from '../../store/notebookStore';
@@ -30,10 +30,12 @@ import {
   File,
   FileText,
   Workflow,
-  Link
+  Link,
+  Brain
 } from 'lucide-react';
 import { AgentType, AgentCapability, AutonomyLevel, Agent } from '../../types/agent';
 import { WorkflowStep } from '../../store/workflowStore';
+import { Tabs, TabsList, TabsTrigger } from '../ui/Tabs';
 
 interface ProjectOption {
   id: string;
@@ -140,7 +142,7 @@ const PROJECTS: ProjectOption[] = [
 export function AgentWizard() {
   const navigate = useNavigate();
   const { agents } = useAgentStore();
-  const { workflows, addWorkflow, generateWorkflowFromPrompt, isLoading: isWorkflowLoading } = useWorkflowStore();
+  const { workflows, addWorkflow, generateWorkflowFromPrompt, enhanceTextWithAI, isLoading: isWorkflowLoading } = useWorkflowStore();
   const { notebooks, createNotebook } = useNotebookStore();
   
   const [step, setStep] = useState(1);
@@ -154,22 +156,49 @@ export function AgentWizard() {
   const [createNotebookOpen, setCreateNotebookOpen] = useState(false);
   const [notebookName, setNotebookName] = useState('');
   const [workflowSaved, setWorkflowSaved] = useState(false);
+  const [creationMode, setCreationMode] = useState<'workflow' | 'swarm'>('workflow');
+  const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
   
-  const generateWorkflowFromPromptHandler = async () => {
+  const handleGenerateConfiguration = async () => {
     if (!prompt.trim()) return;
     
     setIsGenerating(true);
     try {
-      const generatedWorkflow = await generateWorkflowFromPrompt(prompt);
-      setWorkflow(generatedWorkflow);
-      setStep(2);
-      
-      // Prefill notebook name based on workflow
-      setNotebookName(generatedWorkflow.name);
+      if (creationMode === 'workflow') {
+        const generatedWorkflow = await generateWorkflowFromPrompt(prompt);
+        setWorkflow(generatedWorkflow);
+        setStep(2);
+        setNotebookName(generatedWorkflow.name);
+      } else if (creationMode === 'swarm') {
+        navigate('/legal-swarm', {
+          state: {
+            initialDescription: prompt,
+            initialName: `Swarm based on: "${prompt.substring(0, 30)}..."`
+          }
+        });
+      }
     } catch (error) {
-      console.error('Error generating workflow:', error);
+      console.error(`Error generating ${creationMode}:`, error);
     } finally {
       setIsGenerating(false);
+    }
+  };
+  
+  const handleEnhancePrompt = async () => {
+    if (!prompt.trim() || isGenerating || isEnhancingPrompt) return;
+
+    setIsEnhancingPrompt(true);
+    console.log("Original prompt:", prompt);
+    try {
+      const enhancedText = await enhanceTextWithAI(prompt);
+      setPrompt(enhancedText);
+      console.log("Enhanced prompt:", enhancedText);
+    } catch (error) {
+      console.error("Error enhancing prompt:", error);
+      // Optionally, show an error message to the user, e.g., using a toast notification
+      // alert("Failed to enhance prompt. See console for details.");
+    } finally {
+      setIsEnhancingPrompt(false);
     }
   };
   
@@ -674,79 +703,48 @@ export function AgentWizard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Textarea
-              placeholder="Describe the workflow you want to create in natural language. For example: 'Create a workflow that monitors my email for customer inquiries, extracts key information, and creates a task in my task manager.'"
-              rows={5}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="resize-none"
-            />
-            
-            <div className="flex flex-col space-y-2">
-              <Label className="text-sm text-muted-foreground">Examples:</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="mb-4">
+              <Label className="text-sm font-medium">What do you want to create?</Label>
+              <Tabs value={creationMode} onValueChange={(value) => setCreationMode(value as 'workflow' | 'swarm')} className="w-full mt-1">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="workflow">Automated Workflow</TabsTrigger>
+                  <TabsTrigger value="swarm">AI Agent Swarm</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <CardHeader>
+              <CardTitle>Step 1: Describe Your {creationMode === 'workflow' ? 'Workflow' : 'Swarm'} Goal</CardTitle>
+              <CardDescription>
+                Describe what you want to automate or the complex task for your swarm. 
+                The AI will help generate a plan or configuration.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                placeholder={`e.g., Monitor my email for customer inquiries, extract key information, and create a task... \nOr for a swarm: Coordinate a legal research team for case XYZ, including document review, evidence analysis, and report generation...`}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={5}
+                disabled={isGenerating || isEnhancingPrompt}
+              />
+              <div className="flex justify-end space-x-2"> 
                 <Button 
                   variant="outline" 
-                  className="justify-start h-auto py-2"
-                  onClick={() => setPrompt("Create a workflow that processes incoming emails, summarizes them, and creates tasks for any action items.")}
+                  onClick={handleEnhancePrompt} 
+                  disabled={isGenerating || isEnhancingPrompt || !prompt.trim()}
                 >
-                  <div className="text-left">
-                    <div className="font-medium">Email Processing</div>
-                    <div className="text-xs text-muted-foreground">Process emails and create tasks</div>
-                  </div>
+                  {isEnhancingPrompt ? 'Enhancing...' : 'Enhance with AI'}
+                  <Brain className="ml-2 h-4 w-4" />
                 </Button>
-                <Button 
-                  variant="outline" 
-                  className="justify-start h-auto py-2"
-                  onClick={() => setPrompt("Build a workflow that scans my documents, extracts key information, and generates a summary report.")}
-                >
-                  <div className="text-left">
-                    <div className="font-medium">Document Analysis</div>
-                    <div className="text-xs text-muted-foreground">Extract and summarize document info</div>
-                  </div>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="justify-start h-auto py-2"
-                  onClick={() => setPrompt("Create a workflow that takes my meeting notes, extracts action items, assigns them to team members, and adds them to our project management tool.")}
-                >
-                  <div className="text-left">
-                    <div className="font-medium">Meeting Follow-up</div>
-                    <div className="text-xs text-muted-foreground">Process notes and assign tasks</div>
-                  </div>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="justify-start h-auto py-2"
-                  onClick={() => setPrompt("Design a workflow that monitors social media for mentions of my product, analyzes sentiment, and alerts me to negative feedback that needs immediate attention.")}
-                >
-                  <div className="text-left">
-                    <div className="font-medium">Social Media Monitoring</div>
-                    <div className="text-xs text-muted-foreground">Track mentions and analyze sentiment</div>
-                  </div>
+                <Button onClick={handleGenerateConfiguration} disabled={isGenerating || isEnhancingPrompt || !prompt.trim()}>
+                  {isGenerating ? 'Generating...' : (creationMode === 'workflow' ? 'Generate Workflow Plan' : 'Configure Swarm')}
+                  <Sparkles className="ml-2 h-4 w-4" />
                 </Button>
               </div>
-            </div>
+              {isWorkflowLoading && creationMode === 'workflow' && <p>Generating workflow details...</p>}
+            </CardContent>
           </CardContent>
-          <CardFooter>
-            <Button 
-              className="w-full" 
-              onClick={generateWorkflowFromPromptHandler}
-              disabled={!prompt.trim() || isGenerating}
-            >
-              {isGenerating ? (
-                <>
-                  <RotateCw className="h-4 w-4 mr-2 animate-spin" />
-                  Generating Workflow...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate Workflow
-                </>
-              )}
-            </Button>
-          </CardFooter>
         </Card>
       ) : (
         <div className="space-y-6">
