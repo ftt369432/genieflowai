@@ -162,7 +162,7 @@ export class GoogleAuthService {
         provider: 'google',
         options: {
           redirectTo: this.getCallbackUrl(),
-          scopes: 'openid email profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive https://mail.google.com/',
+          scopes: 'openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive https://mail.google.com/',
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
